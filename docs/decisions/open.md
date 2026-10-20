@@ -12,7 +12,7 @@ Date: 2026-10-20. All items OPEN unless explicitly marked PROPOSED or DEFERRED. 
 | O-007 | P0 | Supervisor input/display takeover and reserved resources | Works during BASIC runaway |
 | O-008 | P0 | Filesystem and immutable/read-only boot partition strategy | Crash consistency, atomic updates, recovery |
 | O-009 | P0 | Virtual PEEK/POKE graphics/sound address contract | Educational low-level access without violating isolation |
-| O-010 | P1 | Message payload types, permissions, limits, ordering | Bounded per-subscriber fan-out; overflow diagnostics |
+| O-010 | P1 | Unified Message Manager quotas, overflow, cancellation, event naming and handler semantics | ADR-007 settles one engine and both routing modes; details remain open |
 | O-011 | P1 | BASIC grammar, typing, scoping, errors and modules | Parser and conformance tests |
 | O-012 | P1 | Interpreter safe points, event-handler blocking/reentrancy | Event-driven safety and responsiveness |
 | O-013 | P1 | Input focus vs broadcast keyboard subscriptions | Multiple subscribers without unintended keystrokes |
@@ -31,7 +31,7 @@ Date: 2026-10-20. All items OPEN unless explicitly marked PROPOSED or DEFERRED. 
 ## Potential tensions (not contradictions resolved by fiat)
 - UEFI fast boot vs hardware discovery and recovery: define bounded initialization and diagnostics.
 - Ring-3 isolation vs raw PEEK/POKE: choose virtual device registers rather than physical kernel addresses, subject to approval.
-- Multiple keyboard subscribers vs focus: separate raw system events from focused application input.
+- Multiple keyboard subscribers vs focus: focused application input is default; privileged broadcasts require explicit authorization under ADR-007.
 - High-priority tasks vs supervisor: reserve scheduler/input/display paths and define preemption rules.
 - Background audio advancing vs muted hardware output: separate logical playback timeline from physical mixer.
 - Nine workspaces vs multiple tasks: explicitly define workspace/task relationship.
