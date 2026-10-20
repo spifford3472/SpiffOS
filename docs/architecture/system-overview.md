@@ -16,7 +16,7 @@ Logical graphics resolution is independent of physical hardware. Documented virt
 ## Proposed component boundaries (not approved interfaces)
 UEFI loader → kernel startup/interrupts/memory/scheduler/syscalls → task and message services → BASIC runtime and supervisory UI. Drivers for display/input/storage/audio/Ethernet serve virtual workspace devices. Filesystem and network services expose controlled APIs. This diagram is conceptual; whether services/drivers execute in kernel or user space is OPEN.
 
-## Requirements and verification
+ADR-008 adds a compatibility contract: versioned SpiffFS rollback checks, exclusive locks plus atomic transactions and stale-write detection, one foreground application per workspace, and reserved emergency Supervisor CPU/memory/input/display paths.\n\n## Requirements and verification
 R-BOOT: boot directly to BASIC; QEMU boot-time test.
 R-ISO: ring-3 cannot write ring-0 or other process memory; fault injection.
 R-SCHED: preemption and four priorities; CPU contention tests.
