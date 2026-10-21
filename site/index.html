@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="SpiffOS: the wonder of 8-bit computing with the possibilities of modern hardware.">
+<title>SpiffOS — Explore. Create. Connect.</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#071426;color:#f4f6fb}*{box-sizing:border-box}body{margin:0;line-height:1.6}a{color:#72d7ff}a:hover{color:white}header,main,footer{max-width:1040px;margin:auto;padding:22px}nav{display:flex;gap:20px;flex-wrap:wrap;align-items:center;justify-content:space-between}nav a{font-weight:650;text-decoration:none}nav .links{display:flex;gap:22px;flex-wrap:wrap}.hero{text-align:center;padding-top:25px}.hero img{width:min(100%,850px);height:auto}.eyebrow{color:#8edcf5;letter-spacing:.14em;text-transform:uppercase;font-weight:700;font-size:.84rem}.hero h1{font-size:clamp(1.8rem,4vw,3.2rem);line-height:1.15;margin:14px auto;max-width:750px}.lead{max-width:760px;margin:22px auto;color:#d4e2f4;font-size:1.17rem}.cta{display:inline-block;padding:12px 20px;background:#3aa9e9;color:#06111e;border-radius:10px;text-decoration:none;font-weight:800;margin:10px}.cta.secondary{background:#1a324c;color:#e6f6ff;border:1px solid #4a7b9f}section{padding:38px 0;border-top:1px solid #24405b}h2{font-size:1.7rem}p{max-width:850px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}.card{padding:22px;border:1px solid #2a4a67;border-radius:14px;background:#0d2238}.card h3{margin-top:0;color:#91dcfa}.muted{color:#bdcfe1}.status{background:#102f3d;border-left:4px solid #61c5ed;padding:18px;border-radius:8px}footer{color:#b4c9d9;border-top:1px solid #24405b;font-size:.9rem}code,pre{font-family:ui-monospace,Consolas,monospace}pre{background:#091d2d;padding:18px;border-radius:10px;overflow:auto;color:#9af2ce}@media(prefers-reduced-motion:no-preference){a{transition:color .15s}}
+</style>
+</head>
+<body>
+<header><nav><a href="#home" aria-label="SpiffOS home">SpiffOS</a><div class="links"><a href="#vision">Vision</a><a href="#capabilities">Capabilities</a><a href="#manuals">Manuals</a><a href="https://github.com/spifford3472/SpiffOS">GitHub</a></div></nav></header>
+<main id="home">
+<div class="hero"><img src="assets/spiffos-logo.svg" alt="SpiffOS logo: mountains, winding path and five-color sunrise; Explore, Create, Connect">
+<p class="eyebrow">Explore · Create · Connect</p>
+<h1>The wonder of 8-bit computing.<br>The possibilities of modern hardware.</h1>
+<p class="lead">Remember turning on a computer and finding a blinking cursor, ready for anything you could imagine? SpiffOS brings that spirit back with a native, modern operating system built around BASIC.</p>
+<a class="cta" href="#manuals">Explore the design</a><a class="cta secondary" href="https://github.com/spifford3472/SpiffOS">View the repository</a></div>
+<section id="vision"><h2>A computer you can understand</h2><p>SpiffOS isn't a Commodore emulator or a retro-themed Linux distribution. It's an independent x86-64 operating system designed to boot directly into a programming environment. Type a few lines of BASIC, make something happen, and keep exploring.</p><pre>PRINT "HELLO, SPIFFOS!"</pre><p>Simple enough to understand. Powerful enough to create.</p></section>
+<section id="capabilities"><h2>Designed for creators</h2><div class="grid">
+<article class="card"><h3>Modern BASIC</h3><p>Structured, line-number-free programming, an interpreter and a built-in native compiler.</p></article>
+<article class="card"><h3>Graphics and sprites</h3><p>Full-color pixels, tile maps, animation, layers and built-in sprite collisions.</p></article>
+<article class="card"><h3>Music and sound</h3><p>Thirty-two virtual voices per workspace for instruments, effects and background music.</p></article>
+<article class="card"><h3>Devices and connections</h3><p>USB serial, full-duplex audio input/output, wired TCP/IP and hardware-independent interfaces.</p></article>
+<article class="card"><h3>Protected workspaces</h3><p>Independent BASIC programs and a workspace model designed to stay responsive.</p></article>
+<article class="card"><h3>Learning by doing</h3><p>Documented virtual registers, PEEK/POKE, practical examples and accessible manuals.</p></article>
+</div></section>
+<section id="manuals"><h2>Design documents and manuals</h2><p>Documentation is being written in the open as the architecture takes shape. These references are drafts, and command syntax may change.</p><div class="grid">
+<article class="card"><h3>Programmer's Reference</h3><p>Language concepts, proposed BASIC commands and system interfaces.</p><a href="https://github.com/spifford3472/SpiffOS/blob/main/docs/basic/programmers-reference.md">Read the reference →</a></article>
+<article class="card"><h3>Example handbook</h3><p>Guided examples of BASIC and byte-addressed memory.</p><a href="https://github.com/spifford3472/SpiffOS/pull/7">Review the draft examples →</a></article>
+<article class="card"><h3>Architecture</h3><p>System principles and accepted technical decisions.</p><a href="https://github.com/spifford3472/SpiffOS/tree/main/docs/architecture">Explore architecture →</a></article>
+</div></section>
+<section><div class="status"><strong>Project status: early design.</strong> SpiffOS is not yet a bootable, usable operating system. The site describes goals and accepted design direction, not implemented features.</div></section>
+</main>
+<footer>SpiffOS is an independent project inspired by the creative spirit of 8-bit personal computing. Not affiliated with Commodore or its successors.</footer>
+</body></html>
