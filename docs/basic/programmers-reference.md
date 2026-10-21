@@ -14,7 +14,7 @@ PRINT, INPUT; LET/assignment; IF, THEN, ELSE; FOR, NEXT; GOTO/GOSUB (legacy stat
 TASK START/STOP/STATUS (syntax OPEN); workspace select/query; task priority/state; safe memory introspection; supervisor-only commands distinguished from user calls.
 
 ## Part IV — Named messages and events
-SUBSCRIBE channel; SEND channel, payload; RECEIVE channel, variable; ON MESSAGE channel CALL handler. All syntax illustrative only. Define subscription timing, queue overflow, event handler safety and error conditions.
+One kernel-managed Message Manager (ADR-007): process inboxes, direct single-recipient send, correlated request/reply and named event subscriptions with per-subscriber fan-out. Proposed MESSAGE.SEND/RECEIVE/REQUEST/REPLY/SUBSCRIBE/PUBLISH and ON MESSAGE handler. All syntax illustrative only. Define subscription timing, queue overflow, event handler safety and error conditions.
 
 ## Part V — Graphics and text
 Screen mode, color, text cursor, pixel, line, shape, sprite, animation and frame sync; logical coordinates; virtual graphics register PEEK/POKE contract (OPEN).
@@ -124,3 +124,6 @@ TASK.STOP worker
 
 ### Remaining reference work
 Before implementing these APIs, document each command's complete syntax, types, return values, blocking behavior, permissions, errors, and conformance tests. Resolve compiler ABI, `REDIM PRESERVE` multidimensional semantics, Unicode indexing, TCP partial sends, IPC queue-full policy, file-lock semantics and native code execution safety.
+
+## Architecture reconciliation — ADR-007
+Direct messages and published events use one delivery engine. Direct messages have one recipient; published events fan out to each subscriber inbox. The MESSAGE.* naming family is preferred for IPC; TASK.* manages lifecycle. Older TASK.SEND/RECEIVE/REQUEST examples remain historical illustrative syntax, not an independent second messaging system. A single authoritative subsystem owner maintains each stateful resource; callers use documented APIs.\n

@@ -9,14 +9,14 @@ UEFI boots a standalone SpiffOS kernel into an interactive, unnumbered structure
 
 Nine independent virtual BASIC workspaces retain program, cursor, screen, and execution state. Ctrl+Alt+1–9 select workspaces, Ctrl+Alt+0 shows overview, Ctrl+Alt+Delete enters a privileged supervisor rather than ordinarily rebooting. Only the foreground workspace owns physical display and audible output; background playback advances silently.
 
-Named message channels provide the primary IPC and system event model, with subscriptions receiving future events only, fan-out to multiple subscribers, and polling and safe-point event handlers. Queue bounds, payloads, overflow and permissions remain open. BASIC supports named SUB/FUNCTION, local variables, structured control flow, files, graphics, sound, networking, processes and messages. Interactive screen entry works away from a fixed bottom prompt; EDIT opens a two-pane source/command environment, Tab switches panes, EXIT leaves editor. Pane focus must be visibly explicit, with a Turbo Pascal-inspired but unapproved menu design.
+A unified kernel Message Manager provides process inboxes, direct single-recipient messages, correlated request/reply and named event subscriptions with per-subscriber fan-out; subscriptions receive future events only, with polling and safe-point event handlers. Queue limits, overflow policy and exact API syntax remain open; payload families, immutable delivery, kernel permissions and safety requirements are recorded in ADR-006/007. BASIC supports named SUB/FUNCTION, local variables, structured control flow, files, graphics, sound, networking, processes and messages. Interactive screen entry works away from a fixed bottom prompt; EDIT opens a two-pane source/command environment, Tab switches panes, EXIT leaves editor. Pane focus must be visibly explicit, with a Turbo Pascal-inspired but unapproved menu design.
 
 Logical graphics resolution is independent of physical hardware. Documented virtual PEEK/POKE device access must not compromise ring-3 isolation. Sound supports simultaneous music/effects. Hardware uses modular drivers. Storage supports folders and power-loss resilience without promising survival of unsaved writes. Wired TCP/IP (IPv4, TCP, UDP, DNS, client/server APIs) is a first-class capability; Wi-Fi is later.
 
 ## Proposed component boundaries (not approved interfaces)
 UEFI loader → kernel startup/interrupts/memory/scheduler/syscalls → task and message services → BASIC runtime and supervisory UI. Drivers for display/input/storage/audio/Ethernet serve virtual workspace devices. Filesystem and network services expose controlled APIs. This diagram is conceptual; whether services/drivers execute in kernel or user space is OPEN.
 
-## Requirements and verification
+ADR-008 adds a compatibility contract: versioned SpiffFS rollback checks, exclusive locks plus atomic transactions and stale-write detection, one foreground application per workspace, and reserved emergency Supervisor CPU/memory/input/display paths.\n\n## Requirements and verification
 R-BOOT: boot directly to BASIC; QEMU boot-time test.
 R-ISO: ring-3 cannot write ring-0 or other process memory; fault injection.
 R-SCHED: preemption and four priorities; CPU contention tests.

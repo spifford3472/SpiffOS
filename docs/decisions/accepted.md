@@ -9,7 +9,7 @@ Date: 2026-10-20. Status: documentation draft for owner review; entries below re
 | A-004 | Testing | QEMU on Forge first; dedicated laptop for physical validation |
 | A-005 | Protection | Kernel ring 0, BASIC user code ring 3; isolate kernel and program state |
 | A-006 | Scheduling | Timer-driven preemptive multitasking with Background, Normal, Interactive, Time-sensitive priorities |
-| A-007 | IPC | Named channels are primary IPC; subscribers receive only post-subscription messages; fan-out |
+| A-007 | IPC | One kernel Message Manager; direct single-consumer process inboxes plus named fan-out subscriptions for future events (ADR-007) |
 | A-008 | Events | Polling and event-driven handlers share messaging; callbacks run at safe interpreter points without unbounded recursion |
 | A-009 | Workspaces | Nine independent BASIC virtual workspaces; tasks continue in background |
 | A-010 | Keyboard | Ctrl+Alt+1–9 workspace; Ctrl+Alt+0 overview; Ctrl+Alt+Delete privileged supervisor |
@@ -27,7 +27,7 @@ Date: 2026-10-20. Status: documentation draft for owner review; entries below re
 | A-022 | Network | Wired TCP/IP first; BASIC client/server network application capability; Wi-Fi later |
 | A-023 | Governance | Documentation and approval before code; AI implementation; PR review; no unauthorized merge/deploy |
 
-## Clarifications requiring approval
+| A-024 | IPC architecture | One shared kernel queue/delivery engine for direct messages, request/reply and published events; no competing IPC engines (ADR-007) |\n| A-025 | Ownership | One authoritative owner for each stateful subsystem, accessed through documented interfaces; direct internal calls allowed where appropriate (ADR-007) |\n\n| A-026 | Boot compatibility | Versioned SpiffFS format; no silent incompatible migrations; verify safe A/B rollback (ADR-008) |\n| A-027 | File concurrency | Exclusive update locks, atomic transactions and stale-update conflict detection (ADR-008) |\n| A-028 | Workspace focus | One foreground application per workspace; Workspace Manager controls focus and composition (ADR-008) |\n| A-029 | Supervisor safety | Reserved CPU/memory/input/display recovery path independent of BASIC responsiveness (ADR-008) |\n\n## Clarifications requiring approval
 The four priorities are conceptual, not an approved algorithm. Workspace count does not establish a task-count limit. Virtual PEEK/POKE addressing is a recommendation, not a finalized mapping. C as implementation language remains PROPOSED. Bounded queue/drop-oldest policy remains PROPOSED. Turbo Pascal menu organization is OPEN. The preliminary development sequence is not a dependency-resolved plan.
 
 ## Change control

@@ -8,11 +8,11 @@ Date: 2026-10-20. All items OPEN unless explicitly marked PROPOSED or DEFERRED. 
 | O-003 | P0 | Paging layout, process address spaces, allocators | Ring-3 isolation, fault handling, limits |
 | O-004 | P0 | Interrupt/syscall ABI, scheduler timer/quantum | Preemption and supervisor responsiveness |
 | O-005 | P0 | Kernel vs user-space driver/service boundaries | Complexity, fault containment, protected APIs |
-| O-006 | P0 | Task/workspace ownership model | Nine workspaces vs number of runnable programs |
-| O-007 | P0 | Supervisor input/display takeover and reserved resources | Works during BASIC runaway |
-| O-008 | P0 | Filesystem and immutable/read-only boot partition strategy | Crash consistency, atomic updates, recovery |
+| O-006 | P0 | Workspace foreground/composition API | ADR-008 settles one foreground app per workspace; surface/focus details open |
+| O-007 | P0 | Supervisor reserve sizing and takeover implementation | ADR-008 requires protected CPU/memory/input/display resources |
+| O-008 | P0 | SpiffFS on-disk format, compatibility matrix and migration protocol | ADR-003/004/008 establish A/B and crash-consistency policy |
 | O-009 | P0 | Virtual PEEK/POKE graphics/sound address contract | Educational low-level access without violating isolation |
-| O-010 | P1 | Message payload types, permissions, limits, ordering | Bounded per-subscriber fan-out; overflow diagnostics |
+| O-010 | P1 | Unified Message Manager quotas, overflow, cancellation, event naming and handler semantics | ADR-007 settles one engine and both routing modes; details remain open |
 | O-011 | P1 | BASIC grammar, typing, scoping, errors and modules | Parser and conformance tests |
 | O-012 | P1 | Interpreter safe points, event-handler blocking/reentrancy | Event-driven safety and responsiveness |
 | O-013 | P1 | Input focus vs broadcast keyboard subscriptions | Multiple subscribers without unintended keystrokes |
@@ -28,10 +28,10 @@ Date: 2026-10-20. All items OPEN unless explicitly marked PROPOSED or DEFERRED. 
 | O-023 | P2 | Release policy, compatibility and native applications | ABI and language stability |
 | O-024 | DEFERRED | Wi-Fi, IPv6, optional Python/MicroPython, multi-monitor, legacy BIOS | Reassess after foundational releases |
 
-## Potential tensions (not contradictions resolved by fiat)
+| O-025 | P0 | File transaction and conflict-token APIs | ADR-008 requires locks, atomic commits and stale-write detection |\n\n## Potential tensions (not contradictions resolved by fiat)
 - UEFI fast boot vs hardware discovery and recovery: define bounded initialization and diagnostics.
 - Ring-3 isolation vs raw PEEK/POKE: choose virtual device registers rather than physical kernel addresses, subject to approval.
-- Multiple keyboard subscribers vs focus: separate raw system events from focused application input.
+- Multiple keyboard subscribers vs focus: focused application input is default; privileged broadcasts require explicit authorization under ADR-007.
 - High-priority tasks vs supervisor: reserve scheduler/input/display paths and define preemption rules.
 - Background audio advancing vs muted hardware output: separate logical playback timeline from physical mixer.
 - Nine workspaces vs multiple tasks: explicitly define workspace/task relationship.

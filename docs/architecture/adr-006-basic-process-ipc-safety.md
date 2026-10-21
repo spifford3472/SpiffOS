@@ -6,8 +6,8 @@ Date: 2026-10-20
 ## Process architecture
 - SpiffOS v1 supports independently scheduled BASIC processes in separate protected address spaces. Lightweight shared-memory threads/tasks are deferred.
 - Each process owns its variables, arrays, handles, sockets and memory; it may coexist with other processes in the same workspace.
-- Processes use OS-managed **message passing**, not shared writable memory, for v1 interprocess communication.
-- Support start, status, wait, graceful stop, exit status, request/reply, send and receive. Proposed `TASK.START`, `TASK.STATUS`, `TASK.WAIT`, `TASK.STOP`, `TASK.EXIT`, `TASK.SEND`, `TASK.RECEIVE`, `TASK.REQUEST`, `TASK.REPLY`; exact signatures open.
+- Processes use OS-managed **message passing**, not shared writable memory, for v1 interprocess communication. ADR-007 unifies direct queues and named event subscriptions within one delivery engine.
+- Support start, status, wait, graceful stop, exit status, request/reply, send and receive. Proposed `TASK.START`, `TASK.STATUS`, `TASK.WAIT`, `TASK.STOP`, `TASK.EXIT` for lifecycle; ADR-007 proposes the `MESSAGE.*` namespace for IPC. Exact signatures and optional aliases remain open.
 - `TASK.STOP` requests graceful shutdown. Forced termination is reserved for protected Supervisor; ordinary applications cannot kill arbitrary processes in other workspaces. Termination cleans up OS resources.
 - Process handles must be opaque and generation-safe to avoid stale handles referring to new processes.
 

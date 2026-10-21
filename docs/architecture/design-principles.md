@@ -1,10 +1,10 @@
 # SpiffOS Design Principles — v0.1
 Status: PROPOSED BASELINE DOCUMENT, reflecting accepted project principles. Date: 2026-10-20.
 
-1. **Understandability first.** One knowledgeable developer should be able to reason about and maintain the system. Favor small modules, explicit ownership and documented interfaces.
+1. **Understandability first.** One knowledgeable developer should be able to reason about and maintain the system. Favor small modules, exactly one authoritative owner for each stateful subsystem, and documented interfaces (ADR-007).
 2. **Immediate computing.** Boot rapidly into an interactive BASIC prompt; retain cursor-addressable screen command entry, without a conventional desktop.
 3. **Safety by construction.** User BASIC executes in ring 3, privileged operations via checked interfaces. Priority is not authority.
-4. **One consistent model.** Named message channels are the primary IPC and event abstraction; exceptions require an ADR.
+4. **One consistent model.** One kernel-managed message engine handles direct process messages, request/reply and named event subscriptions (ADR-007).
 5. **Predictable concurrency.** Preemptive tasks, bounded resources, blocking waits, nonrecursive BASIC event handlers at safe points.
 6. **Nine independent environments.** Workspaces virtualize presentation and input, not necessarily task count. The exact program/workspace relationship is open.
 7. **Portable interfaces, modest implementations.** Hardware abstraction allows new drivers without assuming identical laptops; implement only justified complexity.

@@ -13,11 +13,11 @@ SpiffOS is a native x86-64, BASIC-first operating system, not a C64 emulator or 
 - Rings 1 and 2 are unused.
 - Compile v1 drivers into the kernel behind documented modular interfaces; dynamic kernel modules are deferred.
 - Provide timer-driven preemptive scheduling and process isolation.
-- Support nine workspaces, with multiple independent BASIC processes in each workspace and named message-channel IPC.
+- Support nine workspaces, with multiple independent BASIC processes in each workspace and the unified kernel Message Manager (ADR-007).
 - Keep the emergency supervisor separate from BASIC.
 
 ## Consequences
 Kernel defects remain high impact; clear internal interfaces and tests are essential. Ring 3 programs cannot access hardware or other processes' memory directly.
 
-## Open implementation details
+ADR-008 requires one foreground application per workspace, while multiple processes continue running; emergency Supervisor resources must remain reserved.\n\n## Open implementation details
 Scheduler quantum and fairness, IPC limits and delivery guarantees, exact driver ABI, and hardware support matrix.
