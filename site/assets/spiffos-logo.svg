@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" role="img" aria-labelledby="title desc">
+<title id="title">SpiffOS — Explore, Create, Connect</title>
+<desc id="desc">Original mountain and winding path silhouette beneath a five-band sunset, with the SpiffOS wordmark.</desc>
+<defs>
+<linearGradient id="bg" x2="0" y2="1"><stop stop-color="#091b35"/><stop offset="1" stop-color="#030b18"/></linearGradient>
+<linearGradient id="path" x2="1" y2="0"><stop stop-color="#c8f8ff"/><stop offset=".6" stop-color="#26b7f8"/><stop offset="1" stop-color="#1c6be9"/></linearGradient>
+<clipPath id="sun"><circle cx="500" cy="134" r="110"/></clipPath>
+</defs>
+<rect width="1000" height="400" rx="24" fill="url(#bg)"/>
+<g clip-path="url(#sun)">
+<rect x="380" y="22" width="240" height="42" fill="#2382f5"/>
+<rect x="380" y="68" width="240" height="38" fill="#39c5a5"/>
+<rect x="380" y="110" width="240" height="38" fill="#ffcf4b"/>
+<rect x="380" y="152" width="240" height="38" fill="#ff833a"/>
+<rect x="380" y="194" width="240" height="50" fill="#ef4155"/>
+</g>
+<path d="M245 244 345 142 391 189 500 81 617 208 672 153 755 244Z" fill="#0b3564"/>
+<path d="m345 142 23 40-24-11-25 31 7-36Zm155-61 34 55-31-18-23 28-11-18Zm172 72 18 35-19-10-17 18Z" fill="#effaff"/>
+<path d="M247 244q91-43 157-8t105-14q-82-17-49-38 16-10 61-6-30 16-6 25 38 14 113 7-65 39-153 32-79-8-101 2Z" fill="url(#path)"/>
+<text x="500" y="321" font-family="DejaVu Sans,Arial,sans-serif" font-weight="900" font-size="91" text-anchor="middle" letter-spacing="-4" fill="#f7f2e9">Spiff<tspan fill="#24baff">OS</tspan></text>
+<text x="500" y="357" font-family="DejaVu Sans,Arial,sans-serif" font-weight="600" font-size="18" text-anchor="middle" letter-spacing="7" fill="#d9eafa">EXPLORE  ·  CREATE  ·  CONNECT</text>
+</svg>
