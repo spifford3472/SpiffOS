@@ -34,3 +34,10 @@ Build a small, understandable, native x86-64 operating system that boots directl
 - 64-bit virtual memory/paging, per-process address spaces, RAM-only (no swap), reserved kernel/supervisor resources; return recoverable out-of-memory errors, do not automatically kill user programs.
 - Small, stable, versioned interfaces are the goal; exact syscall ABI, paging layout, allocator and driver ABI are **not yet approved**.
 - Current status is design/documentation; do not represent planned features as implemented.
+
+## Decision precedence and conflict resolution (approved 2026-10-26)
+- The **latest explicitly owner-approved decision** is the official direction when it conflicts with an older one. Mere suggestions, draft examples, and inferred preferences are not approvals.
+- Update the accepted register and applicable ADR to mark the old decision superseded, retaining its reasoning and history. Do not keep contradictory requirements presented as simultaneously current.
+- For **major subsystem** conflicts that materially affect interfaces, safety, on-disk compatibility, process isolation, graphics/audio architecture or hardware support, summarize the differences and trade-offs and ask the owner to choose one official direction **before implementation**.
+- For minor UX/details, follow the latest approval and defer unneeded specifics. Avoid repeated polls about settled or nonessential features.
+- When approval status is ambiguous, document the ambiguity as OPEN rather than guessing.
