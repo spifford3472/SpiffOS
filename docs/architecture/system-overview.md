@@ -46,3 +46,7 @@ Source code must meet the explanation and function-header requirements in [AGENT
 ## Decision precedence and resolved audio conflict (2026-10-26)
 
 The latest explicitly approved owner decision prevails over older conflicting drafts; major subsystem conflicts require an explicit owner decision and updated ADR. Earlier foreground-only audio wording is superseded: background workspace playback may remain audible through the single system-wide Audio Manager, with per-workspace mute and volume, consistent with ADR-010. Older always-open editor wording is superseded by the BASIC READY prompt and separately launched EDIT application. Filesystem retention/recovery differences remain OPEN pending explicit review.
+
+## Approved SpiffFS user-facing policy (2026-10-26)
+
+SpiffFS stores one current saved version per file; deleting moves a file to user-managed Trash until explicitly emptied. There is no automatic saved-version history or Trash expiration/purge. This supersedes older retention/versioning drafts. Crash-consistent updates, power-loss-resistant boot and recovery are independent mandatory requirements; implementation mechanisms remain open. See [ADR-012](../decisions/ADR-012-spifffs-trash-policy.md).
