@@ -60,3 +60,5 @@ Keep original open items above as historical inventory; these status notes take 
 - **Audio policy resolved:** use ADR-010's continued background playback and shared Audio Manager, consistent with the latest approval. Older foreground-only mute language is superseded. Exact mixer limits remain open.
 - **Filesystem recovery policy remains a major subsystem decision:** older retention/versioning specifications conflict with later preference for manually managed trash. Obtain an explicit official choice before changing SpiffFS contracts.
 - **Graphics implementation detail:** later approved default logical modes and opt-in collision behavior supersede older proposals where approval is clear; exact APIs/driver implementation still open. Avoid spending initial boot milestones on these details.
+
+**Filesystem policy resolved 2026-10-26:** manual Trash, one current saved version, no automatic retention/purge; see ADR-012. O-008 remains OPEN only for implementation details (on-disk format, crash consistency, recovery, transaction semantics, compatibility and A/B safeguards). Do not treat older automatic versioning/retention policies as current.
