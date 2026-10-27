@@ -54,3 +54,9 @@ G1: architecture and decision inventory; G2: boot/kernel/memory/scheduling inter
 - **New governance requirement:** AI tasks must read root AGENTS.md and maintain the Developer's Guide and ADRs (ADR-011).
 
 Keep original open items above as historical inventory; these status notes take precedence where explicitly approved.
+
+## Conflict triage — 2026-10-26 review
+
+- **Audio policy resolved:** use ADR-010's continued background playback and shared Audio Manager, consistent with the latest approval. Older foreground-only mute language is superseded. Exact mixer limits remain open.
+- **Filesystem recovery policy remains a major subsystem decision:** older retention/versioning specifications conflict with later preference for manually managed trash. Obtain an explicit official choice before changing SpiffFS contracts.
+- **Graphics implementation detail:** later approved default logical modes and opt-in collision behavior supersede older proposals where approval is clear; exact APIs/driver implementation still open. Avoid spending initial boot milestones on these details.
