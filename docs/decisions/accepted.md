@@ -32,3 +32,22 @@ The four priorities are conceptual, not an approved algorithm. Workspace count d
 
 ## Change control
 Add an ADR with motivation, options, consequences, validation and owner approval before replacing any accepted decision. Record source and approval date for subsequent entries.
+
+## Owner approvals — 2026-10-26 (ADR-011)
+
+| ID | Area | Accepted decision and rationale |
+|---|---|---|
+| A-030 | Bootloader | UEFI + Limine initially; avoids custom bootloader work before first kernel; QEMU first, Anvilone USB later. Legacy BIOS and signed Secure Boot deferred. |
+| A-031 | Kernel language | Modular monolithic C kernel, minimal assembly; simplest comprehensible driver/module organization. |
+| A-032 | User boundary | Ring 0 kernel, ring 3 applications; BASIC interpreter and optional EDIT editor are independent user programs. |
+| A-033 | Memory | 64-bit paging, process address spaces, RAM-only/no swap, protected kernel/supervisor reserve; recoverable OOM and no automatic OOM process killing. |
+| A-034 | Source readability | Verbose file/function contracts and explanatory inline comments, written for developers returning to C. |
+| A-035 | Agent governance | Root AGENTS.md must be explicitly read at the beginning of each AI coding task; Developer's Guide maintained with implementation. |
+| A-036 | Hardware validation | QEMU primary test environment; HP Anvilone UEFI laptop first physical target using USB, preserving Mint. |
+
+These entries record explicit owner approval; see [ADR-011](ADR-011-boot-kernel-memory-governance.md) for context, alternatives, consequences and limitations. **Documentation approval does not grant implementation, merge or physical deployment authorization.**
+
+### Historical conflicts to reconcile
+- A-016 and older overview text describe a permanently open editor-like environment. The later approved model is BASIC READY first, optional EDIT launched as a separate program. A-016 is superseded in this respect by A-032; detailed editor UX remains deferred.
+- A-012 states background sound is muted. Later approved background playback/mixer behavior conflicts with that policy. Mark A-012 **superseded in principle**, pending review of ADR-010 and precise mixer requirements; do not implement the old mute policy by default.
+- Historical storage retention/versioning proposals may differ from later manual-trash discussions. Do not assume either is final without owner review.
