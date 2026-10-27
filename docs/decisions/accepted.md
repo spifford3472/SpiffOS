@@ -51,3 +51,9 @@ These entries record explicit owner approval; see [ADR-011](ADR-011-boot-kernel-
 - A-016 and older overview text describe a permanently open editor-like environment. The later approved model is BASIC READY first, optional EDIT launched as a separate program. A-016 is superseded in this respect by A-032; detailed editor UX remains deferred.
 - A-012 states background sound is muted. Later approved background playback/mixer behavior conflicts with that policy. Mark A-012 **superseded in principle**, pending review of ADR-010 and precise mixer requirements; do not implement the old mute policy by default.
 - Historical storage retention/versioning proposals may differ from later manual-trash discussions. Do not assume either is final without owner review.
+
+## Decision precedence policy — 2026-10-26
+
+**A-037 (accepted):** The latest explicitly owner-approved decision supersedes conflicting older decisions. Retain older rationale and mark it superseded; update relevant architecture documents. For material conflicts in major subsystems, review alternatives and obtain an explicit official direction before implementation. Suggestions are not approvals; minor UX choices can be deferred.
+
+**Audio reconciliation:** A-012's foreground-only audible-output rule is superseded. ADR-010 already documents background music continuing across workspace switches, a single system-wide mixer, and per-workspace volume/mute. The later approval aligns with ADR-010. Global voice limits and exact audio resource budgets remain open.
