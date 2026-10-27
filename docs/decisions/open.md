@@ -39,3 +39,26 @@ Date: 2026-10-20. All items OPEN unless explicitly marked PROPOSED or DEFERRED. 
 
 ## Approval gates
 G1: architecture and decision inventory; G2: boot/kernel/memory/scheduling interfaces; G3: BASIC/IPC/workspace/editor contracts; G4: graphics/audio/storage/network/driver contracts; G5: authorization for code. Owner explicitly approves each gate. Review this register at every PR.
+
+## Status changes — 2026-10-26
+
+- **O-001 partially resolved:** UEFI + Limine approved (ADR-011). Kernel image layout, boot protocol version pinning, recovery and binary boundaries remain OPEN.
+- **O-002 partially resolved:** C with minimal assembly approved. Exact compiler/toolchain, freestanding runtime and ABI remain OPEN.
+- **O-003 partially resolved:** 64-bit paging, separate user address spaces, RAM-only/no swap, reserved emergency memory and recoverable OOM approved. Exact page-table layout, allocators and reserve sizing remain OPEN.
+- **O-005 partially resolved:** modular monolithic kernel and user-space BASIC/EDIT approved. Driver interface details and service placement remain OPEN.
+- **O-016 partially resolved:** HP Anvilone UEFI laptop (i5-7200U, 16 GB, Intel HD 620, SATA AHCI, Realtek Ethernet) selected for first physical USB tests; full hardware support requirements remain OPEN.
+- **O-019 clarified:** EDIT is an optional user application, not the boot screen; UX details remain deferred.
+- **O-015 conflict to resolve:** older foreground-only audible audio contradicts later approved background audio/mixer concept. Review ADR-010 before implementation.
+- **Storage policy conflict to resolve:** older deletion retention and file versioning drafts vs later manual-trash preference. Reconcile before SpiffFS implementation.
+- **New P0:** exact syscall ABI, kernel/userspace boundary validation, reserve sizing and error contracts.
+- **New governance requirement:** AI tasks must read root AGENTS.md and maintain the Developer's Guide and ADRs (ADR-011).
+
+Keep original open items above as historical inventory; these status notes take precedence where explicitly approved.
+
+## Conflict triage — 2026-10-26 review
+
+- **Audio policy resolved:** use ADR-010's continued background playback and shared Audio Manager, consistent with the latest approval. Older foreground-only mute language is superseded. Exact mixer limits remain open.
+- **Filesystem recovery policy remains a major subsystem decision:** older retention/versioning specifications conflict with later preference for manually managed trash. Obtain an explicit official choice before changing SpiffFS contracts.
+- **Graphics implementation detail:** later approved default logical modes and opt-in collision behavior supersede older proposals where approval is clear; exact APIs/driver implementation still open. Avoid spending initial boot milestones on these details.
+
+**Filesystem policy resolved 2026-10-26:** manual Trash, one current saved version, no automatic retention/purge; see ADR-012. O-008 remains OPEN only for implementation details (on-disk format, crash consistency, recovery, transaction semantics, compatibility and A/B safeguards). Do not treat older automatic versioning/retention policies as current.
