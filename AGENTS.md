@@ -12,6 +12,15 @@ Build a small, understandable, native x86-64 operating system that boots directl
 - If documents disagree, identify the conflict explicitly and seek owner resolution rather than guessing. Current approval is more authoritative than a stale draft, but must be recorded before implementation.
 - No manual coding required from the owner: AI agents prepare changes on branches and PRs. Never claim a test ran or a merge occurred unless verified.
 
+## AI coding model selection — Qwen first (owner-approved 2026-10-27)
+- **Qwen is the default and preferred model for all SpiffOS coding work**, including implementation, debugging, tests, documentation associated with code, and iterative fixes. Prefer the locally available Qwen workflow when operational.
+- Start each development task with Qwen. Give it a small, clearly scoped task, the relevant repository context, acceptance criteria, and the mandatory documentation above. Allow it to inspect, implement, test, and make reasonable correction attempts.
+- **Use Codex only if Qwen is genuinely stuck** after reasonable, documented attempts to resolve a specific blocker. Do not escalate simply because Codex may be faster, more convenient, or produce a more polished implementation.
+- When escalating, give Codex **only the smallest isolated issue necessary to unblock Qwen** (for example, a failing build error, narrowly scoped bug, or missing API detail). Do not hand Codex the entire feature, rewrite, or project.
+- After Codex resolves the blocker, return control to Qwen for the remaining implementation and tests. Codex is a temporary troubleshooting fallback, not a parallel default coder.
+- Record in the PR which model did each coding portion, what Qwen attempted, the exact blocker, why escalation was necessary, the limited Codex change, and the verification performed. If Qwen cannot run, report the access/tooling limitation rather than silently switching to Codex.
+- The model preference does not override safety, owner approvals, required reviews, or the prohibition on claiming unverified builds/tests.
+
 ## Mandatory source-code style
 - Every C and assembly source file begins with a clear header: purpose, responsibilities, dependencies, invariants, relevant architecture/ADR references.
 - Every function has a header: purpose, arguments and units, return values, error behavior, side effects, ownership/lifetime, concurrency and interrupt-context constraints when relevant.
