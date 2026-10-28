@@ -77,3 +77,9 @@ VM layout, runtime ABI, allocators, recovery/A-B and BASIC remain open.
 The owner authorized a QEMU boot pattern as the next verified step after
 `be74fe2`; see ADR-011. O-014 logical resolution, composition, sprites and
 BASIC graphics interfaces remain open. This diagnostic settles none of them.
+
+## Fixed boot label scope — 2026-10-28
+
+The owner authorized a fixed bitmap SPIFFOS label after `8f48fa7`; see ADR-011.
+General text encoding, console/cursor/scrolling behavior, font selection, BASIC
+interfaces and logical graphics policy remain open.

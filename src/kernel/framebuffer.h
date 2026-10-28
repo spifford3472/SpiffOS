@@ -14,4 +14,9 @@ struct limine_framebuffer;
  * Startup CPU only, interrupts disabled; caller guarantees metadata/mapping
  * remain valid throughout. Uses no allocator, locks or serial hardware. */
 bool framebuffer_draw_boot_pattern(const struct limine_framebuffer *framebuffer);
+/* Draw the fixed bitmap SPIFFOS label on a black panel over the boot pattern.
+ * Borrows the mapped descriptor; returns false without writes if unsupported
+ * or smaller than 256x96 pixels. Returns true after drawing. Startup CPU only;
+ * no allocation, ownership transfer, interrupts or concurrent access. */
+bool framebuffer_draw_boot_title(const struct limine_framebuffer *framebuffer);
 #endif

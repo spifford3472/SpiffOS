@@ -1,5 +1,5 @@
 /*
- * Purpose: draw a small, recognizable boot pattern into screen memory.
+ * Purpose: draw a boot pattern and fixed bitmap title into screen memory.
  * Dependencies: official Limine framebuffer metadata; no host C library.
  * Invariants: borrowed bootloader mappings stay valid, single startup CPU,
  * no concurrent drawing, no allocation or interrupts. Only 32-bit RGB with
@@ -104,6 +104,59 @@ bool framebuffer_draw_boot_pattern(const struct limine_framebuffer *framebuffer)
                 color = blue;
             }
             row[x] = color;
+        }
+    }
+    return true;
+}
+
+/* Draw the fixed word SPIFFOS; this is intentionally not a general text API.
+ * Borrows a validated, mapped framebuffer. Returns false before any writes for
+ * unsupported metadata or insufficient space; true after painting the title.
+ * Owns/allocates nothing. Startup CPU only, no concurrent drawing/interrupts.
+ * The caller keeps Limine's descriptor and screen mappings valid throughout.
+ * See docs/operations/text-2026-10-28.md for layout and validation.
+ */
+bool framebuffer_draw_boot_title(const struct limine_framebuffer *framebuffer)
+{
+    enum {
+        GLYPH_WIDTH = 8, GLYPH_HEIGHT = 8, SCALE = 4, LETTER_COUNT = 7,
+        TITLE_WIDTH = LETTER_COUNT * GLYPH_WIDTH * SCALE,
+        TITLE_HEIGHT = GLYPH_HEIGHT * SCALE, TITLE_TOP = 48
+    };
+    /* Original hand-defined glyphs: each byte is one row, bit 7 at the left.
+     * Repeated letters are explicit to make the fixed label easy to follow.
+     * For example, 0x3c is 00111100: four white pixels between black margins.
+     * The final zero row supplies spacing beneath each letter. */
+    static const uint8_t glyphs[LETTER_COUNT][GLYPH_HEIGHT] = {
+        {0x3c, 0x66, 0x60, 0x3c, 0x06, 0x66, 0x3c, 0x00}, /* S */
+        {0x7c, 0x66, 0x66, 0x7c, 0x60, 0x60, 0x60, 0x00}, /* P */
+        {0x3c, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3c, 0x00}, /* I */
+        {0x7e, 0x60, 0x60, 0x7c, 0x60, 0x60, 0x60, 0x00}, /* F */
+        {0x7e, 0x60, 0x60, 0x7c, 0x60, 0x60, 0x60, 0x00}, /* F */
+        {0x3c, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3c, 0x00}, /* O */
+        {0x3c, 0x66, 0x60, 0x3c, 0x06, 0x66, 0x3c, 0x00}  /* S */
+    };
+    if (!framebuffer_supported(framebuffer) ||
+        framebuffer->width < TITLE_WIDTH + 2 * BORDER_PIXELS ||
+        framebuffer->height < TITLE_TOP + TITLE_HEIGHT + BORDER_PIXELS) {
+        return false;
+    }
+    uint64_t left = (framebuffer->width - TITLE_WIDTH) / 2;
+    uint32_t white = pixel_color(framebuffer, 255, 255, 255);
+    uint32_t black = pixel_color(framebuffer, 0, 0, 0);
+    volatile uint8_t *pixels = framebuffer->address;
+    for (unsigned int y = 0; y < TITLE_HEIGHT; ++y) {
+        volatile uint32_t *row = (volatile uint32_t *)(
+            pixels + (TITLE_TOP + y) * framebuffer->pitch);
+        for (unsigned int x = 0; x < TITLE_WIDTH; ++x) {
+            /* Integer division maps each 4x4 screen square to one font bit.
+             * A character occupies 32 screen columns; its source row has 8 bits.
+             * The mask walks from the highest (leftmost) bit toward the lowest. */
+            unsigned int letter = x / (GLYPH_WIDTH * SCALE);
+            unsigned int column = (x / SCALE) % GLYPH_WIDTH;
+            uint8_t bits = glyphs[letter][y / SCALE];
+            bool illuminated = (bits & (UINT8_C(0x80) >> column)) != 0;
+            row[left + x] = illuminated ? white : black;
         }
     }
     return true;

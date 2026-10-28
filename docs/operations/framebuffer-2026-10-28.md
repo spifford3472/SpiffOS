@@ -136,3 +136,10 @@ Change history: read-only inspection; verified snapshot; scoped docs-first
 record; request/drawing module; strict compile correction; guarded memory tests;
 host sanitizer tool selection; QMP capture; full pixel and corrupted-image
 checks; serial regression; GDB absent-response test; documentation and review.
+
+## Later text milestone
+
+The fixed-label step adds SPIFFOS over the pattern. Current test-framebuffer
+checks the complete pattern plus title; plain-bar pixel counts above describe
+the original `8f48fa7` milestone. See [text validation](text-2026-10-28.md) for
+current screenshots and `make test-text`.

@@ -95,3 +95,19 @@ install `qemu-system-gui` in a local terminal with
 The headless framebuffer test can pass even when this package is absent.
 If no window appears, inspect `build/run-qemu.log`: QEMU may have started a
 VNC server instead. The owner installed the package and confirmed the pattern.
+
+## Turning font bits into letters — verified 2026-10-28
+
+The boot label SPIFFOS uses seven fixed 8x8 bitmaps in framebuffer.c.
+Each bitmap row occupies one byte. For example, 0x3c has binary value 00111100:
+the middle four source pixels are white and the other four are black.
+
+The renderer tests one bit with `bits & (0x80 >> column)`. Shifting the mask
+moves from the leftmost bit toward the rightmost. A nonzero result paints white.
+Dividing screen coordinates by four maps a 4x4 block back to one bitmap pixel.
+The result is larger lettering drawn using the same pitch-aware framebuffer
+stores as the color pattern, with no font library or graphics service.
+
+This deliberately draws one fixed label. A full character set, arbitrary text,
+cursor, newlines and scrolling are future steps. Run `make test-text` or
+`make run`; see [the text validation record](operations/text-2026-10-28.md).

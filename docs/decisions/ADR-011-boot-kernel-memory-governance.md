@@ -96,3 +96,24 @@ Graphics Manager/Workspace Manager interfaces, font rendering or BASIC APIs
 from ADR-009. Native video drivers, multiple displays and user graphics remain
 open. Validate strict compilation, padded-row/guard tests, serial regression and
 an actual QEMU framebuffer capture. No physical devices, push or merge.
+
+## Fixed bitmap boot label — owner authorization 2026-10-28
+
+The owner authorized the next small step after framebuffer commit `8f48fa7`:
+render the fixed word SPIFFOS using bitmap glyphs. Continue direct ChatGPT-guided
+work for this step without delegated coding models; unrelated governance stays
+unchanged. This is a boot diagnostic, not a finalized graphics or text ABI.
+
+Use original 8x8 glyph bitmaps, scaled 4x, white on an opaque black 224x32-pixel
+panel centered horizontally at y=48, over the existing pattern. Require at least
+256x96 pixels to preserve the 16-pixel border; reject smaller/unsupported buffers
+without title writes. Honor framebuffer pitch and existing format validation.
+Emit SPIFFOS_TEXT_OK only after title drawing succeeds; retain existing serial
+markers and the missing-framebuffer path. No cursor, scrolling, keyboard or BASIC.
+
+Validation: strict kernel build, padded-row/guard tests, exact-fit and undersized
+buffer cases, screenshot comparison including the entire label, serial marker
+and visual inspection of an actual QEMU capture. Keep original staging/drafts,
+verify a pre-edit snapshot, and leave code uncommitted for review. No push,
+merge, physical-device or infrastructure changes. See the step's implementation
+and validation record in docs/operations/text-2026-10-28.md.

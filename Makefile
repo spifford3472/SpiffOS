@@ -46,4 +46,15 @@ test-framebuffer-memory: build/framebuffer-test
 .PHONY: test-framebuffer
 test-framebuffer: test-framebuffer-memory iso
 	python3 scripts/qemu.py test --screenshot
-	python3 scripts/check-framebuffer.py build/framebuffer.ppm
+	python3 scripts/check-framebuffer.py build/framebuffer.ppm --title --serial build/serial.log
+
+# Test fixed bitmap lettering using ordinary guarded host RAM.
+.PHONY: test-text-memory test-text
+build/text-test: tests/text-test.c src/kernel/framebuffer.c src/kernel/framebuffer.h include/limine.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/text-test.c src/kernel/framebuffer.c -o $@
+
+test-text-memory: build/text-test
+	./build/text-test
+
+test-text: test-text-memory test-framebuffer

@@ -122,6 +122,11 @@ void kmain(void)
                  framebuffer_draw_boot_pattern(response->framebuffers[0]);
     if (drawn) {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_OK\r\n");
+        if (framebuffer_draw_boot_title(response->framebuffers[0])) {
+            (void)serial_write("SPIFFOS_TEXT_OK\r\n");
+        } else {
+            (void)serial_write("SPIFFOS_TEXT_UNAVAILABLE\r\n");
+        }
     } else {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }

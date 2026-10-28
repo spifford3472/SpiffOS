@@ -65,3 +65,10 @@ The next authorized boot-only diagnostic draws a pattern directly into the
 first compatible Limine framebuffer. It uses firmware-selected physical
 dimensions and does not establish a logical graphics mode or workspace API.
 Validation status is recorded in `docs/operations/framebuffer-2026-10-28.md`.
+
+## Fixed boot label scope — 2026-10-28
+
+The next authorized diagnostic adds bitmap SPIFFOS lettering over the boot
+pattern. This uses the existing borrowed Limine framebuffer and does not
+establish a console or a user-space graphics interface. See
+[the text validation record](../operations/text-2026-10-28.md).
