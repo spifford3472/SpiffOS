@@ -96,3 +96,24 @@ request base revision **5**, explicitly validated with this binary. This
 supersedes the initial revision-6 choice above for this smoke-test milestone.
 The current upstream specification deprecates revisions below 6; upgrading the
 bootloader/protocol pair is future work. No newer-revision state is assumed.
+
+## Framebuffer smoke-test authorization — 2026-10-28
+
+After reviewing first-boot commit `be74fe2`, the owner authorized the next small
+step: request a Limine framebuffer, validate its format and draw a color pattern
+in QEMU. Direct ChatGPT-guided work continues for this step; no Qwen or separate
+Codex coding workflow is invoked. This does not replace unrelated governance.
+
+Use only the first provided framebuffer, with 32-bit RGB pixels and three
+non-overlapping 8-bit color fields. Honor reported pitch (bytes per row), check
+alignment and arithmetic bounds, and leave padding bytes untouched. Draw red,
+green and blue bars inside a 16-pixel purple border. If framebuffer metadata is
+missing/unsupported, report it on serial and preserve the serial boot path.
+The existing SPIFFOS_BOOT_OK marker remains; SPIFFOS_FRAMEBUFFER_OK means the
+pattern writes completed. Screenshot verification is required for visible output.
+
+This temporary kernel boot diagnostic does not decide logical display modes,
+Graphics Manager/Workspace Manager interfaces, font rendering or BASIC APIs
+from ADR-009. Native video drivers, multiple displays and user graphics remain
+open. Validate strict compilation, padded-row/guard tests, serial regression and
+an actual QEMU framebuffer capture. No physical devices, push or merge.

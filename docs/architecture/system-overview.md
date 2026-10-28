@@ -58,3 +58,10 @@ and prints `SPIFFOS_BOOT_OK` on COM1 before halting. This is a smoke test, not
 the BASIC READY environment or a completed architecture. See the
 [recovery and validation record](../operations/first-boot-2026-10-28.md) for
 protocol compatibility, workspace configuration, evidence and limitations.
+
+## Framebuffer diagnostic scope — 2026-10-28
+
+The next authorized boot-only diagnostic draws a pattern directly into the
+first compatible Limine framebuffer. It uses firmware-selected physical
+dimensions and does not establish a logical graphics mode or workspace API.
+Validation status is recorded in `docs/operations/framebuffer-2026-10-28.md`.

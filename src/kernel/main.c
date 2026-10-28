@@ -1,13 +1,15 @@
 /*
- * Purpose: prove Limine reached native x86-64 C by writing to QEMU COM1.
+ * Purpose: prove native C entry via COM1 and draw a boot framebuffer pattern.
  * Dependencies: pinned official limine.h, Limine-supplied stack and mappings.
  * Invariants: ring 0, one CPU, interrupts disabled; no heap or host C library.
  * See ADR-011 and docs/operations/first-boot-2026-10-28.md.
  * This smoke test does not implement BASIC, user processes or storage.
  */
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <limine.h>
+#include "framebuffer.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -18,6 +20,14 @@ __attribute__((used, section(".limine_requests")))
 static volatile uint64_t base_revision[] = LIMINE_BASE_REVISION(5);
 __attribute__((used, section(".limine_requests_end")))
 static volatile uint64_t requests_end[] = LIMINE_REQUESTS_END_MARKER;
+
+/* Limine fills response if a framebuffer is available; no resolution is forced.
+ * The official request ID and revision-0 fields come from the pinned header. */
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_framebuffer_request framebuffer_request = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0
+};
 
 enum {
     COM1_DATA = 0x3f8, COM1_INTERRUPT_ENABLE = 0x3f9,
@@ -103,6 +113,17 @@ void kmain(void)
     if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision)) {
         (void)serial_write("SPIFFOS_BOOT_ERROR: unsupported Limine revision\r\n");
         halt_forever();
+    }
+    /* The response and its pointer array are owned by the bootloader. Borrow
+     * them while those mappings remain intact; never free or reclaim them here. */
+    const struct limine_framebuffer_response *response = framebuffer_request.response;
+    bool drawn = response != NULL && response->framebuffer_count > 0 &&
+                 response->framebuffers != NULL &&
+                 framebuffer_draw_boot_pattern(response->framebuffers[0]);
+    if (drawn) {
+        (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_OK\r\n");
+    } else {
+        (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();

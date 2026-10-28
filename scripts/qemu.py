@@ -3,6 +3,8 @@
 from pathlib import Path
 import argparse
 import fcntl
+import json
+import socket
 import shutil
 import signal
 import subprocess
@@ -18,14 +20,45 @@ def interrupted(signum, frame):
     raise KeyboardInterrupt
 
 
+def capture_framebuffer(socket_path, output_path):
+    """Ask this QEMU instance for its rendered screen; raise on QMP errors.
+
+    Uses a private Unix socket and writes a PPM evidence file. QMP messages may
+    include asynchronous events, so wait for matching response IDs. No external
+    connection or guest memory access; socket resources close on all paths.
+    """
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(3)
+        connection.connect(str(socket_path))
+        with connection.makefile("rwb") as stream:
+            greeting = json.loads(stream.readline())
+            if "QMP" not in greeting:
+                raise RuntimeError("Missing QMP greeting")
+            for request in [
+                {"execute": "qmp_capabilities", "id": 1},
+                {"execute": "screendump", "arguments": {"filename": str(output_path)}, "id": 2}
+            ]:
+                stream.write((json.dumps(request) + "\n").encode())
+                stream.flush()
+                while True:
+                    response = json.loads(stream.readline())
+                    if response.get("id") == request["id"]:
+                        if "error" in response:
+                            raise RuntimeError("QMP screenshot error: " + str(response["error"]))
+                        break
+
+
 def main():
     """Return 0 only for a captured full marker line in test mode; always reap QEMU."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["test", "run", "debug"])
     parser.add_argument("--timeout", type=float, default=20.0, help="test deadline in seconds")
+    parser.add_argument("--screenshot", action="store_true", help="test framebuffer marker and capture build/framebuffer.ppm")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("timeout must be positive")
+    if args.screenshot and args.mode != "test":
+        parser.error("--screenshot requires test mode")
     build = ROOT / "build"
     build.mkdir(exist_ok=True)
     # Refuse competing runs sharing logs or the local GDB port.
@@ -48,6 +81,9 @@ def main():
                    "-drive", "if=pflash,format=raw,unit=1,file=" + str(variables),
                    "-cdrom", str(build / "spiffos.iso"), "-boot", "d",
                    "-serial", "file:" + str(serial), "-monitor", "none"]
+        qmp_socket = Path(directory) / "qmp.sock"
+        if args.screenshot:
+            command += ["-qmp", "unix:" + str(qmp_socket) + ",server=on,wait=off"]
         if args.mode in ["test", "debug"]:
             command += ["-display", "none"]
         if args.mode == "debug":
@@ -62,7 +98,14 @@ def main():
                 else:
                     deadline = time.monotonic() + args.timeout
                     while time.monotonic() < deadline:
-                        if MARKER in serial.read_bytes().splitlines():
+                        lines = serial.read_bytes().splitlines()
+                        if MARKER in lines:
+                            if args.screenshot:
+                                if b"SPIFFOS_FRAMEBUFFER_OK" not in lines:
+                                    print("FAIL: framebuffer success marker absent", flush=True)
+                                    break
+                                capture_framebuffer(qmp_socket, build / "framebuffer.ppm")
+                                print("CAPTURED: build/framebuffer.ppm", flush=True)
                             success = True
                             break
                         if child.poll() is not None:

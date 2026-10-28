@@ -1,0 +1,110 @@
+/*
+ * Purpose: draw a small, recognizable boot pattern into screen memory.
+ * Dependencies: official Limine framebuffer metadata; no host C library.
+ * Invariants: borrowed bootloader mappings stay valid, single startup CPU,
+ * no concurrent drawing, no allocation or interrupts. Only 32-bit RGB with
+ * disjoint 8-bit channels is supported. Padding is never written.
+ * References: ADR-011; docs/operations/framebuffer-2026-10-28.md.
+ */
+#include <stddef.h>
+#include <stdint.h>
+#include <limine.h>
+#include "framebuffer.h"
+
+enum { BORDER_PIXELS = 16, BYTES_PER_PIXEL = 4, CHANNEL_BITS = 8 };
+
+/* Check metadata before any screen writes; false means unsupported/unsafe.
+ * Borrows the descriptor, owns nothing, has no side effects or allocations.
+ * Caller guarantees the descriptor itself is readable; boot CPU only.
+ * This checks arithmetic/layout, not whether arbitrary addresses are mapped. */
+static bool framebuffer_supported(const struct limine_framebuffer *framebuffer)
+{
+    if (framebuffer == NULL || framebuffer->address == NULL ||
+        framebuffer->memory_model != LIMINE_FRAMEBUFFER_RGB ||
+        framebuffer->bpp != 32 ||
+        framebuffer->width <= 2 * BORDER_PIXELS ||
+        framebuffer->height <= 2 * BORDER_PIXELS) {
+        return false;
+    }
+    /* Pitch is measured in bytes, and may include padding after visible pixels.
+     * Check multiplication before calculating row length or total span. */
+    if (framebuffer->width > UINT64_MAX / BYTES_PER_PIXEL ||
+        framebuffer->pitch < framebuffer->width * BYTES_PER_PIXEL ||
+        framebuffer->pitch % BYTES_PER_PIXEL != 0 ||
+        (uintptr_t)framebuffer->address % BYTES_PER_PIXEL != 0 ||
+        framebuffer->height > UINTPTR_MAX / framebuffer->pitch ||
+        (uintptr_t)framebuffer->address >
+            UINTPTR_MAX - framebuffer->height * framebuffer->pitch) {
+        return false;
+    }
+    /* Restrict shifts before evaluating them: shifting a 32-bit value by 32
+     * or more is undefined in C. Each 8-bit channel must fit within the word. */
+    if (framebuffer->red_mask_size != CHANNEL_BITS ||
+        framebuffer->green_mask_size != CHANNEL_BITS ||
+        framebuffer->blue_mask_size != CHANNEL_BITS ||
+        framebuffer->red_mask_shift > 24 ||
+        framebuffer->green_mask_shift > 24 ||
+        framebuffer->blue_mask_shift > 24) {
+        return false;
+    }
+    uint32_t red_mask = UINT32_C(255) << framebuffer->red_mask_shift;
+    uint32_t green_mask = UINT32_C(255) << framebuffer->green_mask_shift;
+    uint32_t blue_mask = UINT32_C(255) << framebuffer->blue_mask_shift;
+    return (red_mask & green_mask) == 0 && (red_mask & blue_mask) == 0 &&
+           (green_mask & blue_mask) == 0;
+}
+
+/* Pack three 0..255 channel values according to previously checked metadata.
+ * Returns the pixel word with unused bits zero. Pure calculation; no ownership,
+ * allocation, error path or hardware access; any context after validation. */
+static uint32_t pixel_color(const struct limine_framebuffer *framebuffer,
+                            uint8_t red, uint8_t green, uint8_t blue)
+{
+    return ((uint32_t)red << framebuffer->red_mask_shift) |
+           ((uint32_t)green << framebuffer->green_mask_shift) |
+           ((uint32_t)blue << framebuffer->blue_mask_shift);
+}
+
+/* Draw a purple border enclosing red, green and blue vertical bars.
+ * Argument: borrowed descriptor with dimensions in pixels, pitch in bytes.
+ * Returns false without writing if metadata is unsupported; true after drawing.
+ * Owns no memory; performs volatile screen stores. Startup CPU only, no locks
+ * or interrupts; descriptor and full screen mapping must remain valid. */
+bool framebuffer_draw_boot_pattern(const struct limine_framebuffer *framebuffer)
+{
+    if (!framebuffer_supported(framebuffer)) {
+        return false;
+    }
+    uint32_t border = pixel_color(framebuffer, 160, 160, 255);
+    uint32_t red = pixel_color(framebuffer, 255, 0, 0);
+    uint32_t green = pixel_color(framebuffer, 0, 255, 0);
+    uint32_t blue = pixel_color(framebuffer, 0, 0, 255);
+    uint64_t inner_width = framebuffer->width - 2 * BORDER_PIXELS;
+    uint64_t first_boundary = BORDER_PIXELS + inner_width / 3;
+    uint64_t second_boundary = BORDER_PIXELS + inner_width * 2 / 3;
+    volatile uint8_t *pixels = framebuffer->address;
+
+    for (uint64_t y = 0; y < framebuffer->height; ++y) {
+        /* Byte arithmetic advances by the reported pitch, including padding.
+         * The checked alignment lets us then address this row as 32-bit pixels.
+         * Volatile keeps the compiler from discarding hardware-visible stores. */
+        volatile uint32_t *row =
+            (volatile uint32_t *)(pixels + y * framebuffer->pitch);
+        for (uint64_t x = 0; x < framebuffer->width; ++x) {
+            uint32_t color;
+            if (x < BORDER_PIXELS || y < BORDER_PIXELS ||
+                x >= framebuffer->width - BORDER_PIXELS ||
+                y >= framebuffer->height - BORDER_PIXELS) {
+                color = border;
+            } else if (x < first_boundary) {
+                color = red;
+            } else if (x < second_boundary) {
+                color = green;
+            } else {
+                color = blue;
+            }
+            row[x] = color;
+        }
+    }
+    return true;
+}

@@ -65,3 +65,33 @@ smoke test. Run `make test` from the repository root. The kernel prints
 Read [the recovery and boot record](operations/first-boot-2026-10-28.md) for
 prerequisites, protocol pins, source walkthrough, VS Code debugging and actual
 validation. The educational examples above remain illustrative.
+
+## Writing pixels — verified 2026-10-28
+
+A framebuffer is mapped memory whose contents become the display. Limine gives
+us the starting address, dimensions, bytes per row (pitch), and color-bit layout.
+The kernel requests that description, then borrows it while Limine's mappings
+remain valid. It does not allocate or free screen memory in this diagnostic.
+
+`framebuffer.c` advances to a row using byte arithmetic:
+`row_address = address + y * pitch`. It then treats that row as an array of
+32-bit pixels: `row[x] = color`. One pixel occupies four bytes; pitch may include
+extra bytes after the visible pixels. Using width instead of pitch to find the
+next row would put writes in the wrong place when padding exists.
+
+The volatile pixel pointer makes each assignment an actual store. Color masks
+describe where red, green and blue bits belong in that stored word. The code
+checks those masks, address alignment and arithmetic before drawing.
+
+Run `make test-framebuffer` to check memory guards and QEMU's actual display,
+or `make run` to see the pattern. See the
+[framebuffer validation record](operations/framebuffer-2026-10-28.md).
+
+### QEMU window prerequisite on Forge
+
+Interactive `make run` needs QEMU's graphical backend. On Linux Mint/Ubuntu,
+install `qemu-system-gui` in a local terminal with
+`sudo apt install qemu-system-gui`. Run from a graphical desktop session.
+The headless framebuffer test can pass even when this package is absent.
+If no window appears, inspect `build/run-qemu.log`: QEMU may have started a
+VNC server instead. The owner installed the package and confirmed the pattern.

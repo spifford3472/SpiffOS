@@ -71,3 +71,9 @@ base revision 5, C entry and template-derived ELF layout are recorded in
 [boot record](../operations/first-boot-2026-10-28.md). The exact serial marker
 was captured in two passing QEMU tests, including a fresh build. Future process
 VM layout, runtime ABI, allocators, recovery/A-B and BASIC remain open.
+
+## Scoped framebuffer diagnostic — 2026-10-28
+
+The owner authorized a QEMU boot pattern as the next verified step after
+`be74fe2`; see ADR-011. O-014 logical resolution, composition, sprites and
+BASIC graphics interfaces remain open. This diagnostic settles none of them.
