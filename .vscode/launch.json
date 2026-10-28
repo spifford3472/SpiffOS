@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "SpiffOS: Attach to paused QEMU",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/spiffos-kernel.elf",
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "miDebuggerServerAddress": "127.0.0.1:1234",
+      "stopAtEntry": false,
+      "launchCompleteCommand": "None",
+      "setupCommands": [
+        {
+          "text": "-break-insert -h kmain",
+          "description": "Stop at the kernel entry"
+        }
+      ]
+    }
+  ]
+}

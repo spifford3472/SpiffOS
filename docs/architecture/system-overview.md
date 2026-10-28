@@ -50,3 +50,11 @@ The latest explicitly approved owner decision prevails over older conflicting dr
 ## Approved SpiffFS user-facing policy (2026-10-26)
 
 SpiffFS stores one current saved version per file; deleting moves a file to user-managed Trash until explicitly emptied. There is no automatic saved-version history or Trash expiration/purge. This supersedes older retention/versioning drafts. Crash-consistent updates, power-loss-resistant boot and recovery are independent mandatory requirements; implementation mechanisms remain open. See [ADR-012](../decisions/ADR-012-spifffs-trash-policy.md).
+
+## Verified first-boot scope — 2026-10-28
+
+A minimal native x86-64 kernel now boots through pinned Limine in QEMU/OVMF
+and prints `SPIFFOS_BOOT_OK` on COM1 before halting. This is a smoke test, not
+the BASIC READY environment or a completed architecture. See the
+[recovery and validation record](../operations/first-boot-2026-10-28.md) for
+protocol compatibility, workspace configuration, evidence and limitations.

@@ -56,3 +56,12 @@ Start in QEMU with serial logging and deterministic smoke tests; test fault path
 5. Consult the build and test instructions before changing behavior.
 
 As the kernel is implemented, replace illustrative examples with verified excerpts and add a walkthrough of each real subsystem.
+
+## Verified first-boot implementation — 2026-10-28
+
+The repository now has a freestanding Clang/LLD build and a QEMU UEFI serial
+smoke test. Run `make test` from the repository root. The kernel prints
+`SPIFFOS_BOOT_OK` and halts; it does not yet provide BASIC or user processes.
+Read [the recovery and boot record](operations/first-boot-2026-10-28.md) for
+prerequisites, protocol pins, source walkthrough, VS Code debugging and actual
+validation. The educational examples above remain illustrative.

@@ -59,3 +59,40 @@ These entries record explicit owner approval; see [ADR-011](ADR-011-boot-kernel-
 **Audio reconciliation:** A-012's foreground-only audible-output rule is superseded. ADR-010 already documents background music continuing across workspace switches, a single system-wide mixer, and per-workspace volume/mute. The later approval aligns with ADR-010. Global voice limits and exact audio resource budgets remain open.
 
 **A-038 (accepted 2026-10-26):** SpiffFS keeps only the current saved file version; deleted files go to manually managed Trash until explicitly emptied. No automatic file version history, Trash expiration or silent purge. Crash consistency and power-loss-resistant boot remain mandatory and independent of Trash. See [ADR-012](ADR-012-spifffs-trash-policy.md). Earlier automatic retention/versioning requirements are superseded where conflicting.
+
+## Scoped first-boot authorization — 2026-10-28
+
+The owner explicitly authorized direct ChatGPT-guided recovery, VS Code setup,
+and a QEMU-only first boot on `feat/first-qemu-boot`, without Qwen or a separate
+Codex coding workflow. This exception applies only to this boot issue; the
+historical model policy and unrelated governance are retained.
+
+Use the existing official Limine C template at
+`40dcbdf9602a0255b1fd20e148c6343476df17c3` as the reference. Pin the protocol to
+`3a0526b700e356f0eac1b71a77697b3fd1c707a3` (base revision 6), and Limine binaries
+to `7a9013f305de0bea1f6310e76e7baba30499fef0` (v10.8.5-binary).
+For this smoke-test milestone, use the template's higher-half ELF layout and
+C `kmain` entry on Limine's supplied stack. The recovered `start.S` remains
+preserved but is excluded from the build: its fixed physical stack is unsafe.
+This does not settle future memory layout, syscall ABI or runtime architecture.
+
+Validation requires a strict freestanding Clang build, retained Limine request
+markers, a UEFI ISO booted with OVMF and a writable local variables copy, and
+captured serial output containing the exact line `SPIFFOS_BOOT_OK`. Compilation
+alone is insufficient. BASIC, ring 3, interrupts, allocators, storage recovery,
+A/B slots and physical hardware validation remain unimplemented.
+
+No merge, push, physical disk, USB, or infrastructure configuration changes are
+authorized. Recovery and exact validation evidence are recorded in
+`docs/operations/first-boot-2026-10-28.md`.
+
+### Validated protocol compatibility correction — 2026-10-28
+
+The first QEMU attempt reached `kmain` but rejected requested base revision 6.
+GDB at `kmain` read the official base tag as `{magic, 5, 6}`: the pinned Limine
+v10.8.5 binary loaded revision 5 and left the unsupported request unchanged.
+The newer template requests revision 6. Keep both dependency commit pins and
+request base revision **5**, explicitly validated with this binary. This
+supersedes the initial revision-6 choice above for this smoke-test milestone.
+The current upstream specification deprecates revisions below 6; upgrading the
+bootloader/protocol pair is future work. No newer-revision state is assumed.

@@ -62,3 +62,12 @@ Keep original open items above as historical inventory; these status notes take 
 - **Graphics implementation detail:** later approved default logical modes and opt-in collision behavior supersede older proposals where approval is clear; exact APIs/driver implementation still open. Avoid spending initial boot milestones on these details.
 
 **Filesystem policy resolved 2026-10-26:** manual Trash, one current saved version, no automatic retention/purge; see ADR-012. O-008 remains OPEN only for implementation details (on-disk format, crash consistency, recovery, transaction semantics, compatibility and A/B safeguards). Do not treat older automatic versioning/retention policies as current.
+
+## First-boot milestone — 2026-10-28
+
+For the QEMU-only smoke test, the pinned Limine protocol and binary pair,
+base revision 5, C entry and template-derived ELF layout are recorded in
+[ADR-011](ADR-011-boot-kernel-memory-governance.md) and the
+[boot record](../operations/first-boot-2026-10-28.md). The exact serial marker
+was captured in two passing QEMU tests, including a fresh build. Future process
+VM layout, runtime ABI, allocators, recovery/A-B and BASIC remain open.

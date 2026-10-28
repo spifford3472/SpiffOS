@@ -1,0 +1,10 @@
+{
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.tabSize": 4,
+  "editor.detectIndentation": true,
+  "files.associations": {
+    "*.S": "asm",
+    "*.ld": "plaintext"
+  }
+}

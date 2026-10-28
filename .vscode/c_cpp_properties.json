@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "name": "SpiffOS x86-64",
+      "compilerPath": "/usr/bin/clang",
+      "compilerArgs": [
+        "--target=x86_64-unknown-none-elf",
+        "-ffreestanding",
+        "-mno-red-zone",
+        "-mcmodel=kernel"
+      ],
+      "includePath": [
+        "${workspaceFolder}/include"
+      ],
+      "cStandard": "c11",
+      "intelliSenseMode": "linux-clang-x64"
+    }
+  ],
+  "version": 4
+}
