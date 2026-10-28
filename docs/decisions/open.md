@@ -83,3 +83,9 @@ BASIC graphics interfaces remain open. This diagnostic settles none of them.
 The owner authorized a fixed bitmap SPIFFOS label after `8f48fa7`; see ADR-011.
 General text encoding, console/cursor/scrolling behavior, font selection, BASIC
 interfaces and logical graphics policy remain open.
+
+## Boot console scope — 2026-10-28
+
+A bounded kernel diagnostic console is authorized after `25150f0`; see ADR-011.
+Scrolling, input, full text encoding, visible cursor, user console interfaces
+and BASIC remain open and outside this step.

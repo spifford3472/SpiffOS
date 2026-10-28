@@ -161,3 +161,57 @@ bool framebuffer_draw_boot_title(const struct limine_framebuffer *framebuffer)
     }
     return true;
 }
+
+/* Fill a nonempty rectangle after complete metadata/bounds validation.
+ * Origin and size in pixels; rgb is logical 0xRRGGBB. False causes no writes.
+ * Borrows mappings, no allocation, startup CPU only/no concurrent drawing. */
+bool framebuffer_fill_rectangle(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height, uint32_t rgb)
+{
+    /* Subtraction-based bounds checks avoid overflowing x+width or y+height. */
+    if (!framebuffer_supported(framebuffer) || width == 0 || height == 0 ||
+        x > framebuffer->width || width > framebuffer->width - x ||
+        y > framebuffer->height || height > framebuffer->height - y) {
+        return false;
+    }
+    uint32_t color = pixel_color(framebuffer, (uint8_t)(rgb >> 16),
+                                 (uint8_t)(rgb >> 8), (uint8_t)rgb);
+    volatile uint8_t *pixels = framebuffer->address;
+    for (uint64_t row_index = 0; row_index < height; ++row_index) {
+        volatile uint32_t *row = (volatile uint32_t *)(
+            pixels + (y + row_index) * framebuffer->pitch);
+        for (uint64_t column = 0; column < width; ++column) {
+            row[x + column] = color;
+        }
+    }
+    return true;
+}
+
+/* Draw borrowed glyph rows into one 16x16 cell, with logical RGB colors.
+ * False leaves screen untouched for invalid metadata/coordinates/NULL glyph.
+ * Full cell/mapping must remain valid. No allocation; startup CPU only. */
+bool framebuffer_draw_cell(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, const uint8_t glyph[8], uint32_t foreground,
+    uint32_t background)
+{
+    enum { CELL_PIXELS = 16, GLYPH_SCALE = 2 };
+    if (glyph == NULL || !framebuffer_supported(framebuffer) ||
+        x > framebuffer->width || CELL_PIXELS > framebuffer->width - x ||
+        y > framebuffer->height || CELL_PIXELS > framebuffer->height - y) {
+        return false;
+    }
+    uint32_t ink = pixel_color(framebuffer, (uint8_t)(foreground >> 16),
+                               (uint8_t)(foreground >> 8), (uint8_t)foreground);
+    uint32_t paper = pixel_color(framebuffer, (uint8_t)(background >> 16),
+                                 (uint8_t)(background >> 8), (uint8_t)background);
+    volatile uint8_t *pixels = framebuffer->address;
+    for (unsigned int py = 0; py < CELL_PIXELS; ++py) {
+        volatile uint32_t *row = (volatile uint32_t *)(
+            pixels + (y + py) * framebuffer->pitch);
+        for (unsigned int px = 0; px < CELL_PIXELS; ++px) {
+            bool set = (glyph[py / GLYPH_SCALE] & (UINT8_C(0x80) >> (px / GLYPH_SCALE))) != 0;
+            row[x + px] = set ? ink : paper;
+        }
+    }
+    return true;
+}

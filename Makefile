@@ -9,7 +9,7 @@ KERNEL := build/spiffos-kernel.elf
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/text-console.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -18,8 +18,8 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -46,7 +46,7 @@ test-framebuffer-memory: build/framebuffer-test
 .PHONY: test-framebuffer
 test-framebuffer: test-framebuffer-memory iso
 	python3 scripts/qemu.py test --screenshot
-	python3 scripts/check-framebuffer.py build/framebuffer.ppm --title --serial build/serial.log
+	python3 scripts/check-framebuffer.py build/framebuffer.ppm --title --console --serial build/serial.log
 
 # Test fixed bitmap lettering using ordinary guarded host RAM.
 .PHONY: test-text-memory test-text
@@ -58,3 +58,21 @@ test-text-memory: build/text-test
 	./build/text-test
 
 test-text: test-text-memory test-framebuffer
+
+build/text-console.o: src/kernel/text-console.c src/kernel/text-console.h src/kernel/framebuffer.h src/kernel/console-font.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/console-font.o: src/kernel/console-font.c src/kernel/console-font.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: test-console-memory test-console
+build/console-test: tests/console-test.c src/kernel/text-console.c src/kernel/text-console.h src/kernel/console-font.c src/kernel/console-font.h src/kernel/framebuffer.c src/kernel/framebuffer.h include/limine.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/console-test.c src/kernel/text-console.c src/kernel/console-font.c src/kernel/framebuffer.c -o $@
+
+test-console-memory: build/console-test
+	./build/console-test
+
+test-console: test-console-memory test-text

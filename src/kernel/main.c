@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <limine.h>
 #include "framebuffer.h"
+#include "text-console.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -127,6 +128,22 @@ void kmain(void)
         } else {
             (void)serial_write("SPIFFOS_TEXT_UNAVAILABLE\r\n");
         }
+        const struct limine_framebuffer *screen = response->framebuffers[0];
+        struct text_console console;
+        /* Only whole cells fit in the panel; keep the title and outer border.
+         * Check subtraction first so small dimensions cannot wrap unsigned sizes. */
+        bool console_ok = screen->width > 64 && screen->height >= 160 &&
+            text_console_initialize(&console, screen, 32, 112,
+                (screen->width - 64) / TEXT_CELL_PIXELS,
+                (screen->height - 144) / TEXT_CELL_PIXELS) &&
+            text_console_write(&console,
+                "SPIFFOS BOOT CONSOLE\n"
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n"
+                "0123456789 .:?\n"
+                "TEXT ADVANCES THE CURSOR.\n"
+                "NEWLINES AND WRAPPING ARE ACTIVE.");
+        (void)serial_write(console_ok ? "SPIFFOS_CONSOLE_OK\r\n" :
+                                       "SPIFFOS_CONSOLE_UNAVAILABLE\r\n");
     } else {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }

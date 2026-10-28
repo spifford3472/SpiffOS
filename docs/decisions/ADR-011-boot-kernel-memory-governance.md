@@ -117,3 +117,30 @@ and visual inspection of an actual QEMU capture. Keep original staging/drafts,
 verify a pre-edit snapshot, and leave code uncommitted for review. No push,
 merge, physical-device or infrastructure changes. See the step's implementation
 and validation record in docs/operations/text-2026-10-28.md.
+
+## Small boot text console — owner authorization 2026-10-28
+
+After saving fixed-label milestone `25150f0`, the owner authorized printing
+different characters and advancing a logical cursor. Continue direct
+ChatGPT-guided work without delegated coding models. Unrelated governance
+remains unchanged. This is a kernel boot diagnostic, not a stable console ABI.
+
+Use caller-owned state and borrowed Limine mappings, with no heap. Original
+5x7 uppercase/digit glyphs occupy 8x8 cells at scale 2 (16x16 screen pixels).
+Support space, period, colon and question mark; unsupported bytes render '?'.
+Newline sets column zero and advances the row. Printable characters advance
+and wrap immediately after the final column. A cursor row equal to the row
+count means full: later input returns false without writes. String output may
+be partial on error. No scrolling, visible/blinking cursor, input or BASIC.
+
+Keep the bars and fixed title; show demonstration text in a dark-blue panel
+at x=32,y=112, using whole 16x16 cells and a 32-pixel right/bottom margin.
+Rectangle/cell operations must validate layout and bounds before writing.
+Emit SPIFFOS_CONSOLE_OK only after the demonstration prints completely.
+Retain prior markers and serial diagnostics if screen output is unavailable.
+
+Validate guarded padded RAM, wrapping/newlines/full-panel behavior, unsupported
+characters, strict kernel build, actual QEMU capture and serial success. Verify
+a backup before source changes, preserve current staging/drafts, and leave the
+new step uncommitted for review. No push, merge or physical-device changes.
+See docs/operations/console-2026-10-28.md for actual results and limitations.

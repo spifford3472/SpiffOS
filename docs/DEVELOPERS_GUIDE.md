@@ -111,3 +111,25 @@ stores as the color pattern, with no font library or graphics service.
 This deliberately draws one fixed label. A full character set, arbitrary text,
 cursor, newlines and scrolling are future steps. Run `make test-text` or
 `make run`; see [the text validation record](operations/text-2026-10-28.md).
+
+## A console is state plus pixel drawing — verified 2026-10-28
+
+`struct text_console` records where the next character belongs: a row and a
+column. The framebuffer origin is measured in pixels; cursor positions are
+measured in character cells. One cell is 16x16 pixels at the current 2x scale.
+A cell at (column,row) starts at `(left + column*16, top + row*16)`.
+
+After successfully painting a character, the console advances its column.
+The last column wraps to column zero on the next row. A newline also selects
+column zero on the next row. Reaching `row == rows` means full; further output
+fails without writing outside the panel. There is no scrolling or blinking
+cursor yet. A string can print a prefix before reporting that the panel filled.
+
+The console owns no allocated memory: the caller supplies state and keeps the
+borrowed Limine framebuffer valid. Font lookup returns row bits; framebuffer
+functions pack colors and touch screen memory. Unsupported characters display
+'?'. This separation keeps cursor rules independent of the hardware layout.
+
+Run `make test-console` for guarded memory and actual QEMU screen verification.
+Close an old QEMU window before `make run` to load the new kernel. See the
+[console record](operations/console-2026-10-28.md) for exact scope and results.

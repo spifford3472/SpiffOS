@@ -72,3 +72,9 @@ The next authorized diagnostic adds bitmap SPIFFOS lettering over the boot
 pattern. This uses the existing borrowed Limine framebuffer and does not
 establish a console or a user-space graphics interface. See
 [the text validation record](../operations/text-2026-10-28.md).
+
+## Boot console diagnostic — 2026-10-28
+
+The next authorized step adds a small caller-owned text console over the
+existing framebuffer. Only kernel startup uses it; process/workspace console
+interfaces remain open. See [console validation](../operations/console-2026-10-28.md).
