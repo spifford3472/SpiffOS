@@ -8,7 +8,7 @@ See ../decisions/ADR-memory-foundation.md for approved scope and later proposals
 
 Worktree: /home/geoff/projects/spiffos-memory, feat/memory-foundation,
 from deployed/documented main 9e98a0f. Original /home/geoff/projects/spiffos
-staging/drafts remain separate. No merge or deployment is claimed here.
+staging/drafts remain separate. M1 merge/deployment is recorded below.
 
 ## Implementation
 memory-map.h/.c is a pure interval analyzer with a 512-entry diagnostic bound.
@@ -92,3 +92,25 @@ owner quotas, an emergency reserve allocation, process protection, BASIC or
 nine running workspaces. Those follow as separate verified checkpoints.
 Rollback: build 9e98a0f in an isolated worktree. Preserve the owner index and
 history. No USB, physical disk, firmware, network or infrastructure change.
+
+## PR18 merge and deployment
+
+The owner authorized local QEMU merges/deployments as needed until
+2026-10-30 03:00 America/New_York. PR18 tested head
+2aa9c9090fec21c6f49b8bc6af9401b8e82ebdbb merged as
+81d457bcb140b976be9bedc8b2bbe4dbd3a1c028.
+
+The main checkout rebuilt successfully, but its test runner correctly refused
+a lock held by the owner's open QEMU window (PID 1022980). That window was
+preserved. A detached checkout /home/geoff/projects/spiffos-pr18-validation at
+the exact merge then passed make test-memory test-keyboard test-workspace
+test-workspace-scroll (exit 0, 37.37s) and scripts/test-safe-launcher.py
+(exit 0, 26.56s). Logs are retained under spiffos-memory/build:
+pr18-isolated-postmerge.log and pr18-isolated-launcher.log.
+The earlier main-checkout lock refusal remains in build/pr18-postmerge.log.
+
+The tested ISO was atomically installed as
+/home/geoff/projects/spiffos-qemu-main/build/spiffos.iso; both ISO hashes matched:
+a3a941ce4618de6ec238db80b8667b2ccf69867e445261f9af2779decd955c68
+The running guest retains its already-booted RAM state; the new image is used
+at the next launch. No running emulator was terminated or physical media used.

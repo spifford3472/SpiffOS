@@ -14,4 +14,9 @@ struct limine_memmap_response;
  * transfer; one boot CPU caller only, interrupts disabled. */
 bool memory_boot_report(const struct limine_memmap_response *response,
     bool (*write_text)(const char *text));
+/* Once per boot, initialize owner metadata after a successful map report and
+ * exercise allocate/free without accessing returned physical frames. Unsupported
+ * capacity/map emits ALLOCATOR_UNAVAILABLE and returns writer status; self-test
+ * or output failure returns false. Borrow callback synchronously, one CPU. */
+bool memory_boot_allocator_probe(bool (*write_text)(const char *text));
 #endif
