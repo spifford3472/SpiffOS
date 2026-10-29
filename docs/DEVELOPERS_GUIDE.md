@@ -215,3 +215,25 @@ Run `make test-keyboard` for host sanitizer tests and actual QMP-injected keys.
 Run `make test-workspace test-workspace-scroll` for earlier screen regressions.
 Run `make run`, focus the QEMU window and type. Use Enter to create new rows.
 There is no keyboard workspace-reset command yet.
+
+## Safe interactive launching — 2026-10-29
+
+Run `make run` from this checkout in a graphical desktop session. The runner
+explicitly chooses GTK, starts windowed, scales the framebuffer with the window,
+and keeps the host pointer visible. Normal keyboard focus accepts typing;
+exclusive Grab Input is unnecessary. Do not enable View > Grab Input or hover
+grabbing for this diagnostic. **Ctrl+Alt+G releases an accidental input grab**
+(the observed recovery shortcut, also verified in QEMU's installed GTK source
+and manual). Close the window to exit QEMU; this runner then removes its private
+firmware variables and control socket. Closing the emulator loses RAM-only work;
+this is host process shutdown, not a guest filesystem shutdown implementation.
+
+The run command selects an emulated absolute pointer through local QMP before
+execution and again after the boot marker. This avoids GTK's relative-pointer
+click capture without a guest mouse driver. It changes no physical USB devices.
+The fixed guest framebuffer scales; window resizing does not change guest modes.
+`make test` and `make debug` retain headless behavior. Debug GDB remains local-only.
+Run `python3 scripts/test-safe-launcher.py` after `make iso` to exercise real
+headless guest boot, pointer selection, input and runner cleanup. Desktop focus,
+resizing, capture release and window close remain manual acceptance checks.
+See [launcher evidence](operations/safe-launcher-2026-10-29.md).

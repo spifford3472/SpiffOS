@@ -99,3 +99,15 @@ See docs/decisions/ADR-qemu-keyboard-input.md (repository-relative) for scope,
 rationale and validation. PS/2 polling is a temporary kernel diagnostic; USB,
 interrupts, full character input, shortcuts, BASIC and the final input ABI remain open.
 Prior no-merge restrictions are superseded for this milestone only.
+
+## Safe launcher and screen editing — owner authorization 2026-10-29
+
+The owner authorized direct ChatGPT architecture, implementation, local builds,
+tests and documentation for safer QEMU launching and stored logical input with
+screen editing. No delegated model/agent is used. This scoped exception supersedes
+the historical Qwen-first requirement only for these objectives. PR #13's merge
+and deployment authorization does not extend here: prepare tested PRs for review;
+no merge, physical disk, USB, firmware, network or unrelated service changes.
+Preserve the original checkout/index and unrelated work. See
+[launcher decision](../decisions/ADR-safe-qemu-launcher.md). Screen-editing rules
+requiring a material interaction choice remain proposals until owner review.

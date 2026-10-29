@@ -13,6 +13,9 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = b"SPIFFOS_BOOT_OK"
+# Explicit settings avoid a default backend or accidental hover grab.
+GTK_DISPLAY = ("gtk,full-screen=off,grab-on-hover=off,show-cursor=on,"
+               "window-close=on,zoom-to-fit=on,show-menubar=on,gl=off")
 
 
 def interrupted(signum, frame):
@@ -46,6 +49,64 @@ def capture_framebuffer(socket_path, output_path):
                         if "error" in response:
                             raise RuntimeError("QMP screenshot error: " + str(response["error"]))
                         break
+
+
+def select_absolute_pointer(socket_path, child, resume=False):
+    """Select this VM's tablet before execution or after firmware initialization.
+
+    Borrow child; never touch other processes. Wait at most five seconds for the
+    private socket, then use bounded QMP reads. HMP's numeric mouse_set selector
+    comes from query-mice, never shell text or external input. Raise on any
+    missing tablet, protocol error or failed selection so main reaps its child.
+    """
+    deadline = time.monotonic() + 5
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(3)
+        while True:
+            if child.poll() is not None:
+                raise RuntimeError("QEMU exited before pointer setup; see run-qemu.log")
+            try:
+                connection.connect(str(socket_path))
+                break
+            except (FileNotFoundError, ConnectionRefusedError):
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Timed out waiting for private QMP socket")
+                time.sleep(0.02)
+        with connection.makefile("rwb") as stream:
+            if "QMP" not in json.loads(stream.readline()):
+                raise RuntimeError("Missing QMP greeting")
+
+            def execute(name, arguments=None):
+                """Return one matching QMP reply; ignore asynchronous events."""
+                request = {"execute": name, "id": name}
+                if arguments is not None:
+                    request["arguments"] = arguments
+                stream.write((json.dumps(request) + "\n").encode())
+                stream.flush()
+                # Events must not extend the exchange indefinitely.
+                response_deadline = time.monotonic() + 3
+                while time.monotonic() < response_deadline:
+                    response = json.loads(stream.readline())
+                    if response.get("id") == name:
+                        if "error" in response:
+                            raise RuntimeError("QMP pointer setup: " + str(response["error"]))
+                        return response["return"]
+                raise RuntimeError("QMP pointer response deadline exceeded")
+
+            execute("qmp_capabilities")
+            mice = execute("query-mice")
+            tablet = next((m for m in mice if m["absolute"] and
+                           m["name"] == "QEMU Virtio Tablet"), None)
+            if tablet is None:
+                raise RuntimeError("QEMU absolute pointer unavailable")
+            execute("human-monitor-command", {
+                "command-line": "mouse_set " + str(int(tablet["index"]))})
+            if not any(m["index"] == tablet["index"] and m["absolute"] and
+                       m["current"] for m in execute("query-mice")):
+                raise RuntimeError("QEMU absolute pointer selection failed")
+            if resume:
+                execute("cont")
+    print("POINTER: absolute mode selected; normal focus needs no input grab", flush=True)
 
 
 def main():
@@ -85,10 +146,13 @@ def main():
                    "-cdrom", str(build / "spiffos.iso"), "-boot", "d",
                    "-serial", "file:" + str(serial), "-monitor", "none"]
         qmp_socket = Path(directory) / "qmp.sock"
-        if args.screenshot or args.keyboard:
+        if args.screenshot or args.keyboard or args.mode == "run":
             command += ["-qmp", "unix:" + str(qmp_socket) + ",server=on,wait=off"]
         if args.mode in ["test", "debug"]:
             command += ["-display", "none"]
+        if args.mode == "run":
+            command += ["-display", GTK_DISPLAY, "-device",
+                        "virtio-tablet-pci,id=host-pointer", "-S"]
         if args.mode == "debug":
             command += ["-S", "-gdb", "tcp:127.0.0.1:1234"]
         print("COMMAND:", " ".join(command), flush=True)
@@ -96,7 +160,22 @@ def main():
             child = subprocess.Popen(command, cwd=ROOT, stdout=diagnostics, stderr=subprocess.STDOUT)
             success = False
             try:
-                if args.mode != "test":
+                if args.mode == "run":
+                    print("Windowed GTK: focus to type; Ctrl+Alt+G releases input capture.", flush=True)
+                    select_absolute_pointer(qmp_socket, child, resume=True)
+                    deadline = time.monotonic() + args.timeout
+                    while MARKER not in serial.read_bytes().splitlines():
+                        if child.poll() is not None:
+                            return child.returncode
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError("Guest boot deadline exceeded; see run-serial.log")
+                        time.sleep(0.1)
+                    # Firmware can choose an input device; restore our policy
+                    # after it hands control to the native kernel.
+                    if child.poll() is None:
+                        select_absolute_pointer(qmp_socket, child)
+                        child.wait()
+                elif args.mode == "debug":
                     child.wait()
                 else:
                     deadline = time.monotonic() + args.timeout
