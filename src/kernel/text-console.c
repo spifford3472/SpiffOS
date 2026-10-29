@@ -9,7 +9,7 @@
 #include "console-font.h"
 #include "text-console.h"
 
-enum { CONSOLE_BACKGROUND = 0x091b35, CONSOLE_FOREGROUND = 0xa0a0ff };
+
 
 /* Initialize and clear a viewport, with dimensions in cells and origin in pixels.
  * False disables this state without screen writes; successful initialization
@@ -26,7 +26,7 @@ bool text_console_initialize(struct text_console *console,
     if (columns == 0 || rows == 0 || columns > UINT64_MAX / TEXT_CELL_PIXELS ||
         rows > UINT64_MAX / TEXT_CELL_PIXELS ||
         !framebuffer_fill_rectangle(framebuffer, x, y, columns * TEXT_CELL_PIXELS,
-                                    rows * TEXT_CELL_PIXELS, CONSOLE_BACKGROUND)) {
+                                    rows * TEXT_CELL_PIXELS, TEXT_CONSOLE_BACKGROUND_RGB)) {
         return false;
     }
     console->framebuffer = framebuffer;
@@ -51,34 +51,20 @@ bool text_console_putc(struct text_console *console, unsigned char character)
         return false;
     }
     if (console->row == console->rows) {
-        if (console->scroll_count == UINT64_MAX) {
-            return false;
-        }
         /* Defer moving the last line until another byte actually needs room.
          * This keeps an exact-fill final character visible on the screen. */
-        if (!framebuffer_scroll_rectangle(console->framebuffer,
-            console->left, console->top, console->columns * TEXT_CELL_PIXELS,
-            console->rows * TEXT_CELL_PIXELS, TEXT_CELL_PIXELS,
-            CONSOLE_BACKGROUND)) {
+        if (!text_console_scroll_up_one_row(console)) {
             return false;
         }
-        console->row = console->rows - 1;
         console->column = 0;
-        ++console->scroll_count;
     }
     if (character == '\n') {
         console->column = 0;
         ++console->row;
         return true;
     }
-    uint8_t glyph[8];
-    for (unsigned int row = 0; row < 8; ++row) {
-        glyph[row] = console_font_row(character, row);
-    }
-    if (!framebuffer_draw_cell(console->framebuffer,
-        console->left + console->column * TEXT_CELL_PIXELS,
-        console->top + console->row * TEXT_CELL_PIXELS,
-        glyph, CONSOLE_FOREGROUND, CONSOLE_BACKGROUND)) {
+    if (!text_console_draw_at(console, console->column,
+                              console->row, character)) {
         return false;
     }
     ++console->column;
@@ -86,6 +72,27 @@ bool text_console_putc(struct text_console *console, unsigned char character)
         console->column = 0;
         ++console->row;
     }
+    return true;
+}
+
+/* Move one viewport row and synchronize the stream cursor and scroll count.
+ * The caller owns overlay hiding. Validation precedes all framebuffer writes;
+ * normal stream output and the editor share this state transition. */
+bool text_console_scroll_up_one_row(struct text_console *console)
+{
+    if (console == NULL || !console->initialized || console->rows == 0 ||
+        console->row > console->rows || console->scroll_count == UINT64_MAX ||
+        !framebuffer_scroll_rectangle(console->framebuffer,
+            console->left, console->top,
+            console->columns * TEXT_CELL_PIXELS,
+            console->rows * TEXT_CELL_PIXELS, TEXT_CELL_PIXELS,
+            TEXT_CONSOLE_BACKGROUND_RGB)) {
+        return false;
+    }
+    if (console->row > 0) {
+        --console->row;
+    }
+    ++console->scroll_count;
     return true;
 }
 
@@ -102,6 +109,25 @@ bool text_console_write(struct text_console *console, const char *text)
         }
     }
     return true;
+}
+
+/* Paint one cell without changing the stream cursor. The font remains the
+ * sole source of glyph bits; framebuffer code owns pitch and color packing. */
+bool text_console_draw_at(const struct text_console *console,
+    uint64_t column, uint64_t row, unsigned char character)
+{
+    if (console == NULL || !console->initialized ||
+        column >= console->columns || row >= console->rows) {
+        return false;
+    }
+    uint8_t glyph[8];
+    for (unsigned int glyph_row = 0; glyph_row < 8; ++glyph_row) {
+        glyph[glyph_row] = console_font_row(character, glyph_row);
+    }
+    return framebuffer_draw_cell(console->framebuffer,
+        console->left + column * TEXT_CELL_PIXELS,
+        console->top + row * TEXT_CELL_PIXELS,
+        glyph, TEXT_CONSOLE_FOREGROUND_RGB, TEXT_CONSOLE_BACKGROUND_RGB);
 }
 
 /* Move the logical cursor in cell units; never draw pixels or a logo.

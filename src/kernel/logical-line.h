@@ -14,6 +14,11 @@ enum logical_line_result {
     LOGICAL_LINE_INVALID
 };
 
+enum logical_line_edit_mode {
+    LOGICAL_LINE_OVERWRITE,
+    LOGICAL_LINE_INSERT
+};
+
 struct logical_line {
     unsigned char *bytes;
     size_t length;
@@ -33,6 +38,18 @@ bool logical_line_initialize(struct logical_line *line,
  * Borrow state/storage; no allocation or ownership transfer. */
 enum logical_line_result logical_line_append(
     struct logical_line *line, unsigned char byte);
+
+/* Edit one byte at a counted offset. Overwrite replaces an existing byte or
+ * pads with spaces through a new end; insert shifts the suffix right. FULL and
+ * INVALID are atomic and leave bytes/length unchanged. */
+enum logical_line_result logical_line_edit(struct logical_line *line,
+    size_t offset, enum logical_line_edit_mode mode, unsigned char byte);
+
+/* Delete the byte immediately before offset and shift the suffix left.
+ * AT_BOUNDARY rejects offset zero; INVALID rejects offsets beyond length.
+ * On success offset is decremented. No allocation or ownership transfer. */
+enum logical_line_result logical_line_delete_before(
+    struct logical_line *line, size_t *offset);
 
 /* Remove the final byte. AT_BOUNDARY leaves an empty line unchanged.
  * removed may be NULL; otherwise receives the deleted byte on success. */

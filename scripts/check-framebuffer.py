@@ -145,6 +145,13 @@ def main():
                                 if glyph_row < 7 else "00000000")
                 )
                 expected[32 * 3:(32 + columns * 16) * 3] = console_row
+        # The normal interactive boot enters the screen editor after one
+        # separating newline. Its default overwrite cursor inverts the full
+        # first cell of row 15; the forced-scroll presentation build halts
+        # before starting input and therefore has no cursor.
+        if args.workspace and not args.scrolled and 15 * 16 <= y < 16 * 16:
+            expected = bytearray(expected)
+            expected[:16 * 3] = bytes(255-value for value in expected[:16 * 3])
         actual = pixels[y * width * 3:(y + 1) * width * 3]
         if actual != expected:
             raise SystemExit("FAIL: unexpected screenshot pixels in row " + str(y))

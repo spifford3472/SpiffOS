@@ -262,3 +262,35 @@ including a three-row logical line and exact serial submission. Read
 [the validation record](operations/logical-lines-2026-10-29.md). Arrows, visible
 cursor, Insert editing, multiple screen lines and owner-approved push-down reflow
 remain the next checkpoint.
+
+## Screen-position editor and visible cursor — 2026-10-29
+
+The earlier append-only keyboard console remains as a regression fixture.
+Normal keyboard input now uses screen-editor.c and named decoder events.
+Arrow keys select a visible row and column. Each stored logical record retains
+its bytes independently of those coordinates; moving away never submits it.
+
+Overwrite replaces a byte at the selected offset; Insert shifts the suffix
+right before storing the new byte. Space padding turns a position past text
+into an explicit counted offset. Buffer capacity is checked before mutation.
+Deleting before the cursor shifts the suffix left. Rows gained or lost by
+these edits move following framebuffer pixels and logical records together.
+
+Downward row copying walks bottom to top so each source row is read before
+its destination can overwrite it. Upward copies walk top to bottom. Both
+operate on visible pixels and honor reported pitch and untouched padding.
+
+The cursor is an overlay that inverts pixels, then inverts them again before
+drawing or moving content. Applying the operation twice restores the exact
+prior bits, including logo artwork. Overwrite covers the full 16x16 cell;
+Insert covers the bottom two pixel rows. Capacity rejection adds a distinct
+top band/notch. A steady cursor needs no timer in the polling diagnostic.
+
+The embedded 65-by-4096-byte text storage lives in static kernel BSS. It is too
+large for Limine's entry stack. A line with a hidden prefix keeps all bytes
+while visible fragments remain. Backspace at the top-left visible fragment
+clamps the resulting cursor to the screen while preserving the complete line.
+
+Run make test-keyboard for sanitizer checks and real QEMU injection, including
+independent pixel expectations for both cursor shapes and push-down reflow.
+See [screen-editor validation](operations/screen-editor-2026-10-29.md).

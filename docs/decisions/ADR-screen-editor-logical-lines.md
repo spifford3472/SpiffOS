@@ -143,7 +143,7 @@ once. Neither crossing the edge nor either Backspace can synthesize Enter.
 Checkpoint 1/2 now implements and tests this append-at-end example. Moving the
 cursor into earlier text belongs to the next screen-wide editing checkpoint.
 
-## Implementation checkpoint — stored wrapping and submission
+## First implementation checkpoint — stored wrapping and submission (historical)
 
 The first source checkpoint implements one active append-at-end stored logical
 line, full-width soft wrapping, complete counted submission on Enter, Backspace
@@ -151,6 +151,24 @@ across wraps, scrolling with the full prefix retained, and explicit 4096-byte
 capacity rejection. It does not yet implement arrows, Insert/overwrite editing,
 a visible cursor, multiple visible logical-line records or push-down drawing.
 See [actual validation](../operations/logical-lines-2026-10-29.md).
+
+## Current checkpoint — visible cursor and screen-position editing
+
+The next implementation checkpoint adds named E0 arrow/Insert make events,
+default overwrite and insert-at-offset editing, multiple static logical records,
+blank-cell padding, push-down row insertion and upward shrink reflow. The
+steady overwrite cursor covers one full cell; Insert covers the bottom two
+pixel rows. Reversible inversion preserves underlying artwork on movement.
+Backspace at a top-left visible fragment clamps the resulting cursor to the
+viewport when the line's prefix is hidden. Boot output is explicitly seeded
+into the line model, without interpreting pixels as text.
+
+Host sanitizers and actual QEMU injection verify cursor shapes, earlier-line
+growth/shrink with following content preserved, complete counted submission,
+capacity rejection, hidden prefixes and prior boot/logo/launcher behavior.
+See [checkpoint evidence](../operations/screen-editor-2026-10-29.md).
+The first checkpoint's implementation exclusions above are historical.
+BASIC execution, asynchronous output and general scrollback remain deferred.
 
 ## Authorization, limits and rollback
 Default overwrite, the Insert toggle and push-down screen-wide reflow are

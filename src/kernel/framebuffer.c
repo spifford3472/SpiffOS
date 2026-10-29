@@ -250,6 +250,59 @@ bool framebuffer_scroll_rectangle(const struct limine_framebuffer *framebuffer,
                                        width, amount, background);
 }
 
+/* Move visible pixels downward inside one rectangle. Destination rows lie
+ * below source rows, so copy bottom-to-top to avoid overwriting unread source.
+ * Clear the newly exposed top using the same validated fill primitive. */
+bool framebuffer_move_rectangle_down(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height,
+    uint64_t amount, uint32_t background)
+{
+    if (!framebuffer_supported(framebuffer) || width == 0 || height == 0 ||
+        amount > height || x > framebuffer->width ||
+        width > framebuffer->width - x || y > framebuffer->height ||
+        height > framebuffer->height - y) {
+        return false;
+    }
+    if (amount == 0) {
+        return true;
+    }
+    volatile uint8_t *pixels = framebuffer->address;
+    for (uint64_t remaining = height - amount; remaining > 0; --remaining) {
+        uint64_t source_offset = remaining - 1;
+        volatile uint32_t *destination = (volatile uint32_t *)(
+            pixels + (y + source_offset + amount) * framebuffer->pitch);
+        const volatile uint32_t *source = (const volatile uint32_t *)(
+            pixels + (y + source_offset) * framebuffer->pitch);
+        for (uint64_t column = 0; column < width; ++column) {
+            destination[x + column] = source[x + column];
+        }
+    }
+    return framebuffer_fill_rectangle(framebuffer, x, y, width, amount,
+                                       background);
+}
+
+/* XOR every stored pixel bit. The framebuffer layout has already been checked
+ * as a 32-bit word, so repeating this exact operation restores every pixel.
+ * Cursor drawing uses this instead of saving a cell-sized backing buffer. */
+bool framebuffer_invert_rectangle(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height)
+{
+    if (!framebuffer_supported(framebuffer) || width == 0 || height == 0 ||
+        x > framebuffer->width || width > framebuffer->width - x ||
+        y > framebuffer->height || height > framebuffer->height - y) {
+        return false;
+    }
+    volatile uint8_t *pixels = framebuffer->address;
+    for (uint64_t row_index = 0; row_index < height; ++row_index) {
+        volatile uint32_t *row = (volatile uint32_t *)(
+            pixels + (y + row_index) * framebuffer->pitch);
+        for (uint64_t column = 0; column < width; ++column) {
+            row[x + column] = ~row[x + column];
+        }
+    }
+    return true;
+}
+
 /* Copy a packed RGB24 image into a validated screen rectangle.
  * Pixel dimensions, byte_count bytes readable at borrowed rgb. False before
  * any writes on truncated data or invalid bounds. No ownership/allocation;

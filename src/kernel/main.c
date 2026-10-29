@@ -14,7 +14,7 @@
 #include "boot-logo.h"
 #include "keyboard.h"
 #include "keyboard-ps2.h"
-#include "keyboard-console.h"
+#include "screen-editor.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -145,6 +145,7 @@ static bool console_scroll_demo(struct text_console *console)
 
 #endif
 
+#ifndef SPIFFOS_SCROLL_TEST
 /* Adapt the existing x86 port helpers to the keyboard transport callbacks.
  * Context is unused; ring 0 startup CPU only, synchronous hardware access. */
 static uint8_t keyboard_port_read(void *context, uint16_t port)
@@ -159,10 +160,10 @@ static void keyboard_port_write(void *context, uint16_t port, uint8_t byte)
     port_write(port, byte);
 }
 
-enum { KEYBOARD_LOGICAL_CAPACITY = 4096 };
-/* Static kernel storage avoids placing a 4 KiB command on Limine's entry stack.
- * It belongs to the single boot keyboard diagnostic for the entire boot. */
-static unsigned char keyboard_line_storage[KEYBOARD_LOGICAL_CAPACITY];
+/* The screen editor contains about 266 KiB of bounded line storage, so it must
+ * live in kernel BSS rather than Limine's small entry stack. One boot CPU owns
+ * this diagnostic state for the lifetime of the kernel. */
+static struct screen_editor boot_editor;
 
 /* Diagnostic submission boundary: emit the complete counted logical line.
  * context is unused. The callback borrows bytes only during this call.
@@ -183,59 +184,97 @@ static bool keyboard_submit_diagnostic(
     return serial_write("\r\n");
 }
 
-/* Run the diagnostic input loop; accepted ASCII is echoed and logged in hex.
- * Borrow live console forever. No allocation, command execution or IRQs.
- * PAUSE reduces contention but does not sleep; this polling phase uses CPU. */
+/* Run the diagnostic input loop. The decoder emits named navigation/mode
+ * events; the editor owns pixels and stored lines. Text keys retain hexadecimal
+ * serial evidence while named keys use readable EVENT records. */
 __attribute__((noreturn))
 static void keyboard_run(struct text_console *console)
 {
-    const struct keyboard_io io={keyboard_port_read,keyboard_port_write,NULL};
+    const struct keyboard_io io = {
+        keyboard_port_read, keyboard_port_write, NULL
+    };
     struct keyboard_decoder decoder;
-    struct keyboard_console input;
     keyboard_decoder_reset(&decoder);
+    static const unsigned char first_output[] = "SPIFFOS WORKSPACE";
+    static const unsigned char second_output[] = "OUTPUT SCROLLS THE LOGO.";
     if (!keyboard_ps2_initialize(&io) ||
-        !keyboard_console_initialize(&input, console, keyboard_line_storage,
-            sizeof keyboard_line_storage, keyboard_submit_diagnostic, NULL)) {
+        !screen_editor_initialize(&boot_editor, console,
+            keyboard_submit_diagnostic, NULL) ||
+        !screen_editor_seed_line(&boot_editor, 13, first_output,
+            sizeof first_output - 1) ||
+        !screen_editor_seed_line(&boot_editor, 14, second_output,
+            sizeof second_output - 1)) {
         (void)serial_write("SPIFFOS_KEYBOARD_UNAVAILABLE\r\n");
         halt_forever();
     }
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
-    bool first=true;
+    bool first = true;
     for (;;) {
-        uint8_t byte=0;
-        enum keyboard_poll result=keyboard_ps2_poll(&io,&byte);
-        if (result==KEYBOARD_DROPPED) keyboard_decoder_reset(&decoder);
-        if (result==KEYBOARD_BYTE) {
+        uint8_t byte = 0;
+        enum keyboard_poll poll = keyboard_ps2_poll(&io, &byte);
+        if (poll == KEYBOARD_DROPPED) {
+            keyboard_decoder_reset(&decoder);
+        }
+        if (poll == KEYBOARD_BYTE) {
             if (first) {
                 (void)serial_write("SPIFFOS_KEYBOARD_BYTE_OK\r\n");
-                first=false;
+                first = false;
             }
-            unsigned char character=keyboard_decode(&decoder,byte);
-            if (character!=0) {
-                enum keyboard_console_result accepted =
-                    keyboard_console_accept(&input, character);
-                if (accepted == KEYBOARD_CONSOLE_ERROR) {
+            struct keyboard_event event;
+            if (keyboard_decode_event(&decoder, byte, &event)) {
+                enum screen_editor_action action = SCREEN_EDITOR_CHARACTER;
+                unsigned char character = event.character;
+                const char *named = NULL;
+                if (event.type == KEYBOARD_EVENT_ENTER) {
+                    action = SCREEN_EDITOR_ENTER;
+                    character = '\n';
+                } else if (event.type == KEYBOARD_EVENT_BACKSPACE) {
+                    action = SCREEN_EDITOR_BACKSPACE;
+                    character = '\b';
+                } else if (event.type == KEYBOARD_EVENT_LEFT) {
+                    action = SCREEN_EDITOR_LEFT; named = "EVENT:LEFT\r\n";
+                } else if (event.type == KEYBOARD_EVENT_RIGHT) {
+                    action = SCREEN_EDITOR_RIGHT; named = "EVENT:RIGHT\r\n";
+                } else if (event.type == KEYBOARD_EVENT_UP) {
+                    action = SCREEN_EDITOR_UP; named = "EVENT:UP\r\n";
+                } else if (event.type == KEYBOARD_EVENT_DOWN) {
+                    action = SCREEN_EDITOR_DOWN; named = "EVENT:DOWN\r\n";
+                } else if (event.type == KEYBOARD_EVENT_INSERT) {
+                    action = SCREEN_EDITOR_TOGGLE_INSERT;
+                    named = "EVENT:INSERT\r\n";
+                }
+                enum screen_editor_result accepted =
+                    screen_editor_accept(&boot_editor, action, character);
+                if (accepted == SCREEN_EDITOR_ERROR) {
                     (void)serial_write("SPIFFOS_INPUT_ERROR\r\n");
                     halt_forever();
                 }
-                if (accepted == KEYBOARD_CONSOLE_FULL) {
-                    if (!serial_write("SPIFFOS_INPUT_FULL\r\n")) {
-                        halt_forever();
-                    }
+                if (accepted == SCREEN_EDITOR_FULL &&
+                    !serial_write("SPIFFOS_INPUT_FULL\r\n")) {
+                    halt_forever();
                 }
-                if (accepted == KEYBOARD_CONSOLE_ACCEPTED ||
-                    accepted == KEYBOARD_CONSOLE_SUBMITTED) {
-                    static const char hex[]="0123456789ABCDEF";
-                    char message[]="KEY:00\r\n";
-                    message[4]=hex[character>>4];
-                    message[5]=hex[character&15];
-                    if (!serial_write(message)) halt_forever();
+                if (accepted == SCREEN_EDITOR_ACCEPTED ||
+                    accepted == SCREEN_EDITOR_SUBMITTED) {
+                    if (named != NULL) {
+                        if (!serial_write(named)) {
+                            halt_forever();
+                        }
+                    } else {
+                        static const char hex[] = "0123456789ABCDEF";
+                        char message[] = "KEY:00\r\n";
+                        message[4] = hex[character >> 4];
+                        message[5] = hex[character & 15];
+                        if (!serial_write(message)) {
+                            halt_forever();
+                        }
+                    }
                 }
             }
         }
         __asm__ volatile ("pause" : : : "memory");
     }
 }
+#endif
 
 /* ELF entry called using Limine's x86-64 C-compatible stack and mappings.
  * No arguments or return; owns no allocated resources. Single startup CPU.
@@ -287,6 +326,10 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
-    if (console.initialized) keyboard_run(&console);
+#ifndef SPIFFOS_SCROLL_TEST
+    if (console.initialized) {
+        keyboard_run(&console);
+    }
+#endif
     halt_forever();
 }
