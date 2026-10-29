@@ -86,6 +86,9 @@ Insert toggle, arbitrary blank-cell typing, editing earlier characters, multiple
 line records or push-down row insertion yet. PS/2 remains polling-only; USB,
 interrupts, BASIC, ring 3 and the final console ABI remain outside this milestone.
 
-Roll back by building commit 353f160 or merged baseline bbb2d4d in an isolated
-worktree. Do not reset or clean the owner's editor checkout. No merge, physical
-deployment, USB, disk, firmware, network or infrastructure change is included.
+The owner authorized PR #14 merge and local QEMU deployment on 2026-10-29.
+Exact tested head 9e40e5a merged as 4a06c61. The separate merged-main checkout
+rebuilt and passed the full keyboard/workspace/launcher validation from 4a06c61.
+Roll back by building bbb2d4d in an isolated worktree. Do not reset or clean the
+owner's editor checkout. No physical deployment, USB, disk, firmware, network or
+infrastructure change is included.
