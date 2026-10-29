@@ -58,3 +58,26 @@ SIGTERM child/private-resource cleanup. Evidence: build/m2-launcher.log.
 Manual GTK resize/focus/release/close remains a separate acceptance item.
 Merge/deployment results will be recorded after actual completion. Preserve the owner's running QEMU and its lock. Rollback is an
 isolated build of M1 merge 81d457b. No history rewrite or owner-index changes.
+
+## PR19 merge and local deployment
+PR19 head 37d3236846a66713d4a595dc7bfdf82fd526022a merged as
+ ea4ac06ea692789ed4f9b2855ce2cfdae5dfd41c under the timed owner authorization.
+A detached checkout /home/geoff/projects/spiffos-pr19-validation at that exact
+merge passed make test-memory test-keyboard test-workspace test-workspace-scroll
+and python3 scripts/test-safe-launcher.py sequentially: combined exit 0,
+65.59 seconds. Logs: spiffos-frame-allocator/build/pr19-postmerge.log and
+pr19-launcher.log. These tests include the complete M1/M2 sanitizer and QEMU
+RAM matrix, unchanged exact editor/workspace pixels and safe launcher cleanup.
+
+The clean main checkout /home/geoff/projects/spiffos-qemu-main fast-forwarded
+to ea4ac06. The exact tested ISO was atomically installed through a temporary
+.next file and rename. SHA256 matched in both validation and deployed paths:
+56367651dc3822681208710e8ce2f4298d8c22c2d3c2ab512920409416df8b75
+The owner's existing QEMU wrapper PID 1022980 remained running; its booted
+memory was unchanged. The new ISO applies to the next launch. The original
+checkout's staged start.S and unrelated drafts were preserved.
+
+The next implementation checkpoint should establish a reviewed kernel mapping/
+zeroing boundary before returning usable memory to a heap or any user process.
+Do not treat numeric physical addresses as directly dereferenceable pointers.
+No claim of nine running workspace services or process isolation is made here.
