@@ -111,3 +111,12 @@ no merge, physical disk, USB, firmware, network or unrelated service changes.
 Preserve the original checkout/index and unrelated work. See
 [launcher decision](../decisions/ADR-safe-qemu-launcher.md). Screen-editing rules
 requiring a material interaction choice remain proposals until owner review.
+
+### Logical-line screen editor design — 2026-10-29
+
+Owner chose default overwrite with the Insert key toggling insert mode.
+[Screen-editor design](../decisions/ADR-screen-editor-logical-lines.md) records
+physical rows versus stored logical lines, complete Enter submission, cross-wrap
+Backspace, arbitrary visible-cell navigation, bounded storage and logo/cursor
+rules. Push-down versus overwrite-below reflow is a material choice still for
+owner review. No editor source changes or implementation results are claimed.
