@@ -263,3 +263,16 @@ only on Enter and Backspaces across wraps; see
 [validation](../operations/logical-lines-2026-10-29.md). Arrow navigation,
 visible cursor, Insert editing, multiple visible line records and push-down
 rendering remain open implementation work.
+
+## PR #14 merge and local QEMU deployment — 2026-10-29
+
+The owner explicitly authorized merge and deployment after reviewing the tested
+launcher and stored logical-line checkpoint. PR #14 exact head
+`9e40e5af09836855508aa39df615ca4c955d719d` merged as
+`4a06c61f86a5004cb532fdde5096d684e77b265b`. Deployment means the rebuilt
+QEMU development ISO in the separate merged-main checkout. Post-merge strict
+build, host sanitizer tests, actual QEMU input/full-frame checks, forced-scroll
+workspace test and safe-launcher cleanup test all passed. Manual GTK resizing,
+focus, Ctrl+Alt+G and close-button observation remain pending and are not claimed.
+No physical disk, USB, firmware, network or infrastructure change was authorized
+or performed.

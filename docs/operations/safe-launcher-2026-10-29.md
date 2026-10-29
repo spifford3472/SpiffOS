@@ -44,19 +44,24 @@ launcher-signal.log; regression log copied into build/launcher-regression.log.
 
 ## Limits and rollback
 Actual desktop focus, resizing/scaling, click behavior, shortcut release and
-clicking close require owner observation. No new desktop session opened; existing
-owner window and original checkout remain in service. No merge/deployment.
-Rollback by using the prior bbb2d4d checkout or building it separately; preserve
-staging, history, drafts and recovery snapshot. No reset/clean/physical media.
+clicking close still require owner observation. The automated launcher validation
+does not claim those manual desktop interactions. Roll back by building bbb2d4d
+in an isolated worktree; preserve staging, history, drafts and recovery snapshot.
+No reset, clean operation or physical-media change is part of this deployment.
 
-## Review checkpoint
-Draft PR: https://github.com/spifford3472/SpiffOS/pull/14 (not merged).
-Representative keyboard-typed.png and keyboard-scrolled.png were visually
-inspected after their exact pixel checks: expected logo/text on navy initially,
-logo absent after scrolling, with SCROLL OK. on the bottom row. These are guest
-framebuffer captures, not evidence of interactive GTK desktop behavior.
-Final preservation check compared original src/include/docs/scripts/tests/assets
-and original Git index bytes with the verified snapshot: all unchanged. Existing
-owner QEMU PID 830726 remains running. Own Python cache moved into build evidence.
-Screen-editor design is a separate unimplemented proposal; owner approved default
-overwrite and the Insert toggle. Screen-wide reflow behavior awaits review.
+## Merge and local QEMU deployment
+The owner explicitly authorized merge and deployment on 2026-10-29. PR #14 was
+marked ready and merged from exact tested head
+9e40e5af09836855508aa39df615ca4c955d719d. GitHub merge commit:
+4a06c61f86a5004cb532fdde5096d684e77b265b.
+
+The clean /home/geoff/projects/spiffos-qemu-main checkout fast-forwarded from
+bbb2d4d to 4a06c61. Its pinned Limine dependency remained at
+7a9013f305de0bea1f6310e76e7baba30499fef0. The merged source rebuilt the local
+QEMU ISO and passed make test-keyboard test-workspace test-workspace-scroll,
+then python3 scripts/test-safe-launcher.py, all exit 0. This is the deployed
+merged QEMU development image; no physical USB, disk or laptop was changed.
+
+Representative typed/scrolled frames had already passed exact pixel checks and
+visual inspection. The original editor checkout/index, staged start.S, unrelated
+drafts, branding and existing owner QEMU PID 830726 remained untouched.
