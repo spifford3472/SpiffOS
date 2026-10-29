@@ -139,3 +139,15 @@ multiple stored screen lines, blank-cell padding and push-down/shrink reflow.
 See [screen-editor validation](../operations/screen-editor-2026-10-29.md) for
 actual evidence and limitations. General scrollback, asynchronous output,
 BASIC execution and the final user-space console ABI remain open.
+
+## Memory foundation — owner authorization 2026-10-29
+
+The owner authorized memory foundations and direct work/Codex fallback after
+Qwen timeouts, with very small Qwen jobs. See
+[the memory ADR](../decisions/ADR-memory-foundation.md) for OS/session/workspace
+ownership, M1 read-only inventory scope and validation. Shared RAM ownership,
+protected recovery resources, no swap and recoverable OOM remain the direction.
+Allocator/reserve sizing, quotas, process mappings and session layout remain
+OPEN beyond this inventory checkpoint. M1 now implements read-only inventory;
+see [actual memory validation](../operations/memory-inventory-2026-10-29.md).
+No allocator, heap, reserve allocation or process isolation is claimed by M1.
