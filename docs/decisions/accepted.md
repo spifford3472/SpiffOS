@@ -281,3 +281,16 @@ workspace test and safe-launcher cleanup test all passed. Manual GTK resizing,
 focus, Ctrl+Alt+G and close-button observation remain pending and are not claimed.
 No physical disk, USB, firmware, network or infrastructure change was authorized
 or performed.
+
+## PR #16 merge and local QEMU deployment — 2026-10-29
+
+After reviewing the cursor/screen-editing checkpoint, the owner explicitly
+authorized merge and deployment. Tested head
+df5f966f3d0be182ad4d166b61441611461f18a8 merged through PR #16 as
+e63b04222d04060753949b849f1dfd2e3001f60e. The separate merged-main checkout
+was fast-forwarded and its local QEMU ISO rebuilt. Post-merge host sanitizer,
+real QEMU input, five full-frame cursor/reflow captures, workspace/forced-scroll
+and safe-launcher tests all passed. Manual GTK observations remain pending.
+See [deployment evidence](../operations/screen-editor-2026-10-29.md) for
+commands, image hashes, limitations and rollback. Deployment does not extend
+to physical hardware, USB, firmware, network or infrastructure.
