@@ -1,10 +1,21 @@
-/* Purpose: turn set-1 make/break bytes into a small uppercase text subset.
+/* Purpose: decode translated set-1 bytes into text and editor key events.
  * Dependencies: keyboard.h. No ports, framebuffer, heap or host runtime.
  * Invariants: caller owns state; single CPU, interrupts disabled.
- * See docs/decisions/ADR-qemu-keyboard-input.md for scope and limitations. */
+ * References: keyboard and screen-editor ADRs in docs/decisions. */
+#include <stddef.h>
 #include "keyboard.h"
-enum { SHIFT_LEFT=1, SHIFT_RIGHT=2, CTRL_LEFT=4, CTRL_RIGHT=8,
-       ALT_LEFT=16, ALT_RIGHT=32, SHIFT_MASK=3, CHORD_MASK=60 };
+
+enum {
+    SHIFT_LEFT = 1,
+    SHIFT_RIGHT = 2,
+    CTRL_LEFT = 4,
+    CTRL_RIGHT = 8,
+    ALT_LEFT = 16,
+    ALT_RIGHT = 32,
+    SHIFT_MASK = 3,
+    CHORD_MASK = 60
+};
+
 /* Reset all modifier/prefix state after startup or a corrupted byte stream.
  * Borrow non-NULL state; no I/O, allocation or concurrency. */
 void keyboard_decoder_reset(struct keyboard_decoder *decoder)
@@ -13,19 +24,48 @@ void keyboard_decoder_reset(struct keyboard_decoder *decoder)
     decoder->skip = 0;
     decoder->extended = 0;
 }
-/* Consume a byte and return ASCII, or zero when it is not supported text.
- * Break bit 7 marks release; low seven bits identify the physical key.
- * Borrow non-NULL state; no I/O, allocation or concurrent use. */
-unsigned char keyboard_decode(struct keyboard_decoder *decoder, uint8_t byte)
+
+/* Store one event in caller-owned output. This small helper centralizes the
+ * invariant that named keys never carry a stray text byte. */
+static bool emit_event(struct keyboard_event *event,
+    enum keyboard_event_type type, unsigned char character)
 {
+    event->type = type;
+    event->character = character;
+    return true;
+}
+
+/* Consume a byte and emit one supported make event. Break bit 7 marks release;
+ * E0 names extended keys. Ctrl/Alt chords are intentionally filtered before
+ * arrows/Insert so future shortcuts cannot leak into the editor. */
+bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
+    struct keyboard_event *event)
+{
+    if (decoder == NULL || event == NULL) {
+        return false;
+    }
+    event->type = KEYBOARD_EVENT_NONE;
+    event->character = 0;
     if (byte == 0 || byte == 0xff || byte == 0xfa || byte == 0xfe) {
         keyboard_decoder_reset(decoder);
-        return 0;
+        return false;
     }
-    if (decoder->skip != 0) { --decoder->skip; return 0; }
-    if (byte == 0xe1) { decoder->skip = 5; decoder->extended = 0; return 0; }
-    if (byte == 0xe0) { decoder->extended = 1; return 0; }
-    uint8_t code = byte & 0x7f;
+    if (decoder->skip != 0) {
+        --decoder->skip;
+        return false;
+    }
+    if (byte == 0xe1) {
+        decoder->skip = 5;
+        decoder->extended = 0;
+        return false;
+    }
+    if (byte == 0xe0) {
+        decoder->extended = 1;
+        return false;
+    }
+
+    uint8_t code = byte & UINT8_C(0x7f);
+    bool released = (byte & UINT8_C(0x80)) != 0;
     int extended = decoder->extended;
     decoder->extended = 0;
     uint8_t modifier = 0;
@@ -34,12 +74,25 @@ unsigned char keyboard_decode(struct keyboard_decoder *decoder, uint8_t byte)
     if (!extended && code == 0x2a) modifier = SHIFT_LEFT;
     if (!extended && code == 0x36) modifier = SHIFT_RIGHT;
     if (modifier != 0) {
-        if ((byte & 0x80) != 0) decoder->modifiers &= (uint8_t)~modifier;
-        else decoder->modifiers |= modifier;
-        return 0;
+        if (released) {
+            decoder->modifiers &= (uint8_t)~modifier;
+        } else {
+            decoder->modifiers |= modifier;
+        }
+        return false;
     }
-    if (extended || (byte & 0x80) != 0 ||
-        (decoder->modifiers & CHORD_MASK) != 0) return 0;
+    if (released || (decoder->modifiers & CHORD_MASK) != 0) {
+        return false;
+    }
+    if (extended) {
+        if (code == 0x4b) return emit_event(event, KEYBOARD_EVENT_LEFT, 0);
+        if (code == 0x4d) return emit_event(event, KEYBOARD_EVENT_RIGHT, 0);
+        if (code == 0x48) return emit_event(event, KEYBOARD_EVENT_UP, 0);
+        if (code == 0x50) return emit_event(event, KEYBOARD_EVENT_DOWN, 0);
+        if (code == 0x52) return emit_event(event, KEYBOARD_EVENT_INSERT, 0);
+        return false;
+    }
+
     /* Sparse designated entries describe physical US keys, not ASCII indexes.
      * Unlisted keys are zero-initialized and intentionally ignored. */
     static const unsigned char letters[128] = {
@@ -50,17 +103,42 @@ unsigned char keyboard_decode(struct keyboard_decoder *decoder, uint8_t byte)
         [0x2c]='Z',[0x2d]='X',[0x2e]='C',[0x2f]='V',
         [0x30]='B',[0x31]='N',[0x32]='M'
     };
-    if (letters[code] != 0) return letters[code];
-    if (code == 0x1c) return '\n';
-    if (code == 0x0e) return '\b';
-    if (code == 0x39) return ' ';
+    if (letters[code] != 0) {
+        return emit_event(event, KEYBOARD_EVENT_CHARACTER, letters[code]);
+    }
+    if (code == 0x1c) return emit_event(event, KEYBOARD_EVENT_ENTER, 0);
+    if (code == 0x0e) return emit_event(event, KEYBOARD_EVENT_BACKSPACE, 0);
+    if (code == 0x39) return emit_event(event, KEYBOARD_EVENT_CHARACTER, ' ');
     if ((decoder->modifiers & SHIFT_MASK) != 0) {
-        if (code == 0x27) return ':';
-        if (code == 0x35) return '?';
+        if (code == 0x27) return emit_event(event, KEYBOARD_EVENT_CHARACTER, ':');
+        if (code == 0x35) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '?');
+        return false;
+    }
+    if (code >= 0x02 && code <= 0x0a) {
+        return emit_event(event, KEYBOARD_EVENT_CHARACTER,
+            (unsigned char)('1' + code - 2));
+    }
+    if (code == 0x0b) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '0');
+    if (code == 0x34) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '.');
+    return false;
+}
+
+/* Adapt event decoding for the earlier byte-oriented interface. The decoder is
+ * consumed exactly once; named navigation/mode events intentionally map to 0. */
+unsigned char keyboard_decode(struct keyboard_decoder *decoder, uint8_t byte)
+{
+    struct keyboard_event event;
+    if (!keyboard_decode_event(decoder, byte, &event)) {
         return 0;
     }
-    if (code >= 0x02 && code <= 0x0a) return (unsigned char)('1' + code - 2);
-    if (code == 0x0b) return '0';
-    if (code == 0x34) return '.';
+    if (event.type == KEYBOARD_EVENT_CHARACTER) {
+        return event.character;
+    }
+    if (event.type == KEYBOARD_EVENT_ENTER) {
+        return '\n';
+    }
+    if (event.type == KEYBOARD_EVENT_BACKSPACE) {
+        return '\b';
+    }
     return 0;
 }

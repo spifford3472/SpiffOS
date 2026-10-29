@@ -52,5 +52,30 @@ int main(void)
     logical_line_reset(&line);
     assert(line.length == 0);
     assert(logical_line_backspace(&line, NULL) == LOGICAL_LINE_AT_BOUNDARY);
-    puts("PASS bounded logical line, capacity and exact submission");
+
+    assert(logical_line_edit(&line, 2, LOGICAL_LINE_OVERWRITE, 'C') ==
+           LOGICAL_LINE_OK);
+    assert(line.length == 3 && memcmp(line.bytes, "  C", 3) == 0);
+    assert(logical_line_edit(&line, 1, LOGICAL_LINE_OVERWRITE, 'B') ==
+           LOGICAL_LINE_OK);
+    assert(memcmp(line.bytes, " BC", 3) == 0);
+    assert(logical_line_edit(&line, 1, LOGICAL_LINE_INSERT, 'A') ==
+           LOGICAL_LINE_OK);
+    assert(line.length == 4 && memcmp(line.bytes, " ABC", 4) == 0);
+    unsigned char before_full[4];
+    memcpy(before_full, line.bytes, sizeof before_full);
+    assert(logical_line_edit(&line, 0, LOGICAL_LINE_INSERT, 'X') ==
+           LOGICAL_LINE_FULL);
+    assert(line.length == 4 && memcmp(line.bytes, before_full, 4) == 0);
+    size_t offset = 3;
+    assert(logical_line_delete_before(&line, &offset) == LOGICAL_LINE_OK);
+    assert(offset == 2 && line.length == 3 &&
+           memcmp(line.bytes, " AC", 3) == 0);
+    offset = 0;
+    assert(logical_line_delete_before(&line, &offset) ==
+           LOGICAL_LINE_AT_BOUNDARY);
+    offset = 4;
+    assert(logical_line_delete_before(&line, &offset) ==
+           LOGICAL_LINE_INVALID);
+    puts("PASS bounded logical line, editing and exact submission");
 }

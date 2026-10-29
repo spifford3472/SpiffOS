@@ -18,8 +18,8 @@ def wait_until(predicate, description, seconds=5):
     raise RuntimeError("Timed out: " + description)
 
 
-def verify_screen(path, text, row, initial):
-    """Compare every RGB byte to independent text/font/logo reference data."""
+def verify_screen(path, text, row, initial, cursor, extra_lines=()):
+    """Compare every RGB byte to independent text/font/logo/cursor reference data."""
     magic, size, maximum, actual = path.read_bytes().split(b"\n", 3)
     width, height = map(int, size.split())
     assert magic == b"P6" and maximum == b"255"
@@ -35,6 +35,7 @@ def verify_screen(path, text, row, initial):
     font = json.loads((ROOT / "tests/fixtures/console-font.json").read_text())
     lines = [(13, "SPIFFOS WORKSPACE"), (14, "OUTPUT SCROLLS THE LOGO.")] if initial else []
     lines.append((row, text))
+    lines.extend(extra_lines)
     for screen_row, line in lines:
         for column, character in enumerate(line):
             for y in range(16):
@@ -43,6 +44,15 @@ def verify_screen(path, text, row, initial):
                 cell = b"".join((ink if bit == "1" else navy) * 2 for bit in bits)
                 start = ((screen_row*16+y)*width+column*16)*3
                 expected[start:start+48] = cell
+    cursor_row, cursor_column, cursor_mode = cursor
+    cursor_y = cursor_row * 16
+    y_range = range(cursor_y, cursor_y + 16)
+    if cursor_mode == "insert":
+        y_range = range(cursor_y + 14, cursor_y + 16)
+    for y in y_range:
+        for x in range(cursor_column * 16, cursor_column * 16 + 16):
+            offset = (y * width + x) * 3
+            expected[offset:offset+3] = bytes(255-value for value in expected[offset:offset+3])
     if actual != expected:
         index = next(i for i, (a,b) in enumerate(zip(actual, expected)) if a != b)
         raise RuntimeError(f"Unexpected keyboard screenshot pixel {index//3%width},{index//3//width}")
@@ -51,10 +61,11 @@ def verify_screen(path, text, row, initial):
 
 
 def run_keyboard_test(socket_path, serial, build):
-    """Drive real emulated keys after readiness; verify serial and two full frames."""
+    """Drive real emulated keys; verify named events, submissions and full frames."""
     wait_until(lambda: b"SPIFFOS_KEYBOARD_READY" in serial.read_bytes().splitlines(),
                "keyboard ready")
     expected = []
+    expected_events = []
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(5)
         connection.connect(str(socket_path))
@@ -79,29 +90,42 @@ def run_keyboard_test(socket_path, serial, build):
                         return
 
             def accepted():
-                """Return only accepted-key byte diagnostics in their original order."""
-                return [line for line in serial.read_bytes().splitlines() if line.startswith(b"KEY:")]
+                """Return accepted text-key diagnostics in their original order."""
+                return [line for line in serial.read_bytes().splitlines()
+                        if line.startswith(b"KEY:")]
+
+            def events():
+                """Return named editor make events; break codes must add nothing."""
+                return [line for line in serial.read_bytes().splitlines()
+                        if line.startswith(b"EVENT:")]
 
             def submitted():
                 """Return complete diagnostic logical-line submissions in order."""
                 return [line[7:] for line in serial.read_bytes().splitlines()
                         if line.startswith(b"SUBMIT:")]
 
-            def key(codes, character=None):
-                """Inject key combination, wait for releases and check exact accepted trace."""
+            def key(codes, character=None, named=None):
+                """Inject one key combination and verify exact text/event traces."""
                 rpc("send-key", {"keys":[{"type":"qcode","data":code} for code in codes],
                                  "hold-time":20})
                 if character is not None:
                     expected.append(f"KEY:{ord(character):02X}".encode())
-                    wait_until(lambda: len(accepted()) >= len(expected), "accepted key " + repr(character))
-                time.sleep(0.04)  # QEMU key-up timer must finish before the next combination.
+                    wait_until(lambda: len(accepted()) >= len(expected),
+                               "accepted key " + repr(character))
+                if named is not None:
+                    expected_events.append(("EVENT:" + named).encode())
+                    wait_until(lambda: len(events()) >= len(expected_events),
+                               "named event " + named)
+                time.sleep(0.04)
                 assert accepted() == expected, (accepted(), expected)
+                assert events() == expected_events, (events(), expected_events)
 
             rpc("qmp_capabilities")
-            key(["backspace"])  # Must not erase boot output.
+            key(["backspace"])
             key(["ctrl","a"])
             key(["alt","b"])
-            key(["up"])
+            key(["up"], named="UP")
+            key(["down"], named="DOWN")
             for character in "spiffox":
                 key([character], character.upper())
             key(["backspace"], "\b")
@@ -112,15 +136,29 @@ def run_keyboard_test(socket_path, serial, build):
             key(["shift","slash"], "?")
             path = build / "keyboard-typed.ppm"
             rpc("screendump", {"filename":str(path)})
-            rows = verify_screen(path, "SPIFFOS 123.:?", 15, True)
+            rows = verify_screen(path, "SPIFFOS 123.:?", 15, True,
+                                 (15, 14, "overwrite"))
+
+            key(["left"], named="LEFT")
+            key(["left"], named="LEFT")
+            key(["insert"], named="INSERT")
+            path = build / "keyboard-insert.ppm"
+            rpc("screendump", {"filename":str(path)})
+            verify_screen(path, "SPIFFOS 123.:?", 15, True,
+                          (15, 12, "insert"))
+            key(["x"], "X")
+            key(["insert"], named="INSERT")
+            key(["y"], "Y")
+            first_text = b"SPIFFOS 123.XY?"
             key(["ret"], "\n")
-            wait_until(lambda: submitted() == [b"SPIFFOS 123.:?"],
-                       "first complete logical submission")
-            key(["backspace"])  # Cannot cross a submitted line boundary.
+            wait_until(lambda: submitted() == [first_text],
+                       "first complete edited logical submission")
+
+            key(["backspace"])
             long_text = "A" * 80 + "B" * 80 + "CDE"
             for character in long_text:
                 key([character.lower()], character)
-            assert submitted() == [b"SPIFFOS 123.:?"]  # Soft wraps never submit.
+            assert submitted() == [first_text]
             key(["backspace"], "\b")
             key(["backspace"], "\b")
             for character in "QR":
@@ -129,7 +167,7 @@ def run_keyboard_test(socket_path, serial, build):
             key(["ret"], "\n")
             wait_until(lambda: submitted()[-1:] == [expected_long],
                        "three-row complete logical submission")
-            assert submitted()[:2] == [b"SPIFFOS 123.:?", expected_long]
+            assert submitted()[:2] == [first_text, expected_long]
             for _ in range(rows+20):
                 key(["ret"], "\n")
             for character in "SCROLL OK.":
@@ -137,7 +175,42 @@ def run_keyboard_test(socket_path, serial, build):
                 key([code], character)
             path = build / "keyboard-scrolled.ppm"
             rpc("screendump", {"filename":str(path)})
-            verify_screen(path, "SCROLL OK.", rows-1, False)
+            verify_screen(path, "SCROLL OK.", rows-1, False,
+                          (rows-1, 10, "overwrite"))
+            # Edit an earlier visible line near the bottom. Grow from one row
+            # to two, prove a following line moves intact, then shrink it again.
+            for _ in range(5):
+                key(["up"], named="UP")
+            for _ in range(10):
+                key(["left"], named="LEFT")
+            for _ in range(79):
+                key(["a"], "A")
+            key(["ret"], "\n")
+            for _ in range(4):
+                key(["b"], "B")
+            key(["up"], named="UP")
+            for _ in range(75):
+                key(["right"], named="RIGHT")
+            key(["insert"], named="INSERT")
+            key(["x"], "X")
+            key(["y"], "Y")
+            path = build / "keyboard-reflow.ppm"
+            rpc("screendump", {"filename":str(path)})
+            verify_screen(path, "A" * 79 + "X", rows-6, False,
+                          (rows-5, 1, "insert"),
+                          [(rows-5, "Y"), (rows-4, "BBBB")])
+            key(["backspace"], "\b")
+            path = build / "keyboard-shrink.ppm"
+            rpc("screendump", {"filename":str(path)})
+            verify_screen(path, "A" * 79 + "X", rows-6, False,
+                          (rows-5, 0, "insert"), [(rows-5, "BBBB")])
+            key(["right"], named="RIGHT")
+            key(["insert"], named="INSERT")
+            key(["c"], "C")
+            key(["ret"], "\n")
+            wait_until(lambda: submitted()[-1:] == [b"BCBB"],
+                       "preserved following line submitted after reflow")
             assert b"SPIFFOS_KEYBOARD_BYTE_OK" in serial.read_bytes().splitlines()
             (build / "keyboard-serial.log").write_bytes(serial.read_bytes())
-            print(f"PASS real QEMU keyboard input: {len(expected)} accepted bytes, correction, modifiers, Enter and logo scrolling")
+            print(f"PASS real QEMU screen editor: {len(expected)} text bytes, "
+                  f"{len(expected_events)} named events, reflow, submission and scrolling")

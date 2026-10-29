@@ -3,6 +3,7 @@
  * Invariants: length <= capacity; no heap, I/O or concurrent/interrupt use.
  * References: docs/decisions/ADR-screen-editor-logical-lines.md. */
 #include <stddef.h>
+#include <stdint.h>
 #include "logical-line.h"
 
 /* Establish a valid empty line over borrowed writable bytes. False rejects
@@ -38,6 +39,75 @@ enum logical_line_result logical_line_append(
     }
     line->bytes[line->length] = byte;
     ++line->length;
+    return LOGICAL_LINE_OK;
+}
+
+/* Replace or insert at one counted byte position. Capacity is calculated
+ * before mutation so every failure preserves the prior line exactly. Padding
+ * bytes are ordinary spaces and therefore participate in later submission. */
+enum logical_line_result logical_line_edit(struct logical_line *line,
+    size_t offset, enum logical_line_edit_mode mode, unsigned char byte)
+{
+    if (line == NULL || line->bytes == NULL ||
+        line->length > line->capacity ||
+        (mode != LOGICAL_LINE_OVERWRITE && mode != LOGICAL_LINE_INSERT)) {
+        return LOGICAL_LINE_INVALID;
+    }
+    size_t required;
+    if (offset > line->length) {
+        if (offset == SIZE_MAX) {
+            return LOGICAL_LINE_FULL;
+        }
+        required = offset + 1;
+    } else if (mode == LOGICAL_LINE_INSERT || offset == line->length) {
+        if (line->length == SIZE_MAX) {
+            return LOGICAL_LINE_FULL;
+        }
+        required = line->length + 1;
+    } else {
+        required = line->length;
+    }
+    if (required > line->capacity) {
+        return LOGICAL_LINE_FULL;
+    }
+    if (offset > line->length) {
+        for (size_t index = line->length; index < offset; ++index) {
+            line->bytes[index] = ' ';
+        }
+        line->bytes[offset] = byte;
+        line->length = required;
+        return LOGICAL_LINE_OK;
+    }
+    if (mode == LOGICAL_LINE_INSERT && offset < line->length) {
+        /* Walk backward so each source byte is read before its destination is
+         * overwritten. required <= capacity was established above. */
+        for (size_t index = line->length; index > offset; --index) {
+            line->bytes[index] = line->bytes[index - 1];
+        }
+    }
+    line->bytes[offset] = byte;
+    line->length = required;
+    return LOGICAL_LINE_OK;
+}
+
+/* Delete one byte before a validated cursor offset. Forward copying is safe
+ * because every source lies one byte above its destination. */
+enum logical_line_result logical_line_delete_before(
+    struct logical_line *line, size_t *offset)
+{
+    if (line == NULL || line->bytes == NULL || offset == NULL ||
+        line->length > line->capacity || *offset > line->length) {
+        return LOGICAL_LINE_INVALID;
+    }
+    if (*offset == 0) {
+        return LOGICAL_LINE_AT_BOUNDARY;
+    }
+    size_t removed = *offset - 1;
+    for (size_t index = removed; index + 1 < line->length; ++index) {
+        line->bytes[index] = line->bytes[index + 1];
+    }
+    --line->length;
+    --*offset;
     return LOGICAL_LINE_OK;
 }
 

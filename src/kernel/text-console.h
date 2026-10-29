@@ -8,7 +8,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 struct limine_framebuffer;
-enum { TEXT_CELL_PIXELS = 16 };
+enum {
+    TEXT_CELL_PIXELS = 16,
+    TEXT_CONSOLE_BACKGROUND_RGB = 0x091b35,
+    TEXT_CONSOLE_FOREGROUND_RGB = 0xa0a0ff
+};
 struct text_console {
     const struct limine_framebuffer *framebuffer;
     uint64_t left, top, columns, rows, column, row;
@@ -28,9 +32,18 @@ bool text_console_initialize(struct text_console *console,
  * False on invalid state or drawing failure. No scrollback/history buffer.
  * Unsupported bytes paint '?'. Startup-only, borrowed state, no allocation. */
 bool text_console_putc(struct text_console *console, unsigned char character);
+/* Scroll the entire viewport upward one row and update stream cursor/count.
+ * The caller must hide any cursor overlay first. False on invalid state,
+ * counter exhaustion or framebuffer failure. Borrowed state; no allocation. */
+bool text_console_scroll_up_one_row(struct text_console *console);
 /* Print borrowed NUL-terminated text. False may leave a printed prefix.
  * NULL rejects without writes. Startup-only, no ownership transfer/allocation. */
 bool text_console_write(struct text_console *console, const char *text);
+/* Draw one character in a valid cell without moving the console cursor.
+ * Cell units; false means invalid state/coordinates or drawing failure.
+ * Unsupported bytes paint '?'. Borrow state/framebuffer; no allocation. */
+bool text_console_draw_at(const struct text_console *console,
+    uint64_t column, uint64_t row, unsigned char character);
 /* Position the next character in a valid cell without clearing or redrawing.
  * Cell units; false leaves state/screen unchanged. Borrow initialized state;
  * startup-only, no allocation/ownership transfer. Does not restore any logo. */

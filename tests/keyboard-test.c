@@ -81,6 +81,33 @@ static void decoder_test(void)
     assert(keyboard_decode(&d,0)==0);
     assert(keyboard_decode(&d,0x3b)==0);
 }
+/* Verify E0 make events, ignored breaks and chord filtering independently of
+ * the legacy byte compatibility helper. */
+static void event_test(void)
+{
+    struct keyboard_decoder decoder;
+    struct keyboard_event event;
+    keyboard_decoder_reset(&decoder);
+    assert(!keyboard_decode_event(&decoder, 0xe0, &event));
+    assert(keyboard_decode_event(&decoder, 0x4b, &event));
+    assert(event.type == KEYBOARD_EVENT_LEFT && event.character == 0);
+    assert(!keyboard_decode_event(&decoder, 0xe0, &event));
+    assert(!keyboard_decode_event(&decoder, 0xcb, &event));
+    assert(!keyboard_decode_event(&decoder, 0xe0, &event));
+    assert(keyboard_decode_event(&decoder, 0x52, &event));
+    assert(event.type == KEYBOARD_EVENT_INSERT);
+    assert(!keyboard_decode_event(&decoder, 0xe0, &event));
+    assert(!keyboard_decode_event(&decoder, 0xd2, &event));
+    assert(keyboard_decode_event(&decoder, 0x1e, &event));
+    assert(event.type == KEYBOARD_EVENT_CHARACTER && event.character == 'A');
+    assert(!keyboard_decode_event(&decoder, 0x1d, &event));
+    assert(!keyboard_decode_event(&decoder, 0xe0, &event));
+    assert(!keyboard_decode_event(&decoder, 0x4d, &event));
+    assert(!keyboard_decode_event(&decoder, 0x9d, &event));
+    assert(!keyboard_decode_event(NULL, 0x1e, &event));
+    assert(!keyboard_decode_event(&decoder, 0x1e, NULL));
+}
+
 /* Verify initialization sequence, ACK failure/retry, finite timeouts and polling. */
 static void transport_test(void)
 {
@@ -113,5 +140,6 @@ static void transport_test(void)
 /* Run deterministic tests; assertion/sanitizer failures are a nonzero exit. */
 int main(void)
 {
-    decoder_test(); transport_test(); puts("PASS keyboard decoder and bounded transport");
+    decoder_test(); event_test(); transport_test();
+    puts("PASS keyboard events and bounded transport");
 }

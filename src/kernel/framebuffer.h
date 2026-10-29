@@ -39,6 +39,17 @@ bool framebuffer_draw_cell(const struct limine_framebuffer *framebuffer,
 bool framebuffer_scroll_rectangle(const struct limine_framebuffer *framebuffer,
     uint64_t x, uint64_t y, uint64_t width, uint64_t height,
     uint64_t amount, uint32_t background);
+/* Move a bounded rectangle downward by amount pixels within itself and clear
+ * the exposed top. Copying bottom-to-top preserves overlapping source rows.
+ * Invalid bounds or amount>height return false before writes. */
+bool framebuffer_move_rectangle_down(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height,
+    uint64_t amount, uint32_t background);
+/* Bitwise-invert every stored pixel word in a bounded rectangle. Applying the
+ * same rectangle twice restores its exact prior pixels, including logo art.
+ * False means invalid bounds and no writes. */
+bool framebuffer_invert_rectangle(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height);
 /* Draw packed RGB24 rows, converting logical RGB to the framebuffer layout.
  * Validate byte count and all bounds before writes; false means no writes.
  * Borrow readable data and mapped framebuffer. Startup-only, no allocations. */
