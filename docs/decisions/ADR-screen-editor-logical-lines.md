@@ -97,9 +97,11 @@ a documented visible full indication at the cursor. Submission remains possible
 only for the complete stored line. No partial command is dispatched as recovery.
 
 ## Rendering, cursor and branding
-Use a steady underline in overwrite mode and a vertical bar in insert mode, so
-mode and position are visible without a timer or fixed status/header row. Hide
-it before drawing/scrolling and restore it afterward. Preserve the underlying
+Use a steady full-cell block cursor in overwrite mode and a two-pixel-thick
+underscore cursor at the bottom of the cell in insert mode, so mode and position
+are visible without a timer or fixed status/header row. This owner-approved
+cursor-shape choice supersedes the earlier underline/vertical-bar proposal.
+Hide the cursor before drawing or scrolling and restore it afterward. Preserve the underlying
 pixels exactly (e.g. reversible color inversion validated by framebuffer helpers),
 including initial logo artwork under a moved cursor. A full-capacity indication
 must be visually distinct and cleared after a successful deletion frees capacity.

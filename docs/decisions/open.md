@@ -126,7 +126,9 @@ implementation checkpoints.
 ### Logical-line screen editor design — 2026-10-29
 
 Owner chose default overwrite, the Insert key to toggle insert mode, and
-push-down reflow when a growing logical line needs another physical row.
+push-down reflow when a growing logical line needs another physical row. The
+visible cursor is a full-cell block in overwrite mode and a two-pixel-thick
+underscore at the bottom of the cell in insert mode.
 [Screen-editor design](../decisions/ADR-screen-editor-logical-lines.md) records
 the rules. The first implementation checkpoint now stores a complete bounded
 logical line, uses the full display width, soft-wraps without submission, submits
