@@ -1,18 +1,42 @@
-/* Purpose: bounded current-line editing on the diagnostic text console.
- * Dependencies: text-console. Caller-owned state, no heap/history/BASIC.
- * Invariants: one row per editable line, no concurrent/interrupt use.
- * See docs/decisions/ADR-qemu-keyboard-input.md. */
+/* Purpose: stored logical-line input and soft wrapping on the boot console.
+ * Dependencies: logical-line and text-console. Caller owns all storage/state.
+ * Invariants: one active append-only line, no heap/BASIC/concurrent use.
+ * See docs/decisions/ADR-screen-editor-logical-lines.md. */
 #ifndef SPIFFOS_KEYBOARD_CONSOLE_H
 #define SPIFFOS_KEYBOARD_CONSOLE_H
-#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#include "logical-line.h"
+
 struct text_console;
-struct keyboard_console { struct text_console *console; uint64_t length, limit; };
-/* Start input on the next row. Borrow console throughout editing lifetime.
- * False on invalid console/output failure; caller must stop editing. No heap. */
-bool keyboard_console_initialize(struct keyboard_console *input, struct text_console *console);
-/* Apply supported ASCII byte. True only when accepted; false for line limit,
- * Backspace at start, unsupported byte or drawing failure. Enter resets length.
- * No command execution or logo restoration; synchronous, single caller. */
-bool keyboard_console_accept(struct keyboard_console *input, unsigned char character);
+
+enum keyboard_console_result {
+    KEYBOARD_CONSOLE_IGNORED,
+    KEYBOARD_CONSOLE_ACCEPTED,
+    KEYBOARD_CONSOLE_SUBMITTED,
+    KEYBOARD_CONSOLE_FULL,
+    KEYBOARD_CONSOLE_ERROR
+};
+
+struct keyboard_console {
+    struct text_console *console;
+    struct logical_line line;
+    uint64_t start_row_absolute;
+    logical_line_submit_fn submit;
+    void *submit_context;
+};
+
+/* Start a logical line on the row after existing output. Borrow console and
+ * storage until editing ends. Callback receives counted complete text on Enter.
+ * False leaves input unusable; no heap, submission or ownership transfer. */
+bool keyboard_console_initialize(struct keyboard_console *input,
+    struct text_console *console, unsigned char *storage, size_t capacity,
+    logical_line_submit_fn submit, void *submit_context);
+
+/* Apply supported printable ASCII, Backspace or Enter. Printable text appends
+ * through soft wraps; only Enter calls submit. FULL preserves complete text.
+ * Result distinguishes ignored boundaries, capacity and rendering errors. */
+enum keyboard_console_result keyboard_console_accept(
+    struct keyboard_console *input, unsigned char character);
+
 #endif

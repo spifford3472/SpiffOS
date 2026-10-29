@@ -237,3 +237,28 @@ Run `python3 scripts/test-safe-launcher.py` after `make iso` to exercise real
 headless guest boot, pointer selection, input and runner cleanup. Desktop focus,
 resizing, capture release and window close remain manual acceptance checks.
 See [launcher evidence](operations/safe-launcher-2026-10-29.md).
+
+## Stored logical input and soft wrapping — verified 2026-10-29
+
+Screen pixels show text but do not own command text. The logical-line module
+stores a counted byte sequence in caller-provided bounded memory. The keyboard
+console renders those bytes across every available column. Reaching the right
+edge selects the next physical display row; it does not store Enter, call the
+submission callback or divide the command.
+
+The text console counts rows removed by scrolling. The input line remembers its
+absolute starting row, so it can erase its final character across a wrap while
+retaining a prefix that has already left the screen. Enter borrows the entire
+counted sequence for one synchronous diagnostic callback. The current callback
+writes SUBMIT: evidence to serial and executes no BASIC.
+
+The 4096-byte buffer is static kernel diagnostic storage, keeping it off Limine's
+entry stack. Filling it rejects the new character and preserves the complete
+existing line; it never truncates or submits a prefix. Backspace can free space.
+This capacity is not a BASIC language limit or final user interface contract.
+
+Run `make test-keyboard` for sanitizer checks plus real QEMU key injection,
+including a three-row logical line and exact serial submission. Read
+[the validation record](operations/logical-lines-2026-10-29.md). Arrows, visible
+cursor, Insert editing, multiple screen lines and owner-approved push-down reflow
+remain the next checkpoint.

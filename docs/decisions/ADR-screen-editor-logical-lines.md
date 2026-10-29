@@ -1,18 +1,22 @@
-# ADR draft — Stored logical lines and screen-position editing
+# ADR — Stored logical lines and screen-position editing
 
-Status: DESIGN FOR OWNER REVIEW, 2026-10-29. Not implemented by this document.
+Status: ACCEPTED DESIGN, 2026-10-29. Implementation proceeds in verified checkpoints.
 The owner authorized design/implementation in small verified stages, requested a
 documented design before source changes and review of material interaction choices.
 Owner explicitly chose default overwrite, with the keyboard Insert key toggling
-insert/overwrite. That choice is accepted; the remaining detailed rules below
-are recommendations for review, not claims that the behavior already exists.
+insert/overwrite. That choice is accepted. The owner also accepted push-down
+reflow: when a line grows, following visible lines move down intact.
+Implementation status remains explicit in each checkpoint; this decision alone
+does not claim source behavior.
 Read AGENTS.md, accepted/open, overview, ADR-011, UEFI/recovery, keyboard ADR,
 Developer's Guide and the 2026-10-29 keyboard/2026-10-28 workspace-logo records.
 
 ## Problem and definitions
-Current code retains only length, capped at min(63, columns-1). Pixels cannot
-supply editable command text. At the observed WHATQQQ limit it ignores printable
-keys. This is a current diagnostic restriction, not a BASIC or display-width limit.
+Before the first implementation checkpoint, code retained only a length capped
+at min(63, columns-1); at the observed WHATQQQ limit it ignored printable keys.
+The checkpoint replaces that restriction with stored bounded text. Pixels remain
+non-authoritative, and 4096 bytes is a diagnostic capacity rather than a BASIC
+or final display limit.
 
 A physical row is one horizontal row of character cells. A logical input line
 is a stored sequence of characters; it may occupy several physical rows.
@@ -42,24 +46,18 @@ input, rather than accidentally adding another blank row.
 | Backspace beyond text end | Move left through blank cells; do not delete unrelated text. |
 | Backspace at logical offset zero | No-op; never merge separate submitted/output lines implicitly. |
 | Selecting another line | Retain previous edits in memory without submitting them. A screen editor is not limited to the bottom prompt. |
-| Growth into another row | RECOMMENDED: insert a physical row and push following content downward; preserve its logical-line identity. See material choice below. |
+| Growth into another row | Insert a physical row and push following content downward; preserve its logical-line identity. Owner-approved. |
 | Shrinking by a row | Remove the now-unused continuation row, move following rows upward and expose a blank bottom row. |
 | Reaching bottom while typing | Scroll the whole viewport upward, including logo pixels; keep cursor and row mappings synchronized. |
 | Leaving view | Retain complete text while any fragment of that logical line remains visible; once its last fragment leaves, reclaim its record. No general scrollback in this stage. |
 | Asynchronous output | No concurrent output during this polling diagnostic. Later output must use a documented editor suspension/output path; never mutate editor pixels behind its model. |
 
-## Material reflow choice for owner review
-Recommended: when inserting or extending an earlier command needs another row,
-push following visible text down. This preserves the next line as its own stored
-logical line. Content pushed off the bottom is no longer visible; if its entire
-logical line leaves, it may be reclaimed under the bounded viewport policy.
-
-Alternative: let the growing command overwrite the cells/lines immediately below
-it. That resembles painting onto a fixed screen but can destroy another command
-and requires explicit splitting/merging rules. Do not implement that destructive
-interaction silently. Confirm the recommended push-down behavior before the
-screen-wide reflow stage. Independent logical-buffer and wrapping stages need
-not wait for this choice.
+## Accepted push-down reflow
+When inserting or extending an earlier command needs another row, push following
+visible text down. This preserves the next line as its own stored logical line.
+Content pushed off the bottom is no longer visible; if its entire logical line
+leaves, it may be reclaimed under the bounded viewport policy. Do not overwrite
+or merge the line below merely because another logical line grows.
 
 ## Memory, ownership and small interfaces
 Use bounded caller-owned state, with no allocator or terminal framework.
@@ -140,14 +138,24 @@ removes X and moves to the continuation start. Backspace again removes B and
 moves to column 79 of the first row. Type C then D: C ends the first row, D starts
 the second. Enter delivers 79 As followed by CD as one 81-byte command exactly
 once. Neither crossing the edge nor either Backspace can synthesize Enter.
-This is an acceptance example, not a claim that the current kernel supports it.
+Checkpoint 1/2 now implements and tests this append-at-end example. Moving the
+cursor into earlier text belongs to the next screen-wide editing checkpoint.
+
+## Implementation checkpoint — stored wrapping and submission
+
+The first source checkpoint implements one active append-at-end stored logical
+line, full-width soft wrapping, complete counted submission on Enter, Backspace
+across wraps, scrolling with the full prefix retained, and explicit 4096-byte
+capacity rejection. It does not yet implement arrows, Insert/overwrite editing,
+a visible cursor, multiple visible logical-line records or push-down drawing.
+See [actual validation](../operations/logical-lines-2026-10-29.md).
 
 ## Authorization, limits and rollback
-Default overwrite and Insert toggle are owner-approved in this conversation.
-The screen-wide reflow choice is pending review. This draft is separate from the
-implemented safe-launcher checkpoint. No screen-editor source changes or new
-screen-editor test results are claimed. BASIC, ring 3, interrupt-driven input,
-USB input and final console ABI remain outside this diagnostic.
+Default overwrite, the Insert toggle and push-down screen-wide reflow are
+owner-approved in this conversation. Stored append-at-end logical lines and
+wrapping are implemented in a separate checkpoint after the safe launcher.
+BASIC, ring 3, interrupt-driven input, USB input and the final console ABI
+remain outside this diagnostic.
 Build prior bbb2d4d or the launcher checkpoint in isolated worktrees for rollback;
 preserve the original index, unrelated drafts, backups and history. No merge or
 physical deployment without the separate project authorization step.

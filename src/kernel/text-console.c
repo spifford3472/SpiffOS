@@ -36,6 +36,7 @@ bool text_console_initialize(struct text_console *console,
     console->rows = rows;
     console->column = 0;
     console->row = 0;
+    console->scroll_count = 0;
     console->initialized = true;
     return true;
 }
@@ -50,6 +51,9 @@ bool text_console_putc(struct text_console *console, unsigned char character)
         return false;
     }
     if (console->row == console->rows) {
+        if (console->scroll_count == UINT64_MAX) {
+            return false;
+        }
         /* Defer moving the last line until another byte actually needs room.
          * This keeps an exact-fill final character visible on the screen. */
         if (!framebuffer_scroll_rectangle(console->framebuffer,
@@ -60,6 +64,7 @@ bool text_console_putc(struct text_console *console, unsigned char character)
         }
         console->row = console->rows - 1;
         console->column = 0;
+        ++console->scroll_count;
     }
     if (character == '\n') {
         console->column = 0;

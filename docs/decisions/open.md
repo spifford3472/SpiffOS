@@ -119,14 +119,18 @@ the historical Qwen-first requirement only for these objectives. PR #13's merge
 and deployment authorization does not extend here: prepare tested PRs for review;
 no merge, physical disk, USB, firmware, network or unrelated service changes.
 Preserve the original checkout/index and unrelated work. See
-[launcher decision](../decisions/ADR-safe-qemu-launcher.md). Screen-editing rules
-requiring a material interaction choice remain proposals until owner review.
+[launcher decision](../decisions/ADR-safe-qemu-launcher.md). The owner has now
+settled overwrite/Insert and push-down reflow; remaining work follows verified
+implementation checkpoints.
 
 ### Logical-line screen editor design — 2026-10-29
 
-Owner chose default overwrite with the Insert key toggling insert mode.
+Owner chose default overwrite, the Insert key to toggle insert mode, and
+push-down reflow when a growing logical line needs another physical row.
 [Screen-editor design](../decisions/ADR-screen-editor-logical-lines.md) records
-physical rows versus stored logical lines, complete Enter submission, cross-wrap
-Backspace, arbitrary visible-cell navigation, bounded storage and logo/cursor
-rules. Push-down versus overwrite-below reflow is a material choice still for
-owner review. No editor source changes or implementation results are claimed.
+the rules. The first implementation checkpoint now stores a complete bounded
+logical line, uses the full display width, soft-wraps without submission, submits
+only on Enter and Backspaces across wraps; see
+[validation](../operations/logical-lines-2026-10-29.md). Arrow navigation,
+visible cursor, Insert editing, multiple visible line records and push-down
+rendering remain open implementation work.

@@ -11,7 +11,7 @@ KERNEL := build/spiffos-kernel.elf
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/keyboard-console.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/keyboard-console.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -20,8 +20,8 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/keyboard-console.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/keyboard-console.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -129,7 +129,11 @@ build/keyboard-ps2.o: src/kernel/keyboard-ps2.c src/kernel/keyboard-ps2.h Makefi
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/keyboard-console.o: src/kernel/keyboard-console.c src/kernel/keyboard-console.h src/kernel/text-console.h Makefile
+build/logical-line.o: src/kernel/logical-line.c src/kernel/logical-line.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/keyboard-console.o: src/kernel/keyboard-console.c src/kernel/keyboard-console.h src/kernel/logical-line.h src/kernel/text-console.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -138,12 +142,17 @@ build/keyboard-test: tests/keyboard-test.c src/kernel/keyboard.c src/kernel/keyb
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/keyboard-test.c src/kernel/keyboard.c src/kernel/keyboard-ps2.c -o $@
 
-build/keyboard-console-test: tests/keyboard-console-test.c src/kernel/keyboard-console.c src/kernel/keyboard-console.h src/kernel/text-console.c src/kernel/text-console.h src/kernel/framebuffer.c src/kernel/framebuffer.h src/kernel/console-font.c src/kernel/console-font.h include/limine.h Makefile
+build/logical-line-test: tests/logical-line-test.c src/kernel/logical-line.c src/kernel/logical-line.h Makefile
 	mkdir -p build
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/keyboard-console-test.c src/kernel/keyboard-console.c src/kernel/text-console.c src/kernel/framebuffer.c src/kernel/console-font.c -o $@
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/logical-line-test.c src/kernel/logical-line.c -o $@
 
-test-keyboard-memory: build/keyboard-test build/keyboard-console-test
+build/keyboard-console-test: tests/keyboard-console-test.c src/kernel/keyboard-console.c src/kernel/keyboard-console.h src/kernel/logical-line.c src/kernel/logical-line.h src/kernel/text-console.c src/kernel/text-console.h src/kernel/framebuffer.c src/kernel/framebuffer.h src/kernel/console-font.c src/kernel/console-font.h include/limine.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/keyboard-console-test.c src/kernel/keyboard-console.c src/kernel/logical-line.c src/kernel/text-console.c src/kernel/framebuffer.c src/kernel/console-font.c -o $@
+
+test-keyboard-memory: build/keyboard-test build/logical-line-test build/keyboard-console-test
 	./build/keyboard-test
+	./build/logical-line-test
 	./build/keyboard-console-test
 
 test-keyboard: test-keyboard-memory iso
