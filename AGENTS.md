@@ -50,3 +50,14 @@ Build a small, understandable, native x86-64 operating system that boots directl
 - For **major subsystem** conflicts that materially affect interfaces, safety, on-disk compatibility, process isolation, graphics/audio architecture or hardware support, summarize the differences and trade-offs and ask the owner to choose one official direction **before implementation**.
 - For minor UX/details, follow the latest approval and defer unneeded specifics. Avoid repeated polls about settled or nonessential features.
 - When approval status is ambiguous, document the ambiguity as OPEN rather than guessing.
+
+## Memory-foundation workflow — owner update 2026-10-29
+
+The owner explicitly permits direct work and Codex fallback for memory when
+Qwen continues timing out. Keep Qwen jobs very small: one function, file or test
+group, with concrete inputs/outputs and bounded time. The coordinator reads
+the governing decision documents and gives each worker focused relevant
+context and references; workers must read AGENTS.md and the named references.
+Document attempts, timeouts, model contributions and actual verification.
+This supersedes the older smallest-blocker-only escalation restriction for the
+authorized memory checkpoint; it does not grant merge or physical deployment.
