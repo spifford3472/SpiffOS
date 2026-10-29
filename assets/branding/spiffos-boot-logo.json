@@ -1,0 +1,12 @@
+{
+  "source": "assets/branding/spiffos-logo.svg",
+  "width": 400,
+  "height": 160,
+  "format": "RGB24 row-major, no padding",
+  "background": "#091b35",
+  "background_policy": "Owner-approved uniform boot backdrop; original SVG unchanged",
+  "source_sha256": "313018ff88a3589622a86c422f1f950612b1a3425b1223ef124bbf5cd1af1a09",
+  "rgb_sha256": "45f09bafbd8848e207e6681ff9230a8cca1032cccd68d80deb26d94ec1996d31",
+  "renderer": "host librsvg/Cairo via render-boot-logo.py",
+  "font": "DejaVuSans-Bold.ttf: \"DejaVu Sans\" \"Bold\""
+}

@@ -62,3 +62,50 @@ Keep original open items above as historical inventory; these status notes take 
 - **Graphics implementation detail:** later approved default logical modes and opt-in collision behavior supersede older proposals where approval is clear; exact APIs/driver implementation still open. Avoid spending initial boot milestones on these details.
 
 **Filesystem policy resolved 2026-10-26:** manual Trash, one current saved version, no automatic retention/purge; see ADR-012. O-008 remains OPEN only for implementation details (on-disk format, crash consistency, recovery, transaction semantics, compatibility and A/B safeguards). Do not treat older automatic versioning/retention policies as current.
+
+## First-boot milestone — 2026-10-28
+
+For the QEMU-only smoke test, the pinned Limine protocol and binary pair,
+base revision 5, C entry and template-derived ELF layout are recorded in
+[ADR-011](ADR-011-boot-kernel-memory-governance.md) and the
+[boot record](../operations/first-boot-2026-10-28.md). The exact serial marker
+was captured in two passing QEMU tests, including a fresh build. Future process
+VM layout, runtime ABI, allocators, recovery/A-B and BASIC remain open.
+
+## Scoped framebuffer diagnostic — 2026-10-28
+
+The owner authorized a QEMU boot pattern as the next verified step after
+`be74fe2`; see ADR-011. O-014 logical resolution, composition, sprites and
+BASIC graphics interfaces remain open. This diagnostic settles none of them.
+
+## Fixed boot label scope — 2026-10-28
+
+The owner authorized a fixed bitmap SPIFFOS label after `8f48fa7`; see ADR-011.
+General text encoding, console/cursor/scrolling behavior, font selection, BASIC
+interfaces and logical graphics policy remain open.
+
+## Boot console scope — 2026-10-28
+
+A bounded kernel diagnostic console is authorized after `25150f0`; see ADR-011.
+Scrolling, input, full text encoding, visible cursor, user console interfaces
+and BASIC remain open and outside this step.
+
+## Scroll and logo scope — 2026-10-28
+
+Console scrolling and reuse of the existing SVG logo are now authorized;
+see ADR-011. Input, visible cursor, scroll history and final user-space
+console/display contracts remain open.
+
+## Owner correction: initial logo content — 2026-10-28
+
+Logo scrolls with workspace content and returns only on explicit reset/boot.
+No permanent header reservation. See ADR-011; user reset commands and keyboard
+input remain open.
+
+## QEMU keyboard milestone — 2026-10-29
+
+Owner authorized direct architecture/implementation, merge and local QEMU deployment.
+See docs/decisions/ADR-qemu-keyboard-input.md (repository-relative) for scope,
+rationale and validation. PS/2 polling is a temporary kernel diagnostic; USB,
+interrupts, full character input, shortcuts, BASIC and the final input ABI remain open.
+Prior no-merge restrictions are superseded for this milestone only.

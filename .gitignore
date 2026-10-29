@@ -1,0 +1,3 @@
+# Generated output and local development dependencies; source and editor configuration stay visible.
+/build/
+/.local-dev/

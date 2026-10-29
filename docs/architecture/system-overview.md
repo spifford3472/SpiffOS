@@ -50,3 +50,52 @@ The latest explicitly approved owner decision prevails over older conflicting dr
 ## Approved SpiffFS user-facing policy (2026-10-26)
 
 SpiffFS stores one current saved version per file; deleting moves a file to user-managed Trash until explicitly emptied. There is no automatic saved-version history or Trash expiration/purge. This supersedes older retention/versioning drafts. Crash-consistent updates, power-loss-resistant boot and recovery are independent mandatory requirements; implementation mechanisms remain open. See [ADR-012](../decisions/ADR-012-spifffs-trash-policy.md).
+
+## Verified first-boot scope — 2026-10-28
+
+A minimal native x86-64 kernel now boots through pinned Limine in QEMU/OVMF
+and prints `SPIFFOS_BOOT_OK` on COM1 before halting. This is a smoke test, not
+the BASIC READY environment or a completed architecture. See the
+[recovery and validation record](../operations/first-boot-2026-10-28.md) for
+protocol compatibility, workspace configuration, evidence and limitations.
+
+## Framebuffer diagnostic scope — 2026-10-28
+
+The next authorized boot-only diagnostic draws a pattern directly into the
+first compatible Limine framebuffer. It uses firmware-selected physical
+dimensions and does not establish a logical graphics mode or workspace API.
+Validation status is recorded in `docs/operations/framebuffer-2026-10-28.md`.
+
+## Fixed boot label scope — 2026-10-28
+
+The next authorized diagnostic adds bitmap SPIFFOS lettering over the boot
+pattern. This uses the existing borrowed Limine framebuffer and does not
+establish a console or a user-space graphics interface. See
+[the text validation record](../operations/text-2026-10-28.md).
+
+## Boot console diagnostic — 2026-10-28
+
+The next authorized step adds a small caller-owned text console over the
+existing framebuffer. Only kernel startup uses it; process/workspace console
+interfaces remain open. See [console validation](../operations/console-2026-10-28.md).
+
+## Scrolling power-up presentation — 2026-10-28
+
+The next authorized diagnostic scrolls only its console viewport and embeds a
+bitmap derived from the original branding SVG above it. The logo stays outside
+the scrolling area, with no added boot delay. See
+[validation](../operations/scroll-logo-2026-10-28.md).
+
+## Owner correction: reclaimable logo area — 2026-10-28
+
+The earlier fixed-logo header is superseded: the entire drawable interior is
+one scrolling text workspace. The logo is initial content and returns only
+on workspace reset or boot. See [validation](../operations/workspace-logo-2026-10-28.md).
+
+## QEMU keyboard milestone — 2026-10-29
+
+Owner authorized direct architecture/implementation, merge and local QEMU deployment.
+See docs/decisions/ADR-qemu-keyboard-input.md (repository-relative) for scope,
+rationale and validation. PS/2 polling is a temporary kernel diagnostic; USB,
+interrupts, full character input, shortcuts, BASIC and the final input ABI remain open.
+Prior no-merge restrictions are superseded for this milestone only.
