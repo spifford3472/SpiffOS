@@ -215,3 +215,65 @@ bool framebuffer_draw_cell(const struct limine_framebuffer *framebuffer,
     }
     return true;
 }
+
+/* Move only visible pixels upward within a rectangle; clear exposed bottom.
+ * Pixel units, logical 0xRRGGBB background. False means no writes; zero amount
+ * succeeds unchanged, height amount clears everything. Borrows mappings;
+ * no heap, startup CPU only, no concurrent drawing or interrupt use. */
+bool framebuffer_scroll_rectangle(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height,
+    uint64_t amount, uint32_t background)
+{
+    if (!framebuffer_supported(framebuffer) || width == 0 || height == 0 ||
+        amount > height || x > framebuffer->width ||
+        width > framebuffer->width - x || y > framebuffer->height ||
+        height > framebuffer->height - y) {
+        return false;
+    }
+    if (amount == 0) {
+        return true;
+    }
+    volatile uint8_t *pixels = framebuffer->address;
+    /* Source rows lie below destination rows. Copy top-to-bottom so a write
+     * never overwrites pixels we still need to read (the regions overlap).
+     * Respect pitch and viewport width; neither padding nor neighbors move. */
+    for (uint64_t row_index = 0; row_index < height - amount; ++row_index) {
+        volatile uint32_t *destination = (volatile uint32_t *)(
+            pixels + (y + row_index) * framebuffer->pitch);
+        const volatile uint32_t *source = (const volatile uint32_t *)(
+            pixels + (y + row_index + amount) * framebuffer->pitch);
+        for (uint64_t column = 0; column < width; ++column) {
+            destination[x + column] = source[x + column];
+        }
+    }
+    return framebuffer_fill_rectangle(framebuffer, x, y + height - amount,
+                                       width, amount, background);
+}
+
+/* Copy a packed RGB24 image into a validated screen rectangle.
+ * Pixel dimensions, byte_count bytes readable at borrowed rgb. False before
+ * any writes on truncated data or invalid bounds. No ownership/allocation;
+ * startup CPU only with stable descriptor, mapping and source data. */
+bool framebuffer_draw_rgb_image(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height,
+    const uint8_t *rgb, size_t byte_count)
+{
+    if (rgb == NULL || !framebuffer_supported(framebuffer) ||
+        width == 0 || height == 0 || width > SIZE_MAX / 3 ||
+        height > SIZE_MAX / (width * 3) || byte_count < width * height * 3 ||
+        x > framebuffer->width || width > framebuffer->width - x ||
+        y > framebuffer->height || height > framebuffer->height - y) {
+        return false;
+    }
+    volatile uint8_t *pixels = framebuffer->address;
+    for (uint64_t py = 0; py < height; ++py) {
+        volatile uint32_t *row = (volatile uint32_t *)(pixels + (y + py) * framebuffer->pitch);
+        for (uint64_t px = 0; px < width; ++px) {
+            /* Source rows have three bytes per pixel, destination rows may
+             * include padding and use a different red/green/blue bit order. */
+            size_t offset = (py * width + px) * 3;
+            row[x + px] = pixel_color(framebuffer, rgb[offset], rgb[offset+1], rgb[offset+2]);
+        }
+    }
+    return true;
+}

@@ -59,7 +59,7 @@ int main(void)
     struct text_console console;
     assert(text_console_initialize(&console, &fb, 8, 8, 3, 2));
     assert(console.column == 0 && console.row == 0);
-    assert(screen.pixels[8][8] == UINT32_C(0x202060));
+    assert(screen.pixels[8][8] == UINT32_C(0x091b35));
     assert(text_console_putc(&console, 'A'));
     assert(console.column == 1 && console.row == 0);
     assert(screen.pixels[8][12] == UINT32_C(0xa0a0ff));
@@ -70,10 +70,8 @@ int main(void)
     assert(text_console_putc(&console, '\n'));
     assert(console.column == 0 && console.row == 2);
     assert(memcmp(&screen, &previous, sizeof(screen)) == 0);
-    assert(!text_console_putc(&console, 'Z'));
-    assert(!text_console_write(&console, "Z"));
-    assert(console.column == 0 && console.row == 2);
-    assert(memcmp(&screen, &previous, sizeof(screen)) == 0);
+    assert(text_console_putc(&console, 'Z'));
+    assert(console.column == 1 && console.row == 1); /* pending row scrolled */
 
     assert(text_console_initialize(&console, &fb, 8, 8, 3, 2));
     assert(text_console_write(&console, "A\nB"));
@@ -82,8 +80,8 @@ int main(void)
     assert(text_console_write(&console, "ABCDEF"));
     assert(console.column == 0 && console.row == 2); /* exact final cell */
     assert(text_console_initialize(&console, &fb, 8, 8, 3, 2));
-    assert(!text_console_write(&console, "ABCDEFG")); /* accepted prefix */
-    assert(console.column == 0 && console.row == 2);
+    assert(text_console_write(&console, "ABCDEFG")); /* output continues by scrolling */
+    assert(console.column == 1 && console.row == 1);
     assert(text_console_initialize(&console, &fb, 8, 8, 3, 2));
     assert(text_console_write(&console, "ABC\n")); /* wrapped row then newline */
     assert(console.row == 2 && console.column == 0);
@@ -118,10 +116,10 @@ int main(void)
     /* The same logical colors must pack correctly when red/blue are reversed. */
     fb.red_mask_shift = 0; fb.blue_mask_shift = 16;
     assert(text_console_initialize(&console, &fb, 8, 8, 3, 2));
-    assert(screen.pixels[8][8] == UINT32_C(0x602020));
+    assert(screen.pixels[8][8] == UINT32_C(0x351b09));
     assert(text_console_putc(&console, 'A'));
     assert(screen.pixels[8][12] == UINT32_C(0xffa0a0));
     check_bounds(&screen);
-    puts("PASS: console cursor, wrap, newline, exhaustion, replacement, bounds, padding and colors");
+    puts("PASS: console cursor, wrap, newline, pending scroll, replacement, bounds, padding and colors");
     return 0;
 }

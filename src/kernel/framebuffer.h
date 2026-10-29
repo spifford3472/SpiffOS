@@ -8,6 +8,7 @@
 #define SPIFFOS_FRAMEBUFFER_H
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 struct limine_framebuffer;
 
 /* Draw into a borrowed, mapped Limine framebuffer; never takes ownership.
@@ -31,4 +32,17 @@ bool framebuffer_fill_rectangle(const struct limine_framebuffer *framebuffer,
 bool framebuffer_draw_cell(const struct limine_framebuffer *framebuffer,
     uint64_t x, uint64_t y, const uint8_t glyph[8], uint32_t foreground,
     uint32_t background);
+/* Scroll a bounded pixel rectangle upward; clear exposed rows with 0xRRGGBB.
+ * amount in pixels, zero is a no-op, amount==height clears all. Invalid bounds
+ * or amount>height return false before writes. Borrow valid mappings;
+ * startup-only, no allocation/ownership transfer or concurrent drawing. */
+bool framebuffer_scroll_rectangle(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height,
+    uint64_t amount, uint32_t background);
+/* Draw packed RGB24 rows, converting logical RGB to the framebuffer layout.
+ * Validate byte count and all bounds before writes; false means no writes.
+ * Borrow readable data and mapped framebuffer. Startup-only, no allocations. */
+bool framebuffer_draw_rgb_image(const struct limine_framebuffer *framebuffer,
+    uint64_t x, uint64_t y, uint64_t width, uint64_t height,
+    const uint8_t *rgb, size_t byte_count);
 #endif

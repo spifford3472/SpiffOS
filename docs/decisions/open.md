@@ -89,3 +89,15 @@ interfaces and logical graphics policy remain open.
 A bounded kernel diagnostic console is authorized after `25150f0`; see ADR-011.
 Scrolling, input, full text encoding, visible cursor, user console interfaces
 and BASIC remain open and outside this step.
+
+## Scroll and logo scope — 2026-10-28
+
+Console scrolling and reuse of the existing SVG logo are now authorized;
+see ADR-011. Input, visible cursor, scroll history and final user-space
+console/display contracts remain open.
+
+## Owner correction: initial logo content — 2026-10-28
+
+Logo scrolls with workspace content and returns only on explicit reset/boot.
+No permanent header reservation. See ADR-011; user reset commands and keyboard
+input remain open.

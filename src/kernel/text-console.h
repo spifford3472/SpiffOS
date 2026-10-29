@@ -21,11 +21,15 @@ bool text_console_initialize(struct text_console *console,
     const struct limine_framebuffer *framebuffer, uint64_t x, uint64_t y,
     uint64_t columns, uint64_t rows);
 /* Consume a byte; newline advances row/reset column, others draw and wrap.
- * True means consumed, even when the cursor becomes full (row == rows).
- * False on invalid/full state or drawing failure; cursor unchanged then.
+ * True means consumed; row==rows means next input scrolls up one cell row.
+ * False on invalid state or drawing failure. No scrollback/history buffer.
  * Unsupported bytes paint '?'. Startup-only, borrowed state, no allocation. */
 bool text_console_putc(struct text_console *console, unsigned char character);
 /* Print borrowed NUL-terminated text. False may leave a printed prefix.
  * NULL rejects without writes. Startup-only, no ownership transfer/allocation. */
 bool text_console_write(struct text_console *console, const char *text);
+/* Position the next character in a valid cell without clearing or redrawing.
+ * Cell units; false leaves state/screen unchanged. Borrow initialized state;
+ * startup-only, no allocation/ownership transfer. Does not restore any logo. */
+bool text_console_position(struct text_console *console, uint64_t column, uint64_t row);
 #endif

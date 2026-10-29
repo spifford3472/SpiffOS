@@ -144,3 +144,68 @@ characters, strict kernel build, actual QEMU capture and serial success. Verify
 a backup before source changes, preserve current staging/drafts, and leave the
 new step uncommitted for review. No push, merge or physical-device changes.
 See docs/operations/console-2026-10-28.md for actual results and limitations.
+
+## Scrolling and existing power-up logo — owner authorization 2026-10-28
+
+The owner authorized scrolling after checkpoint `711168c` and explicitly asked
+that the existing SpiffOS logo be used for the power-up screen. Direct
+ChatGPT-guided work continues; no delegated coding models. Preserve unrelated
+governance, staging and drafts; verify backup, test each change separately,
+and leave new work uncommitted for review. No push, merge or physical devices.
+
+Scrolling supersedes the bounded-console full-error behavior: row == rows now
+means a pending scroll. Before consuming the next byte, move the console
+viewport up one 16-pixel character row, clear the bottom row and put the cursor
+on that row. Keep the final character visible until subsequent input needs
+space. Existing immediate wrapping/newline rules stay: a newline following a
+wrap creates an additional blank line. No history, input or visible cursor.
+
+Use only the original assets/branding/spiffos-logo.svg, retaining it unchanged.
+Produce a 400x160 RGB bitmap with recorded provenance and checksums; ordinary
+builds embed that fixed bitmap without image/font libraries in the kernel.
+Center the logo at y=24, outside the console. Use a navy power-up background
+inside the existing purple border and move the console top to y=216. Retain
+prior framebuffer/text diagnostics but replace the temporary fixed title in
+the normal power-up presentation. Do not introduce a splash-screen delay.
+
+Validate overlapping scroll copies, clear/guard/padding behavior, one-row
+consoles, repeated wraps/newlines, image bounds and truncated buffers, faithful
+logo conversion, strict build and actual QEMU captures. Print enough numbered
+lines to force scrolling and verify final visible rows plus untouched logo.
+Record results in docs/operations/scroll-logo-2026-10-28.md. This is still a
+kernel diagnostic; BASIC, ring 3, keyboard and physical hardware remain later.
+
+## Logo is initial workspace content — owner correction 2026-10-28
+
+The owner explicitly corrected the previous fixed-header treatment: once the
+logo scrolls off the workspace, it must not return until workspace reset or
+power-on. This supersedes the fixed logo/header and permanently reserved top
+area in the earlier scrolling-logo section; retain that section as history.
+
+The whole drawable interior inside the 16-pixel border becomes one console
+viewport. Original logo appears initially at y=24, and text initially starts
+on row 12 of the full grid (y=208). No header rows remain reserved. Scrolling
+moves logo and text together; exposed rows use the common navy workspace
+background. All character cells, including former logo rows, can hold text.
+
+An explicit boot_workspace_reset() initializes the full viewport, draws the
+original logo and places the cursor below it. Scrolling and cursor positioning
+never call logo rendering. This is a single boot-workspace helper, not the nine
+workspace manager or a user input command. A reset key/command remains pending.
+Normal boot shows the initial logo and sample text without forcing it away.
+A separate compile-time test variant forces scrolling; no delays are added.
+
+Validate initial screen, partial movement, complete logo removal, repeated
+scrolls without reappearance, usable former header cells and restoration only
+by explicit reset. Preserve all current uncommitted work, staging and drafts.
+Record evidence in docs/operations/workspace-logo-2026-10-28.md. No push, merge,
+physical-device changes or delegated coding models.
+
+### Owner refinement: uniform full-screen background — 2026-10-28
+
+The owner requested one consistent screen background. Use RGB(9,27,53)
+throughout, remove the purple border, and let the console use the whole
+cell-aligned display (origin 0,0). The initial cursor is row 13 (y=208).
+For the boot bitmap only, flatten the SVG's backing rectangle to this same
+navy; preserve the original source SVG and foreground artwork unchanged.
+This supersedes the prior border/inset and gradient-backed boot presentation.

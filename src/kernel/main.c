@@ -11,6 +11,7 @@
 #include <limine.h>
 #include "framebuffer.h"
 #include "text-console.h"
+#include "boot-logo.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -104,6 +105,43 @@ static void halt_forever(void)
     }
 }
 
+#ifdef SPIFFOS_SCROLL_TEST
+/* Write an unsigned line number in decimal without a host printf/library.
+ * Borrow console; false on output error, prefix may be printed. Stack buffer
+ * lives through synchronous write. Startup-only, no heap or interrupts. */
+static bool console_write_number(struct text_console *console, uint64_t number)
+{
+    char digits[21]; /* 20 decimal digits fit every uint64_t, plus terminator. */
+    unsigned int first = 20;
+    digits[first] = '\0';
+    do {
+        digits[--first] = (char)('0' + number % 10);
+        number /= 10;
+    } while (number != 0);
+    return text_console_write(console, &digits[first]);
+}
+
+/* Print more numbered lines than this viewport can retain, then a final label.
+ * Borrow initialized console; false means output failed. No delay, allocation
+ * or ownership transfer; startup CPU only. Successful output forces scrolling. */
+static bool console_scroll_demo(struct text_console *console)
+{
+    if (!text_console_write(console, "SPIFFOS CONSOLE\nSCROLL TEST START\n")) {
+        return false;
+    }
+    /* Initialization bounds rows*16, so rows+2 cannot overflow uint64_t. */
+    for (uint64_t line = 0; line < console->rows + 2; ++line) {
+        if (!text_console_write(console, "LINE ") ||
+            !console_write_number(console, line) ||
+            !text_console_putc(console, '\n')) {
+            return false;
+        }
+    }
+    return text_console_write(console, "SCROLLING OK.");
+}
+
+#endif
+
 /* ELF entry called using Limine's x86-64 C-compatible stack and mappings.
  * No arguments or return; owns no allocated resources. Single startup CPU.
  * Unsupported protocol or failed UART output halts without a success claim. */
@@ -118,32 +156,36 @@ void kmain(void)
     /* The response and its pointer array are owned by the bootloader. Borrow
      * them while those mappings remain intact; never free or reclaim them here. */
     const struct limine_framebuffer_response *response = framebuffer_request.response;
-    bool drawn = response != NULL && response->framebuffer_count > 0 &&
-                 response->framebuffers != NULL &&
-                 framebuffer_draw_boot_pattern(response->framebuffers[0]);
+    const struct limine_framebuffer *screen = NULL;
+    if (response != NULL && response->framebuffer_count > 0 && response->framebuffers != NULL) {
+        screen = response->framebuffers[0];
+    }
+    bool drawn = screen != NULL && framebuffer_fill_rectangle(screen,
+        0, 0, screen->width, screen->height, 0x091b35);
     if (drawn) {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_OK\r\n");
-        if (framebuffer_draw_boot_title(response->framebuffers[0])) {
-            (void)serial_write("SPIFFOS_TEXT_OK\r\n");
-        } else {
-            (void)serial_write("SPIFFOS_TEXT_UNAVAILABLE\r\n");
-        }
-        const struct limine_framebuffer *screen = response->framebuffers[0];
         struct text_console console;
-        /* Only whole cells fit in the panel; keep the title and outer border.
-         * Check subtraction first so small dimensions cannot wrap unsigned sizes. */
-        bool console_ok = screen->width > 64 && screen->height >= 160 &&
-            text_console_initialize(&console, screen, 32, 112,
-                (screen->width - 64) / TEXT_CELL_PIXELS,
-                (screen->height - 144) / TEXT_CELL_PIXELS) &&
-            text_console_write(&console,
-                "SPIFFOS BOOT CONSOLE\n"
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n"
-                "0123456789 .:?\n"
-                "TEXT ADVANCES THE CURSOR.\n"
-                "NEWLINES AND WRAPPING ARE ACTIVE.");
-        (void)serial_write(console_ok ? "SPIFFOS_CONSOLE_OK\r\n" :
-                                       "SPIFFOS_CONSOLE_UNAVAILABLE\r\n");
+        bool logo_ok = boot_workspace_reset(&console, screen);
+        (void)serial_write(logo_ok ? "SPIFFOS_LOGO_OK\r\n" : "SPIFFOS_LOGO_UNAVAILABLE\r\n");
+        bool console_ok = false;
+        if (logo_ok) {
+#ifdef SPIFFOS_SCROLL_TEST
+            /* Test build only: force the initial image out of the full workspace. */
+            console_ok = console_scroll_demo(&console);
+#else
+            /* Normal boot leaves initial content visible, ready for later output. */
+            console_ok = text_console_write(&console,
+                "SPIFFOS WORKSPACE\nOUTPUT SCROLLS THE LOGO.");
+#endif
+        }
+        if (console_ok) {
+            (void)serial_write("SPIFFOS_TEXT_OK\r\nSPIFFOS_CONSOLE_OK\r\n");
+#ifdef SPIFFOS_SCROLL_TEST
+            (void)serial_write("SPIFFOS_SCROLL_OK\r\n");
+#endif
+        } else {
+            (void)serial_write("SPIFFOS_CONSOLE_UNAVAILABLE\r\n");
+        }
     } else {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }

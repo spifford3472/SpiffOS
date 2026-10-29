@@ -133,3 +133,40 @@ functions pack colors and touch screen memory. Unsupported characters display
 Run `make test-console` for guarded memory and actual QEMU screen verification.
 Close an old QEMU window before `make run` to load the new kernel. See the
 [console record](operations/console-2026-10-28.md) for exact scope and results.
+
+## Scrolling pixels and embedding the logo — verified 2026-10-28
+
+A pending bottom row now makes space on the next byte instead of refusing it.
+The framebuffer helper copies the console pixels up one cell row (16 pixels),
+then clears the exposed bottom row. Copy top-to-bottom: the lower source pixels
+must be read before a later destination write could overwrite them. Pitch and
+viewport width keep the logo, neighboring pixels and padding untouched.
+
+The power-up logo comes from the original assets/branding/spiffos-logo.svg.
+Development tools render it once into checked RGB24 bytes. Ordinary builds
+verify the source/bitmap hashes and embed those bytes as a constant array.
+SpiffOS converts each RGB triple to the screen's reported color-bit layout.
+It needs no SVG/image/font library at runtime and adds no boot delay.
+
+The header contains the fixed original logo; the console below it prints enough
+numbered lines to force scrolling. Run `make test-powerup`, or close an old QEMU
+window and run `make run`. See [scroll/logo validation](operations/scroll-logo-2026-10-28.md)
+for regeneration prerequisites, exact tests and limitations. This supersedes the
+earlier console guide's full-panel-error policy; historical records are retained.
+
+## Logo is initial content, not a fixed header — owner correction 2026-10-28
+
+The whole screen now shares RGB(9,27,53) navy and belongs to the text workspace.
+The boot-logo derivative uses this same flat backing; original SVG art remains
+unchanged. No border, header or separate-color panel stays reserved.
+
+`boot_workspace_reset()` clears the grid, draws the logo and starts the cursor
+on row 13. All rows still belong to the viewport. Scrolling physically moves
+those initial logo pixels out, and subsequent output can use their former
+positions. Only an explicit workspace reset or boot draws the logo again.
+At 1280x800 this provides 80 columns by 50 rows. A reset key/command awaits input.
+
+Normal boot leaves the logo visible. Use `make test-workspace-scroll` for the
+isolated stress variant; it does not replace the normal ISO. See
+[workspace/logo validation](operations/workspace-logo-2026-10-28.md). This
+supersedes the earlier guide's statement that the logo stays outside scrolling.

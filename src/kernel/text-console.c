@@ -1,7 +1,7 @@
 /* Purpose: advance a logical text cursor and render bounded character cells.
  * Dependencies: boot framebuffer primitives and original console font.
  * Invariants: state and framebuffer metadata/mappings remain valid and owned
- * by their callers; startup CPU only; no allocation, scrolling or interrupts.
+ * by their callers; startup CPU only; no allocation or interrupts.
  * References: ADR-011 and docs/operations/console-2026-10-28.md. */
 #include <stddef.h>
 #include <stdint.h>
@@ -9,7 +9,7 @@
 #include "console-font.h"
 #include "text-console.h"
 
-enum { CONSOLE_BACKGROUND = 0x202060, CONSOLE_FOREGROUND = 0xa0a0ff };
+enum { CONSOLE_BACKGROUND = 0x091b35, CONSOLE_FOREGROUND = 0xa0a0ff };
 
 /* Initialize and clear a viewport, with dimensions in cells and origin in pixels.
  * False disables this state without screen writes; successful initialization
@@ -40,14 +40,26 @@ bool text_console_initialize(struct text_console *console,
     return true;
 }
 
-/* Consume one byte, advancing cursor only after successful output.
- * False leaves cursor/screen unchanged for full/invalid state. A consumed final
- * cell/newline can set row == rows, a non-writing exhausted sentinel.
+/* Consume one byte, scrolling a pending bottom row before output if needed.
+ * A final cell/newline may set row == rows; next input makes space. False
+ * indicates invalid state or a drawing failure; a string can leave a prefix.
  * No ownership transfer, allocations or concurrent/interrupt use. */
 bool text_console_putc(struct text_console *console, unsigned char character)
 {
-    if (console == NULL || !console->initialized || console->row >= console->rows) {
+    if (console == NULL || !console->initialized || console->row > console->rows) {
         return false;
+    }
+    if (console->row == console->rows) {
+        /* Defer moving the last line until another byte actually needs room.
+         * This keeps an exact-fill final character visible on the screen. */
+        if (!framebuffer_scroll_rectangle(console->framebuffer,
+            console->left, console->top, console->columns * TEXT_CELL_PIXELS,
+            console->rows * TEXT_CELL_PIXELS, TEXT_CELL_PIXELS,
+            CONSOLE_BACKGROUND)) {
+            return false;
+        }
+        console->row = console->rows - 1;
+        console->column = 0;
     }
     if (character == '\n') {
         console->column = 0;
@@ -84,5 +96,19 @@ bool text_console_write(struct text_console *console, const char *text)
             return false;
         }
     }
+    return true;
+}
+
+/* Move the logical cursor in cell units; never draw pixels or a logo.
+ * False rejects invalid state/coordinates without changes. Startup-only,
+ * caller-owned state, no allocation or ownership transfer. */
+bool text_console_position(struct text_console *console, uint64_t column, uint64_t row)
+{
+    if (console == NULL || !console->initialized ||
+        column >= console->columns || row >= console->rows) {
+        return false;
+    }
+    console->column = column;
+    console->row = row;
     return true;
 }

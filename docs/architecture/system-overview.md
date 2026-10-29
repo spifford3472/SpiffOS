@@ -78,3 +78,16 @@ establish a console or a user-space graphics interface. See
 The next authorized step adds a small caller-owned text console over the
 existing framebuffer. Only kernel startup uses it; process/workspace console
 interfaces remain open. See [console validation](../operations/console-2026-10-28.md).
+
+## Scrolling power-up presentation — 2026-10-28
+
+The next authorized diagnostic scrolls only its console viewport and embeds a
+bitmap derived from the original branding SVG above it. The logo stays outside
+the scrolling area, with no added boot delay. See
+[validation](../operations/scroll-logo-2026-10-28.md).
+
+## Owner correction: reclaimable logo area — 2026-10-28
+
+The earlier fixed-logo header is superseded: the entire drawable interior is
+one scrolling text workspace. The logo is initial content and returns only
+on workspace reset or boot. See [validation](../operations/workspace-logo-2026-10-28.md).
