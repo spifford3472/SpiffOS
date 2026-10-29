@@ -1,7 +1,9 @@
 # ADR — Memory foundation and read-only inventory
 
 Status: ACCEPTED scoped direction and M1 implementation authorization,
-2026-10-29. Allocator mechanisms and later interfaces remain PROPOSED.
+2026-10-29. The M2 allocator proposal below is superseded by the implemented
+[ADR-frame-allocator](ADR-frame-allocator.md); later heap/mapping interfaces
+remain PROPOSED.
 Read with ADR-011, ADR-002, ADR-008, accepted/open and AGENTS.md.
 
 ## Context and ownership
@@ -60,7 +62,8 @@ boot/editor path where possible. The on-screen framebuffer remains unchanged.
 A UART output failure cannot produce a false complete success marker.
 
 ## Following checkpoints — proposed, separately reviewed
-M2: 4KiB frame allocation/free and explicit owner/error accounting. A bitmap
+Historical M2 proposal (superseded by ADR-frame-allocator): 4KiB frame
+allocation/free and explicit owner/error accounting. A bitmap
 is a proposed simple choice: bounded bit storage, straightforward validation;
 free lists write metadata into frames and range lists complicate splitting.
 Choose allocator metadata placement and capacity before implementation.
