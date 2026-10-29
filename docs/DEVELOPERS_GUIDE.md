@@ -294,3 +294,39 @@ clamps the resulting cursor to the screen while preserving the complete line.
 Run make test-keyboard for sanitizer checks and real QEMU injection, including
 independent pixel expectations for both cursor shapes and push-down reflow.
 See [screen-editor validation](operations/screen-editor-2026-10-29.md).
+
+## Memory foundation: inventory before allocation — 2026-10-29
+
+A physical frame is a 4096-byte unit of RAM. A virtual address is a process or
+kernel address translated through page tables; it is not automatically a
+physical address. M1 reads only Limine's metadata about physical intervals.
+It never reads or writes the RAM described by those intervals.
+
+An interval is half-open: base is included, base+length is excluded. Check that
+addition before using the end. Only complete frames entirely within USABLE
+regions qualify. Divide base by 4096 and add one frame if there is a remainder;
+divide the exclusive end by 4096 to obtain the last eligible boundary. Working
+in frame numbers avoids an overflowing address+4095 alignment expression.
+Physical frame zero is deliberately excluded in this initial policy.
+
+The boot adapter copies at most 512 metadata entries into static BSS and calls
+the pure analyzer. All interval ends are checked before overlap comparisons.
+An overlap involving usable memory is an error; two reserved entries may
+legitimately overlap. Neither unknown types nor bootloader-reclaimable data are
+made available. Limine's current stack, page tables and responses still matter.
+
+Raw usable bytes, candidate full-frame bytes and excluded usable bytes obey:
+usable = candidate + excluded; candidate = frame_count * 4096.
+Reserved/MMIO holes are not counted as installed RAM. Counters are published
+only after full validation; failure preserves the caller's previous summary.
+
+The future memory manager will use one shared pool with OS, system-session,
+workspace and process ownership. Ownership tags support accounting and cleanup;
+hardware page permissions will enforce process isolation later. A protected
+supervisor reserve, no swap and recoverable allocation errors remain required.
+This inventory does not implement those later allocation/protection mechanisms.
+
+Run make test-memory for sanitizer tests plus independently recomputed real
+QEMU inventories at 128, 256 and 512MiB. This is a diagnostic test matrix, not a
+minimum-RAM product specification. Existing editor frames stay unchanged.
+See decisions/ADR-memory-foundation.md and operations/memory-inventory-2026-10-29.md.

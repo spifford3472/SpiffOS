@@ -116,7 +116,11 @@ def main():
     parser.add_argument("--timeout", type=float, default=20.0, help="test deadline in seconds")
     parser.add_argument("--screenshot", action="store_true", help="test framebuffer marker and capture build/framebuffer.ppm")
     parser.add_argument("--keyboard", action="store_true", help="inject and verify real keyboard events")
+    parser.add_argument("--memory-mib", type=int, default=256,
+                        help="guest RAM in MiB (64..4096; diagnostic runner bound)")
     args = parser.parse_args()
+    if not 64 <= args.memory_mib <= 4096:
+        parser.error("memory-mib must be between 64 and 4096")
     if args.timeout <= 0:
         parser.error("timeout must be positive")
     if args.keyboard and (args.mode != "test" or args.screenshot):
@@ -140,7 +144,7 @@ def main():
         variables = Path(directory) / "OVMF_VARS.fd"
         shutil.copyfile(source_vars, variables)
         command = ["qemu-system-x86_64", "-machine", "q35", "-accel", "tcg",
-                   "-m", "256M", "-net", "none", "-no-reboot",
+                   "-m", str(args.memory_mib) + "M", "-net", "none", "-no-reboot",
                    "-drive", "if=pflash,format=raw,unit=0,readonly=on,file=" + str(code),
                    "-drive", "if=pflash,format=raw,unit=1,file=" + str(variables),
                    "-cdrom", str(build / "spiffos.iso"), "-boot", "d",

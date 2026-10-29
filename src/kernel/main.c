@@ -15,6 +15,7 @@
 #include "keyboard.h"
 #include "keyboard-ps2.h"
 #include "screen-editor.h"
+#include "memory-boot.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -31,6 +32,14 @@ static volatile uint64_t requests_end[] = LIMINE_REQUESTS_END_MARKER;
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0
+};
+
+/* Borrow loader-owned map metadata; all non-USABLE regions remain reserved.
+ * M1 only reports inventory and retains the existing loader mappings/stack. */
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_memmap_request memory_request = {
+    .id = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0
 };
 
@@ -285,6 +294,9 @@ void kmain(void)
     serial_initialize();
     if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision)) {
         (void)serial_write("SPIFFOS_BOOT_ERROR: unsupported Limine revision\r\n");
+        halt_forever();
+    }
+    if (!memory_boot_report(memory_request.response, serial_write)) {
         halt_forever();
     }
     /* The response and its pointer array are owned by the bootloader. Borrow

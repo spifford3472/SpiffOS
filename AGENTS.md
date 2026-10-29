@@ -1,6 +1,6 @@
 # SpiffOS — Mandatory AI Agent Instructions
 
-Read this entire file at the start of **every** AI development task, even if the task appears trivial. Then read `docs/decisions/accepted.md`, `docs/decisions/open.md`, `docs/architecture/system-overview.md`, and any relevant ADR or subsystem reference **before editing**. In every coding prompt explicitly instruct the agent to read these files; do not assume an agent tool discovers this file automatically.
+Read this entire file at the start of **every** AI development task, even if the task appears trivial. The coordinating agent must then read `docs/decisions/accepted.md`, `docs/decisions/open.md`, `docs/architecture/system-overview.md`, and relevant ADR/subsystem references **before editing**. For the owner-authorized memory workflow below, a tiny delegated job may use the coordinator's reviewed decision context and read only its explicitly named focused references after reading AGENTS.md; it must not invent approvals or broaden scope. Every coding prompt must explicitly name the applicable references; do not assume a coding tool discovers them automatically.
 
 ## Mission
 Build a small, understandable, native x86-64 operating system that boots directly to a BASIC READY prompt. Not Linux, not an emulator. Prefer clarity, fast boot, modularity and resilience over cleverness. BASIC and EDIT are user-space programs, not kernel internals.

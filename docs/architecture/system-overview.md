@@ -138,4 +138,6 @@ Qwen timeouts, with very small Qwen jobs. See
 ownership, M1 read-only inventory scope and validation. Shared RAM ownership,
 protected recovery resources, no swap and recoverable OOM remain the direction.
 Allocator/reserve sizing, quotas, process mappings and session layout remain
-OPEN beyond this inventory checkpoint. No implementation results are implied.
+OPEN beyond this inventory checkpoint. M1 now implements read-only inventory;
+see [actual memory validation](../operations/memory-inventory-2026-10-29.md).
+No allocator, heap, reserve allocation or process isolation is claimed by M1.
