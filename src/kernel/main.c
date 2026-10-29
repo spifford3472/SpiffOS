@@ -158,6 +158,31 @@ static void keyboard_port_write(void *context, uint16_t port, uint8_t byte)
     (void)context;
     port_write(port, byte);
 }
+
+enum { KEYBOARD_LOGICAL_CAPACITY = 4096 };
+/* Static kernel storage avoids placing a 4 KiB command on Limine's entry stack.
+ * It belongs to the single boot keyboard diagnostic for the entire boot. */
+static unsigned char keyboard_line_storage[KEYBOARD_LOGICAL_CAPACITY];
+
+/* Diagnostic submission boundary: emit the complete counted logical line.
+ * context is unused. The callback borrows bytes only during this call.
+ * It executes no BASIC and returns false if serial output becomes incomplete. */
+static bool keyboard_submit_diagnostic(
+    void *context, const unsigned char *bytes, size_t length)
+{
+    (void)context;
+    if (!serial_write("SUBMIT:")) {
+        return false;
+    }
+    for (size_t index = 0; index < length; ++index) {
+        char byte_text[2] = {(char)bytes[index], '\0'};
+        if (!serial_write(byte_text)) {
+            return false;
+        }
+    }
+    return serial_write("\r\n");
+}
+
 /* Run the diagnostic input loop; accepted ASCII is echoed and logged in hex.
  * Borrow live console forever. No allocation, command execution or IRQs.
  * PAUSE reduces contention but does not sleep; this polling phase uses CPU. */
@@ -169,7 +194,8 @@ static void keyboard_run(struct text_console *console)
     struct keyboard_console input;
     keyboard_decoder_reset(&decoder);
     if (!keyboard_ps2_initialize(&io) ||
-        !keyboard_console_initialize(&input,console)) {
+        !keyboard_console_initialize(&input, console, keyboard_line_storage,
+            sizeof keyboard_line_storage, keyboard_submit_diagnostic, NULL)) {
         (void)serial_write("SPIFFOS_KEYBOARD_UNAVAILABLE\r\n");
         halt_forever();
     }
@@ -185,12 +211,26 @@ static void keyboard_run(struct text_console *console)
                 first=false;
             }
             unsigned char character=keyboard_decode(&decoder,byte);
-            if (character!=0 && keyboard_console_accept(&input,character)) {
-                static const char hex[]="0123456789ABCDEF";
-                char message[]="KEY:00\r\n";
-                message[4]=hex[character>>4];
-                message[5]=hex[character&15];
-                if (!serial_write(message)) halt_forever();
+            if (character!=0) {
+                enum keyboard_console_result accepted =
+                    keyboard_console_accept(&input, character);
+                if (accepted == KEYBOARD_CONSOLE_ERROR) {
+                    (void)serial_write("SPIFFOS_INPUT_ERROR\r\n");
+                    halt_forever();
+                }
+                if (accepted == KEYBOARD_CONSOLE_FULL) {
+                    if (!serial_write("SPIFFOS_INPUT_FULL\r\n")) {
+                        halt_forever();
+                    }
+                }
+                if (accepted == KEYBOARD_CONSOLE_ACCEPTED ||
+                    accepted == KEYBOARD_CONSOLE_SUBMITTED) {
+                    static const char hex[]="0123456789ABCDEF";
+                    char message[]="KEY:00\r\n";
+                    message[4]=hex[character>>4];
+                    message[5]=hex[character&15];
+                    if (!serial_write(message)) halt_forever();
+                }
             }
         }
         __asm__ volatile ("pause" : : : "memory");

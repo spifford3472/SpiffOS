@@ -82,6 +82,11 @@ def run_keyboard_test(socket_path, serial, build):
                 """Return only accepted-key byte diagnostics in their original order."""
                 return [line for line in serial.read_bytes().splitlines() if line.startswith(b"KEY:")]
 
+            def submitted():
+                """Return complete diagnostic logical-line submissions in order."""
+                return [line[7:] for line in serial.read_bytes().splitlines()
+                        if line.startswith(b"SUBMIT:")]
+
             def key(codes, character=None):
                 """Inject key combination, wait for releases and check exact accepted trace."""
                 rpc("send-key", {"keys":[{"type":"qcode","data":code} for code in codes],
@@ -109,7 +114,22 @@ def run_keyboard_test(socket_path, serial, build):
             rpc("screendump", {"filename":str(path)})
             rows = verify_screen(path, "SPIFFOS 123.:?", 15, True)
             key(["ret"], "\n")
+            wait_until(lambda: submitted() == [b"SPIFFOS 123.:?"],
+                       "first complete logical submission")
             key(["backspace"])  # Cannot cross a submitted line boundary.
+            long_text = "A" * 80 + "B" * 80 + "CDE"
+            for character in long_text:
+                key([character.lower()], character)
+            assert submitted() == [b"SPIFFOS 123.:?"]  # Soft wraps never submit.
+            key(["backspace"], "\b")
+            key(["backspace"], "\b")
+            for character in "QR":
+                key([character.lower()], character)
+            expected_long = (long_text[:-2] + "QR").encode()
+            key(["ret"], "\n")
+            wait_until(lambda: submitted()[-1:] == [expected_long],
+                       "three-row complete logical submission")
+            assert submitted()[:2] == [b"SPIFFOS 123.:?", expected_long]
             for _ in range(rows+20):
                 key(["ret"], "\n")
             for character in "SCROLL OK.":

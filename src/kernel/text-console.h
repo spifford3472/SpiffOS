@@ -12,6 +12,9 @@ enum { TEXT_CELL_PIXELS = 16 };
 struct text_console {
     const struct limine_framebuffer *framebuffer;
     uint64_t left, top, columns, rows, column, row;
+    /* Total physical text rows removed from the top since initialization.
+     * Monotonic count lets stored logical lines survive pixel scrolling. */
+    uint64_t scroll_count;
     bool initialized;
 };
 /* Initialize caller-owned state and clear a viewport. x/y in pixels; size in
