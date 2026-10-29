@@ -48,3 +48,15 @@ clicking close require owner observation. No new desktop session opened; existin
 owner window and original checkout remain in service. No merge/deployment.
 Rollback by using the prior bbb2d4d checkout or building it separately; preserve
 staging, history, drafts and recovery snapshot. No reset/clean/physical media.
+
+## Review checkpoint
+Draft PR: https://github.com/spifford3472/SpiffOS/pull/14 (not merged).
+Representative keyboard-typed.png and keyboard-scrolled.png were visually
+inspected after their exact pixel checks: expected logo/text on navy initially,
+logo absent after scrolling, with SCROLL OK. on the bottom row. These are guest
+framebuffer captures, not evidence of interactive GTK desktop behavior.
+Final preservation check compared original src/include/docs/scripts/tests/assets
+and original Git index bytes with the verified snapshot: all unchanged. Existing
+owner QEMU PID 830726 remains running. Own Python cache moved into build evidence.
+Screen-editor design is a separate unimplemented proposal; owner approved default
+overwrite and the Insert toggle. Screen-wide reflow behavior awaits review.
