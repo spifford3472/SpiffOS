@@ -89,6 +89,27 @@ console ABI. The fixed row/line capacities are implementation bounds, not BASIC
 language limits. A selected long line retains its stored prefix while visible
 fragments scroll.
 
-No merge, local-main deployment, USB, physical disk, laptop, firmware, network
-or infrastructure change is included in this checkpoint yet. Roll back by
-building 8d489b8 in an isolated worktree; do not reset or clean the owner checkout.
+The owner explicitly authorized merge and deployment after review. PR #16
+tested head df5f966f3d0be182ad4d166b61441611461f18a8 merged as
+e63b04222d04060753949b849f1dfd2e3001f60e on 2026-10-29.
+The clean /home/geoff/projects/spiffos-qemu-main checkout fast-forwarded to
+that merge and rebuilt the local QEMU ISO at build/spiffos.iso.
+
+Post-merge make test-keyboard test-workspace test-workspace-scroll and
+python3 scripts/test-safe-launcher.py both completed with exit 0 from the
+merged source. This included host sanitizers, real QEMU key injection, all five
+full-frame cursor/reflow captures, normal and forced-scroll boot regression,
+absolute pointer selection, lock rejection and child/private-resource cleanup.
+Logs: build/pr16-postmerge-validation.log and build/pr16-postmerge-launcher.log.
+
+Deployed ISO SHA-256:
+59c9ecf7d7fd0a777a7e604c3f5b171bcb92bdf5c58361977017abae907196f3
+Kernel ELF SHA-256:
+ce8cf71da88ce8d21a89acd94c82e27edbe7108d6ae93ad422ef09c7a0a57704
+
+Deployment is the rebuilt local QEMU development image. Manual GTK observations
+remain pending as documented above. Original staged start.S and unrelated
+drafts were rechecked and remain preserved. No USB, physical disk, laptop,
+firmware, network or infrastructure changes were made.
+Roll back by building 8d489b8 in an isolated worktree; do not reset or clean
+the owner checkout.
