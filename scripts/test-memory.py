@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recompute M1 inventory independently from real guest metadata at three sizes."""
+"""Verify M1 inventory and restored M2 ownership pools at three RAM sizes."""
 from pathlib import Path
 import json
 import subprocess
@@ -16,6 +16,11 @@ def verify_serial(serial, ram_mib):
     assert b"SPIFFOS_MEMORY_UNAVAILABLE" not in lines
     assert b"SPIFFOS_BOOT_OK" in lines
     assert b"SPIFFOS_KEYBOARD_READY" in lines
+    assert lines.count(b"SPIFFOS_ALLOCATOR_OK") == 1
+    assert b"SPIFFOS_ALLOCATOR_UNAVAILABLE" not in lines
+    assert b"SPIFFOS_ALLOCATOR_ERROR" not in lines
+    pools = [tuple(map(int, line[11:].split(b","))) for line in lines
+             if line.startswith(b"FRAME_POOL:")]
     regions = [tuple(map(int, line[14:].split(b","))) for line in lines
                if line.startswith(b"MEMORY_REGION:")]
     summaries = [tuple(map(int, line[15:].split(b","))) for line in lines
@@ -38,7 +43,8 @@ def verify_serial(serial, ram_mib):
     expected = (usable_bytes, frames, frames * PAGE, usable_bytes - frames * PAGE)
     assert summaries[0] == expected, (summaries[0], expected)
     assert 0 < frames * PAGE <= usable_bytes < ram_mib * 1024 * 1024
-    return dict(ram_mib=ram_mib, regions=len(regions), usable_bytes=usable_bytes,
+    assert frames >= 75 and pools == [(frames, frames - 64, 64, 64, 0)], pools
+    return dict(frame_pool=pools[0], ram_mib=ram_mib, regions=len(regions), usable_bytes=usable_bytes,
                 candidate_frames=frames, candidate_bytes=frames * PAGE,
                 excluded_usable_bytes=expected[3])
 

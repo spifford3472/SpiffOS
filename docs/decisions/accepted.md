@@ -316,3 +316,6 @@ candidate frame, OS/session/workspace groups, explicit allocation/free errors
 and a protected 64-page diagnostic reserve. Final reserve sizing, process
 subownership, heap/mappings and concurrency remain open. This authorization
 does not include physical devices or infrastructure; no merge after expiry.
+
+M2 implementation and verified limits are recorded in
+[frame allocator validation](../operations/frame-allocator-2026-10-29.md).

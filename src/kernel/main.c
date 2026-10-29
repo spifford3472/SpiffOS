@@ -296,7 +296,8 @@ void kmain(void)
         (void)serial_write("SPIFFOS_BOOT_ERROR: unsupported Limine revision\r\n");
         halt_forever();
     }
-    if (!memory_boot_report(memory_request.response, serial_write)) {
+    if (!memory_boot_report(memory_request.response, serial_write) ||
+        !memory_boot_allocator_probe(serial_write)) {
         halt_forever();
     }
     /* The response and its pointer array are owned by the bootloader. Borrow

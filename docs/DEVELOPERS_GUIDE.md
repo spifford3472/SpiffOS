@@ -330,3 +330,24 @@ Run make test-memory for sanitizer tests plus independently recomputed real
 QEMU inventories at 128, 256 and 512MiB. This is a diagnostic test matrix, not a
 minimum-RAM product specification. Existing editor frames stay unchanged.
 See decisions/ADR-memory-foundation.md and operations/memory-inventory-2026-10-29.md.
+
+## M2 frame ownership — 2026-10-29
+
+An allocator ordinal is an index through complete usable frames, skipping holes.
+It is not a physical address. The translator walks the borrowed immutable map
+and converts the ordinal to a numeric physical address. Nothing dereferences
+that number in M2. A uint16_t slot records FREE or an internal owner group;
+allocation changes that slot and counters, and release reverses those changes.
+The metadata table itself is kernel BSS, excluded from usable RAM by Limine.
+
+Reserve ordinals form a separate pool. Ordinary exhaustion returns FRAME_OOM
+without consuming reserve or changing the output. Only an explicit supervisor
+reserve request uses reserve pages. Wrong-owner and double frees are rejected.
+These tags provide bookkeeping, not process isolation or stale-handle safety.
+The internal descriptor, immutable map, slots and nonaliasing output must stay
+valid for the allocator lifetime; one CPU with interrupts disabled owns them.
+
+Run make test-frame-allocator for sanitizer checks and make test-memory for
+three real guest sizes, including all kernel/session/workspace ownership groups
+and reserve/free restoration. See decisions/ADR-frame-allocator.md and
+operations/frame-allocator-2026-10-29.md for diagnostic limits and evidence.

@@ -151,3 +151,9 @@ candidate frame, OS/session/workspace groups, explicit allocation/free errors
 and a protected 64-page diagnostic reserve. Final reserve sizing, process
 subownership, heap/mappings and concurrency remain open. This authorization
 does not include physical devices or infrastructure; no merge after expiry.
+
+M2 now implements internal ownership accounting and a reversible boot probe.
+The ordinary and protected reserve pools have explicit errors and independently
+checked counters. Returned physical addresses are not dereferenced; heap,
+process mappings and actual workspace memory services remain future work.
+See [actual M2 validation](../operations/frame-allocator-2026-10-29.md).
