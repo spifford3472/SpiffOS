@@ -170,3 +170,48 @@ Normal boot leaves the logo visible. Use `make test-workspace-scroll` for the
 isolated stress variant; it does not replace the normal ISO. See
 [workspace/logo validation](operations/workspace-logo-2026-10-28.md). This
 supersedes the earlier guide's statement that the logo stays outside scrolling.
+
+## Following a keyboard press through SpiffOS
+
+The QEMU keyboard milestone is deliberately split into three small layers.
+This is an interactive kernel diagnostic, not the BASIC interpreter.
+
+1. The emulated keyboard sends a scan code for a physical key. The PS/2
+   transport in `src/kernel/keyboard-ps2.c` first configures the controller
+   explicitly. A keyboard set-2 stream is translated by the controller into
+   set 1. Ports 0x64/0x60 carry status/data; they are not memory addresses.
+2. For the A key, the decoder in `src/kernel/keyboard.c` receives make byte
+   0x1e and returns uppercase ASCII 0x41. Release byte 0x9e returns no text.
+   These two numbers belong to different systems: key position versus text.
+   Prefixes/modifiers are remembered in caller-owned decoder state. Ctrl/Alt
+   combinations and unsupported keys are ignored rather than accidentally typed.
+3. `keyboard-console.c` checks the current line length and echoes A through
+   `text_console_putc`. The font maps that character to bitmap rows;
+   `framebuffer.c` expands each bitmap pixel and respects the display pitch.
+   A logical column is measured in cells; framebuffer positions are pixels.
+4. The same accepted character is logged as `KEY:41` on serial. This lets us
+   distinguish transport/decoding failures from display failures.
+5. Backspace moves one cell left, draws a blank cell, and restores that
+   position. It cannot cross the current input line's start. Enter advances
+   the console row and resets the editable length; it executes nothing.
+6. At the bottom, the console's existing pending-scroll rule moves pixels
+   upward before more output. The logo is just those initial pixels. No
+   keyboard or scrolling code calls the logo-reset helper, so it stays gone.
+
+No dynamic memory is needed. The line editor remembers a length, not a command
+buffer yet. Each line is capped at 63 characters or columns-1, whichever is
+smaller; excess printable keys are ignored until Backspace/Enter. Uppercase
+A-Z, digits, space, period, Shift+semicolon (colon), Shift+slash (question mark),
+Enter and Backspace work. Letters are uppercase with or without Shift.
+This font/input subset precedes lowercase, full punctuation, line wrapping,
+a visible cursor, command storage/execution and keyboard layout selection.
+
+The main CPU repeatedly polls for bytes with interrupts disabled. The x86
+PAUSE instruction is a polling hint, not a sleep or scheduler. This consumes
+CPU and cannot support the planned multitasking design; interrupts/timers
+and a final input service belong to subsequent milestones.
+
+Run `make test-keyboard` for host sanitizer tests and actual QMP-injected keys.
+Run `make test-workspace test-workspace-scroll` for earlier screen regressions.
+Run `make run`, focus the QEMU window and type. Use Enter to create new rows.
+There is no keyboard workspace-reset command yet.

@@ -101,3 +101,11 @@ console/display contracts remain open.
 Logo scrolls with workspace content and returns only on explicit reset/boot.
 No permanent header reservation. See ADR-011; user reset commands and keyboard
 input remain open.
+
+## QEMU keyboard milestone — 2026-10-29
+
+Owner authorized direct architecture/implementation, merge and local QEMU deployment.
+See docs/decisions/ADR-qemu-keyboard-input.md (repository-relative) for scope,
+rationale and validation. PS/2 polling is a temporary kernel diagnostic; USB,
+interrupts, full character input, shortcuts, BASIC and the final input ABI remain open.
+Prior no-merge restrictions are superseded for this milestone only.

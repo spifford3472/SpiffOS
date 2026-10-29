@@ -54,9 +54,12 @@ def main():
     parser.add_argument("mode", choices=["test", "run", "debug"])
     parser.add_argument("--timeout", type=float, default=20.0, help="test deadline in seconds")
     parser.add_argument("--screenshot", action="store_true", help="test framebuffer marker and capture build/framebuffer.ppm")
+    parser.add_argument("--keyboard", action="store_true", help="inject and verify real keyboard events")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("timeout must be positive")
+    if args.keyboard and (args.mode != "test" or args.screenshot):
+        parser.error("--keyboard requires test mode without --screenshot")
     if args.screenshot and args.mode != "test":
         parser.error("--screenshot requires test mode")
     build = ROOT / "build"
@@ -82,7 +85,7 @@ def main():
                    "-cdrom", str(build / "spiffos.iso"), "-boot", "d",
                    "-serial", "file:" + str(serial), "-monitor", "none"]
         qmp_socket = Path(directory) / "qmp.sock"
-        if args.screenshot:
+        if args.screenshot or args.keyboard:
             command += ["-qmp", "unix:" + str(qmp_socket) + ",server=on,wait=off"]
         if args.mode in ["test", "debug"]:
             command += ["-display", "none"]
@@ -100,6 +103,10 @@ def main():
                     while time.monotonic() < deadline:
                         lines = serial.read_bytes().splitlines()
                         if MARKER in lines:
+                            if args.keyboard:
+                                import runpy
+                                runpy.run_path(str(ROOT / "scripts/test-keyboard.py"))["run_keyboard_test"](
+                                    qmp_socket, serial, build)
                             if args.screenshot:
                                 if b"SPIFFOS_FRAMEBUFFER_OK" not in lines:
                                     print("FAIL: framebuffer success marker absent", flush=True)

@@ -91,3 +91,11 @@ the scrolling area, with no added boot delay. See
 The earlier fixed-logo header is superseded: the entire drawable interior is
 one scrolling text workspace. The logo is initial content and returns only
 on workspace reset or boot. See [validation](../operations/workspace-logo-2026-10-28.md).
+
+## QEMU keyboard milestone — 2026-10-29
+
+Owner authorized direct architecture/implementation, merge and local QEMU deployment.
+See docs/decisions/ADR-qemu-keyboard-input.md (repository-relative) for scope,
+rationale and validation. PS/2 polling is a temporary kernel diagnostic; USB,
+interrupts, full character input, shortcuts, BASIC and the final input ABI remain open.
+Prior no-merge restrictions are superseded for this milestone only.

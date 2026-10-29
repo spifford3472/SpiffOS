@@ -1,5 +1,5 @@
 /*
- * Purpose: prove native C entry via COM1 and draw a boot framebuffer pattern.
+ * Purpose: boot via Limine, draw initial workspace and poll diagnostic input.
  * Dependencies: pinned official limine.h, Limine-supplied stack and mappings.
  * Invariants: ring 0, one CPU, interrupts disabled; no heap or host C library.
  * See ADR-011 and docs/operations/first-boot-2026-10-28.md.
@@ -12,6 +12,9 @@
 #include "framebuffer.h"
 #include "text-console.h"
 #include "boot-logo.h"
+#include "keyboard.h"
+#include "keyboard-ps2.h"
+#include "keyboard-console.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -142,6 +145,58 @@ static bool console_scroll_demo(struct text_console *console)
 
 #endif
 
+/* Adapt the existing x86 port helpers to the keyboard transport callbacks.
+ * Context is unused; ring 0 startup CPU only, synchronous hardware access. */
+static uint8_t keyboard_port_read(void *context, uint16_t port)
+{
+    (void)context;
+    return port_read(port);
+}
+/* Write a transport byte; borrowed context unused. Ring 0, IRQs disabled. */
+static void keyboard_port_write(void *context, uint16_t port, uint8_t byte)
+{
+    (void)context;
+    port_write(port, byte);
+}
+/* Run the diagnostic input loop; accepted ASCII is echoed and logged in hex.
+ * Borrow live console forever. No allocation, command execution or IRQs.
+ * PAUSE reduces contention but does not sleep; this polling phase uses CPU. */
+__attribute__((noreturn))
+static void keyboard_run(struct text_console *console)
+{
+    const struct keyboard_io io={keyboard_port_read,keyboard_port_write,NULL};
+    struct keyboard_decoder decoder;
+    struct keyboard_console input;
+    keyboard_decoder_reset(&decoder);
+    if (!keyboard_ps2_initialize(&io) ||
+        !keyboard_console_initialize(&input,console)) {
+        (void)serial_write("SPIFFOS_KEYBOARD_UNAVAILABLE\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
+    bool first=true;
+    for (;;) {
+        uint8_t byte=0;
+        enum keyboard_poll result=keyboard_ps2_poll(&io,&byte);
+        if (result==KEYBOARD_DROPPED) keyboard_decoder_reset(&decoder);
+        if (result==KEYBOARD_BYTE) {
+            if (first) {
+                (void)serial_write("SPIFFOS_KEYBOARD_BYTE_OK\r\n");
+                first=false;
+            }
+            unsigned char character=keyboard_decode(&decoder,byte);
+            if (character!=0 && keyboard_console_accept(&input,character)) {
+                static const char hex[]="0123456789ABCDEF";
+                char message[]="KEY:00\r\n";
+                message[4]=hex[character>>4];
+                message[5]=hex[character&15];
+                if (!serial_write(message)) halt_forever();
+            }
+        }
+        __asm__ volatile ("pause" : : : "memory");
+    }
+}
+
 /* ELF entry called using Limine's x86-64 C-compatible stack and mappings.
  * No arguments or return; owns no allocated resources. Single startup CPU.
  * Unsupported protocol or failed UART output halts without a success claim. */
@@ -160,11 +215,11 @@ void kmain(void)
     if (response != NULL && response->framebuffer_count > 0 && response->framebuffers != NULL) {
         screen = response->framebuffers[0];
     }
+    struct text_console console={0};
     bool drawn = screen != NULL && framebuffer_fill_rectangle(screen,
         0, 0, screen->width, screen->height, 0x091b35);
     if (drawn) {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_OK\r\n");
-        struct text_console console;
         bool logo_ok = boot_workspace_reset(&console, screen);
         (void)serial_write(logo_ok ? "SPIFFOS_LOGO_OK\r\n" : "SPIFFOS_LOGO_UNAVAILABLE\r\n");
         bool console_ok = false;
@@ -192,5 +247,6 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
+    if (console.initialized) keyboard_run(&console);
     halt_forever();
 }
