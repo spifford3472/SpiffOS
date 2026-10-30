@@ -653,3 +653,63 @@ reset UI, process manager, ring-3 isolation boundary, persistent session service
 or final teardown policy. No owner QEMU was inspected or stopped. No commit,
 merge, push, deployment, dependency pin, AGENTS/runner control, service,
 infrastructure, firmware or disk was changed.
+
+## Checkpoint 10: independent deterministic M4-M5 accounting model
+
+The owner reported that the small Qwen attempt for this slice exited 55. Its
+log was not available inside the sandbox, so Codex inspected the actual clean
+source at `0c9a2eb` and did not infer that Qwen changed or verified anything.
+The existing source already contained checked M4 allocation/release and M5
+workspace/session cleanup plus focused tests. Direct Codex fallback was used
+under the memory-specific authorization. No model or agent was delegated.
+
+Codex added a separate host test, `tests/kernel-heap-model-test.c`, without
+changing the heap API or production allocator. Its oracle represents the
+4096-byte arena as 256 independent 16-byte units tagged by allocation identity,
+not by production record index. This distinction lets it predict exact block
+boundaries even for adjacent allocations with the same owner. After every one
+of 4,000 deterministic operations it independently recomputes global and
+per-owner byte/allocation counts, walks the production graph in address order
+and compares each allocated/free run, checks every live payload pattern and
+both fixed guard regions, then additionally requires the production invariant
+checker to agree.
+
+The sequence mixes all eleven live owner groups, first-fit allocations, exact
+releases, repeated idempotent workspace cleanup and separate session cleanup.
+Requests larger than the arena and fragmented-space failures exercise OOM;
+each expected failure snapshots and compares the complete descriptor, all 256
+external records, output pointer, arena and guards. Zero, over-limit and
+`SIZE_MAX` requests cover size/rounding overflow rejection with the same atomic
+comparison. Every successful allocation is checked byte-for-byte zero before
+being dirtied, so later reuse proves the entire rounded block is cleared. Final
+owner cleanup plus individual kernel release must reduce both model and
+production to one free 4096-byte record, proving full coalescence. Fixed lower
+bounds ensure the selected sequence actually completes more than 500 successful
+allocations, 50 OOM results, 100 workspace cleanups and 20 session cleanups.
+The existing `test-kernel-heap` target now runs both the focused test and this
+model-based test under the same sanitizer flags.
+
+No concrete production failure was found, so no allocator implementation or
+contract was changed. Actual checks run in this isolated checkout:
+
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-kernel-heap`:
+  passed with AddressSanitizer and UndefinedBehaviorSanitizer. Both the existing
+  focused marker and `PASS kernel heap model: deterministic owners, OOM,
+  cleanup and reuse` were reported.
+- `ASAN_OPTIONS=detect_leaks=0 make test-memory-map test-frame-allocator
+  test-page-access test-kernel-heap test-keyboard-memory
+  test-workspace-memory && make -B all && git diff --check`: passed. M1
+  inventory, M2 owner/reserve accounting, M3 access/rollback, both M4-M5 heap
+  suites, keyboard/logical-line/editor behavior and workspace/logo reset all
+  reported PASS. The forced strict freestanding Clang build and static kernel
+  link also passed.
+
+LeakSanitizer alone remained disabled because the previously recorded
+sandbox/ptrace incompatibility applies; ASan and UBSan remained enabled. This
+test uses a deterministic fixed sequence rather than exhaustive state-space or
+concurrent/interrupt testing. No QEMU was started, stopped or inspected, so no
+new guest, serial-marker or framebuffer evidence is claimed and the owner's
+running guest was not disturbed. Existing M1-M5 runtime evidence applies only
+to its previously tested source; this checkpoint changes host-test wiring only.
+No commit, merge, push, deployment, dependency pin, AGENTS/runner control,
+service, infrastructure, firmware or disk was changed.

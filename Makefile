@@ -230,6 +230,11 @@ build/kernel-heap-test: tests/kernel-heap-test.c src/kernel/kernel-heap.c src/ke
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/kernel-heap-test.c src/kernel/kernel-heap.c src/kernel/page-access.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -o $@
 
+build/kernel-heap-model-test: tests/kernel-heap-model-test.c src/kernel/kernel-heap.c src/kernel/kernel-heap.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/kernel-heap-model-test.c src/kernel/kernel-heap.c -o $@
+
 .PHONY: test-kernel-heap
-test-kernel-heap: build/kernel-heap-test
+test-kernel-heap: build/kernel-heap-test build/kernel-heap-model-test
 	./build/kernel-heap-test
+	./build/kernel-heap-model-test
