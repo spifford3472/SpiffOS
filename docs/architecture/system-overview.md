@@ -186,3 +186,10 @@ heap-allocated session/nine-workspace identity/lifetime records after boot.
 See [M6 ADR](../decisions/ADR-persistent-memory-service.md). This is a bounded
 one-page service, not a complete workspace manager or multi-page growth policy.
 Local merge/deployment authority expires today at 14:00 Eastern (18:00 UTC).
+
+## M6 stopped core checkpoint — 2026-10-30
+Owner requested stop, commit and merge. M6 now supplies a pure service library
+and focused sanitizer tests; kernel linkage, retained boot backing and M6
+guest/late-retention evidence remain open. See ADR-persistent-memory-service
+and operations/persistent-memory-service-20261030.md. This specific merge
+instruction supersedes the expired time window only for this checkpoint.

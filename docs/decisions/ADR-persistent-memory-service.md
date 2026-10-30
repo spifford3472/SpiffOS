@@ -67,3 +67,13 @@ markers, exactly one fewer ordinary free frame, untouched 64-page reserve and
 existing full-frame pixels. Retain keyboard/reflow and launcher cleanup tests.
 Rollback is M5 merge 401d92c (docs main e7120b3). Record model provenance and
 actual commands/results separately; this ADR claims no implementation or tests.
+
+## Stopped core checkpoint — 2026-10-30
+Owner explicitly requested stopping feature development, committing and merging
+the current work after the earlier time window expired. That instruction
+authorizes this reviewed core-only merge, not deployment or further automatic
+development. The service library and focused host tests are complete for this
+checkpoint. It is deliberately not linked into the kernel or initialized at
+boot. Retained physical backing, boot/late verification markers, full failure
+injection and three-size M6 QEMU integration remain unfinished. The deployed
+M1-M5 runtime stays at its previously verified state.
