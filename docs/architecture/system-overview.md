@@ -157,3 +157,12 @@ The ordinary and protected reserve pools have explicit errors and independently
 checked counters. Returned physical addresses are not dereferenced; heap,
 process mappings and actual workspace memory services remain future work.
 See [actual M2 validation](../operations/frame-allocator-2026-10-29.md).
+
+## Memory services night work — owner authorization 2026-10-29
+
+The owner approved checked page access/zeroing, a small kernel heap and owner-
+scoped cleanup, using a persistent three-hour Forge engineering job. See
+[M3–M5 design](../decisions/ADR-memory-services.md). Internal diagnostics do
+not settle ring-3 mappings, syscalls, quotas, SMP or final reserve sizing.
+Merge/local deployment authority expires 2026-10-30 03:00 Eastern; concrete
+results must pass review and tests. The worker pushes its feature branch only.

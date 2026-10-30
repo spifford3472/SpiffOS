@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify M1 inventory and restored M2 ownership pools at three RAM sizes."""
+"""Verify M1/M2 plus real M3 page access at three RAM sizes."""
 from pathlib import Path
 import json
 import subprocess
@@ -19,6 +19,9 @@ def verify_serial(serial, ram_mib):
     assert lines.count(b"SPIFFOS_ALLOCATOR_OK") == 1
     assert b"SPIFFOS_ALLOCATOR_UNAVAILABLE" not in lines
     assert b"SPIFFOS_ALLOCATOR_ERROR" not in lines
+    assert lines.count(b"SPIFFOS_PAGE_ACCESS_OK") == 1
+    assert b"SPIFFOS_PAGE_ACCESS_UNAVAILABLE" not in lines
+    assert b"SPIFFOS_PAGE_ACCESS_ERROR" not in lines
     pools = [tuple(map(int, line[11:].split(b","))) for line in lines
              if line.startswith(b"FRAME_POOL:")]
     regions = [tuple(map(int, line[14:].split(b","))) for line in lines
@@ -50,13 +53,14 @@ def verify_serial(serial, ram_mib):
 
 
 def main():
-    """Run isolated normal guests sequentially; qemu.py retains locking/cleanup."""
+    """Run isolated editor-checked guests; qemu.py retains locking/cleanup."""
     build = ROOT / "build"
     results = []
     for ram_mib in (128, 256, 512):
         with (build / f"memory-{ram_mib}-run.log").open("wb") as log:
             subprocess.run([sys.executable, str(ROOT / "scripts/qemu.py"),
-                            "test", "--memory-mib", str(ram_mib), "--timeout", "30"],
+                            "test", "--wait-keyboard-ready", "--memory-mib",
+                            str(ram_mib), "--timeout", "30"],
                            cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                            check=True, timeout=40)
         serial = (build / "serial.log").read_bytes()

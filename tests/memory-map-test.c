@@ -10,6 +10,7 @@
 #include <limine.h>
 #include "memory-map.h"
 #include "memory-boot.h"
+#include "page-access.h"
 
 /* Verify counted usable capacity and immutable caller input on success. */
 static void check_valid(struct memory_region *regions, size_t count,
@@ -152,10 +153,60 @@ static void test_boot_adapter(void)
     }
 }
 
+/* Validate that the boot adapter accepts only revision-0 HHDM plus the pinned
+ * x86-64 paging modes, derives the correct canonical width, and preserves the
+ * caller's prior policy on every unsupported response. No address is touched. */
+static void test_page_policy_adapter(void)
+{
+    struct memory_region region = {0x1000, MEMORY_PAGE_BYTES,
+                                   MEMORY_REGION_USABLE};
+    uint16_t slot;
+    struct frame_allocator allocator = {0};
+    assert(frame_allocator_initialize(&allocator, &region, 1, &slot, 1, 0) ==
+           FRAME_OK);
+    struct limine_hhdm_response hhdm = {
+        .revision = 0, .offset = UINT64_C(0xffff800000000000)
+    };
+    struct limine_paging_mode_response paging = {
+        .revision = 0, .mode = LIMINE_PAGING_MODE_X86_64_4LVL
+    };
+    struct page_access_policy policy = {0};
+    assert(memory_boot_page_policy(&hhdm, &paging, &allocator, &policy));
+    assert(policy.allocator == &allocator);
+    assert(policy.direct_map_offset == hhdm.offset);
+    assert(policy.virtual_address_bits == PAGE_ACCESS_X86_64_4_LEVEL_BITS);
+
+    /* A valid direct-map response cannot bypass an unavailable M2 boot pool. */
+    reset_capture(0);
+    assert(memory_boot_page_probe(&hhdm, &paging, capture));
+    assert(strcmp(transcript, "SPIFFOS_PAGE_ACCESS_UNAVAILABLE\r\n") == 0);
+
+    paging.mode = LIMINE_PAGING_MODE_X86_64_5LVL;
+    assert(memory_boot_page_policy(&hhdm, &paging, &allocator, &policy));
+    assert(policy.virtual_address_bits == PAGE_ACCESS_X86_64_5_LEVEL_BITS);
+    struct page_access_policy saved = policy;
+    paging.mode = 2;
+    assert(!memory_boot_page_policy(&hhdm, &paging, &allocator, &policy));
+    assert(memcmp(&saved, &policy, sizeof policy) == 0);
+    paging.mode = LIMINE_PAGING_MODE_X86_64_4LVL;
+    hhdm.revision = 1;
+    assert(!memory_boot_page_policy(&hhdm, &paging, &allocator, &policy));
+    assert(memcmp(&saved, &policy, sizeof policy) == 0);
+    hhdm.revision = 0;
+    paging.revision = 1;
+    assert(!memory_boot_page_policy(&hhdm, &paging, &allocator, &policy));
+    assert(memcmp(&saved, &policy, sizeof policy) == 0);
+    assert(!memory_boot_page_policy(NULL, &paging, &allocator, &policy));
+    assert(!memory_boot_page_policy(&hhdm, NULL, &allocator, &policy));
+    assert(!memory_boot_page_policy(&hhdm, &paging, NULL, &policy));
+    assert(!memory_boot_page_policy(&hhdm, &paging, &allocator, NULL));
+}
+
 /* Assertions and sanitizers make malformed-map or mutation bugs fail the run. */
 int main(void)
 {
     test_inventory();
     test_boot_adapter();
+    test_page_policy_adapter();
     puts("PASS memory inventory: interval safety, arithmetic, immutable failures and serial adapter");
 }

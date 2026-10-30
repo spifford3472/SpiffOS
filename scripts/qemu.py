@@ -116,6 +116,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=20.0, help="test deadline in seconds")
     parser.add_argument("--screenshot", action="store_true", help="test framebuffer marker and capture build/framebuffer.ppm")
     parser.add_argument("--keyboard", action="store_true", help="inject and verify real keyboard events")
+    parser.add_argument("--wait-keyboard-ready", action="store_true",
+                        help="require serial keyboard readiness without QMP input")
     parser.add_argument("--memory-mib", type=int, default=256,
                         help="guest RAM in MiB (64..4096; diagnostic runner bound)")
     args = parser.parse_args()
@@ -125,6 +127,8 @@ def main():
         parser.error("timeout must be positive")
     if args.keyboard and (args.mode != "test" or args.screenshot):
         parser.error("--keyboard requires test mode without --screenshot")
+    if args.wait_keyboard_ready and args.mode != "test":
+        parser.error("--wait-keyboard-ready requires test mode")
     if args.screenshot and args.mode != "test":
         parser.error("--screenshot requires test mode")
     build = ROOT / "build"
@@ -186,6 +190,13 @@ def main():
                     while time.monotonic() < deadline:
                         lines = serial.read_bytes().splitlines()
                         if MARKER in lines:
+                            # Some diagnostics need evidence emitted immediately
+                            # after BOOT_OK. Keep QEMU alive until that complete
+                            # serial line arrives instead of racing its flush.
+                            if (args.wait_keyboard_ready and
+                                    b"SPIFFOS_KEYBOARD_READY" not in lines):
+                                time.sleep(0.01)
+                                continue
                             if args.keyboard:
                                 import runpy
                                 runpy.run_path(str(ROOT / "scripts/test-keyboard.py"))["run_keyboard_test"](
