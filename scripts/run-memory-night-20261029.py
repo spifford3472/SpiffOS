@@ -13,7 +13,7 @@ ROOT = Path('/home/geoff/projects/spiffos-memory-night-20261029')
 LOG = Path(__file__).resolve().parent
 QWEN = '/home/geoff/.local/share/ki5vnb-coding/qwen-code/node_modules/.bin/qwen'
 CODEX = '/home/geoff/.local/npm-global/bin/codex'
-BRANCH = 'feat/memory-services-night'
+BRANCH = os.environ.get('SPIFFOS_WORK_BRANCH', 'feat/memory-services-night')
 HARD_STOP = datetime(2026, 10, 30, 7, tzinfo=timezone.utc).timestamp()
 START_STEP = int(os.environ.get('SPIFFOS_RESUME_STEP', '0'))
 START = time.time()

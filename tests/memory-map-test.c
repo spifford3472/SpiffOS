@@ -180,6 +180,9 @@ static void test_page_policy_adapter(void)
     reset_capture(0);
     assert(memory_boot_page_probe(&hhdm, &paging, capture));
     assert(strcmp(transcript, "SPIFFOS_PAGE_ACCESS_UNAVAILABLE\r\n") == 0);
+    reset_capture(0);
+    assert(memory_boot_heap_probe(&hhdm, &paging, capture));
+    assert(strcmp(transcript, "SPIFFOS_HEAP_UNAVAILABLE\r\n") == 0);
 
     paging.mode = LIMINE_PAGING_MODE_X86_64_5LVL;
     assert(memory_boot_page_policy(&hhdm, &paging, &allocator, &policy));

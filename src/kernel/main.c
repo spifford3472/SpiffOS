@@ -323,6 +323,10 @@ void kmain(void)
                                 paging_mode_request.response, serial_write)) {
         halt_forever();
     }
+    if (!memory_boot_heap_probe(hhdm_request.response,
+                                paging_mode_request.response, serial_write)) {
+        halt_forever();
+    }
     /* The response and its pointer array are owned by the bootloader. Borrow
      * them while those mappings remain intact; never free or reclaim them here. */
     const struct limine_framebuffer_response *response = framebuffer_request.response;

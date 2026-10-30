@@ -351,3 +351,31 @@ Run make test-frame-allocator for sanitizer checks and make test-memory for
 three real guest sizes, including all kernel/session/workspace ownership groups
 and reserve/free restoration. See decisions/ADR-frame-allocator.md and
 operations/frame-allocator-2026-10-29.md for diagnostic limits and evidence.
+
+## Bounded heap and owner lifetimes — 2026-10-30
+The frame allocator manages complete 4096-byte physical pages. M3 authorizes a
+live exact-owner page through the loader's validated direct map. M4 divides a
+caller-supplied accessible arena into smaller blocks rounded to 16 bytes. The
+current boot test supplies one ordinary kernel-owned page, then returns it.
+
+Each block has an external metadata record: offset, length, owner and previous/
+next record indices. Metadata is outside payload bytes so an invalid pointer
+cannot trick free into reading a fake header immediately before that pointer.
+The active list covers the arena exactly. Every mutation first checks bounds,
+reciprocal links, coverage and independently recomputed per-owner counters.
+Allocation splits a free block when needed, zeroes the complete rounded payload
+and only then publishes the pointer. Free merges adjacent free ranges, returning
+retired records to the inactive pool. Payload is cleared on reuse, not on free.
+
+Workspace cleanup accepts only workspace tokens 1–9. Session teardown has its
+own fixed-owner call. Neither operation changes the kernel-owned backing page
+or reserve pool; other groups retain both contents and accounting. Bad pointers,
+wrong owners, exhaustion, metadata exhaustion and corrupt state return explicit
+errors. A heap reported corrupt must be retired by its trusted caller.
+Owner tags provide bookkeeping, not hardware isolation or stale-handle safety.
+
+Run make test-kernel-heap for focused and deterministic model-based sanitizer
+tests, or make test-memory for all memory suites and real guest/pixel checks
+at 128/256/512 MiB. Persistent multi-page backing, scheduler synchronization,
+real session/workspace services and ring-3 exposure are separate milestones.
+See decisions/ADR-memory-services.md and the memory-services night record.

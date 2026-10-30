@@ -20,8 +20,8 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -173,19 +173,19 @@ build/memory-map.o: src/kernel/memory-map.c src/kernel/memory-map.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/memory-boot.o: src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/memory-map.h src/kernel/frame-allocator.h src/kernel/page-access.h include/limine.h Makefile
+build/memory-boot.o: src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/memory-map.h src/kernel/frame-allocator.h src/kernel/page-access.h src/kernel/kernel-heap.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/memory-map-test: src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-map.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/page-access.c src/kernel/page-access.h include/limine.h Makefile
+build/memory-map-test: src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-map.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/page-access.c src/kernel/page-access.h src/kernel/kernel-heap.c src/kernel/kernel-heap.h include/limine.h Makefile
 	mkdir -p build
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-boot.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/page-access.c -o $@
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-boot.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/page-access.c src/kernel/kernel-heap.c -o $@
 
 .PHONY: test-memory-map test-memory
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-memory-map test-frame-allocator test-page-access iso
+test-memory: test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 
@@ -219,3 +219,22 @@ build/page-access-test: tests/page-access-test.c src/kernel/page-access.c src/ke
 .PHONY: test-page-access
 test-page-access: build/page-access-test
 	./build/page-access-test
+
+
+# M4 bounded heap over caller-supplied, M3-validated ordinary backing pages.
+build/kernel-heap.o: src/kernel/kernel-heap.c src/kernel/kernel-heap.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/kernel-heap-test: tests/kernel-heap-test.c src/kernel/kernel-heap.c src/kernel/kernel-heap.h src/kernel/page-access.c src/kernel/page-access.h src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h src/kernel/memory-map.c src/kernel/memory-map.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/kernel-heap-test.c src/kernel/kernel-heap.c src/kernel/page-access.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -o $@
+
+build/kernel-heap-model-test: tests/kernel-heap-model-test.c src/kernel/kernel-heap.c src/kernel/kernel-heap.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/kernel-heap-model-test.c src/kernel/kernel-heap.c -o $@
+
+.PHONY: test-kernel-heap
+test-kernel-heap: build/kernel-heap-test build/kernel-heap-model-test
+	./build/kernel-heap-test
+	./build/kernel-heap-model-test

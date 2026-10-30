@@ -1,7 +1,7 @@
-/* Purpose: adapt validated Limine memory metadata to M1-M3 boot diagnostics.
+/* Purpose: adapt validated Limine memory metadata to M1-M5 boot diagnostics.
  * Responsibilities: inventory candidate RAM, exercise M2 ownership, validate
- * the HHDM/paging mode, and touch only one currently owned M3 probe page.
- * Dependencies: pinned limine.h, M1/M2/M3 policy and a serial callback.
+ * the HHDM/paging mode, touch only owned M3 pages, and probe M4/M5 lifetimes.
+ * Dependencies: pinned limine.h, M1/M2/M3/M4/M5 policy and a serial callback.
  * Invariants: static bounded metadata; one startup CPU, interrupts disabled;
  * unsupported M3 responses never change mappings, frames or editor pixels.
  * References: ADR-memory-foundation.md, ADR-frame-allocator.md,
@@ -13,6 +13,7 @@
 #include "memory-boot.h"
 #include "frame-allocator.h"
 #include "page-access.h"
+#include "kernel-heap.h"
 
 _Static_assert(MEMORY_REGION_USABLE == LIMINE_MEMMAP_USABLE,
     "inventory usable type must match the pinned Limine header");
@@ -29,6 +30,15 @@ static struct frame_allocator boot_allocator;
 /* True only after the complete M2 probe restored its pools and emitted its
  * success marker. M3 must remain unavailable when M2 capacity was unsupported. */
 static bool boot_allocator_available;
+enum { BOOT_HEAP_BLOCK_CAPACITY = 8 };
+/* Heap records are external to the one-page arena by M4 contract. Keeping this
+ * bounded diagnostic array in kernel BSS also avoids consuming Limine's entry
+ * stack or placing allocator metadata in the frame being tested. */
+static struct kernel_heap_block boot_heap_blocks[BOOT_HEAP_BLOCK_CAPACITY];
+/* The probe runs once per boot. A static descriptor starts completely zeroed as
+ * required by kernel_heap_initialize(), without asking the freestanding linker
+ * for a hosted memset implementation or consuming additional entry-stack space. */
+static struct kernel_heap boot_heap;
 
 /* Convert any uint64_t to at most 20 decimal digits plus NUL. Stack bytes remain
  * live during the borrowed synchronous writer. False propagates partial output;
@@ -355,4 +365,252 @@ bool memory_boot_page_probe(const struct limine_hhdm_response *hhdm,
         return page_probe_failure(write_text);
     }
     return write_text("SPIFFOS_PAGE_ACCESS_OK\r\n");
+}
+
+/* Fill and read back an exact live heap block through ordinary C byte accesses.
+ * The caller has already proved that bytes names a currently allocated range
+ * inside the M3-authorized kernel page. No metadata, ownership or output state
+ * changes; false reports the first mismatching byte. Boot CPU only, IRQs off. */
+static bool heap_bytes_write_and_verify(void *bytes, size_t length, uint8_t value)
+{
+    uint8_t *writable = bytes;
+    for (size_t index = 0; index < length; ++index) {
+        writable[index] = value;
+    }
+    for (size_t index = 0; index < length; ++index) {
+        if (writable[index] != value) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Return whether every byte in a live heap block has the expected value.
+ * Storage is borrowed read-only for this synchronous call. The caller retains
+ * the allocation and exact owner; no logging, mutation or failure side effect. */
+static bool heap_bytes_have_value(const void *bytes, size_t length,
+    uint8_t expected)
+{
+    const uint8_t *readable = bytes;
+    for (size_t index = 0; index < length; ++index) {
+        if (readable[index] != expected) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Defined below the failure helper because the same retirement operation is
+ * also used on the successful path. It only clears the static descriptor and
+ * never touches its arena or external records. */
+static void heap_probe_retire_descriptor(void);
+
+/* Release the one M3 backing frame after a failed M4 self-test and emit the
+ * fatal diagnostic. A failed release is deliberately still failure and never
+ * permits HEAP_OK. The callback is borrowed synchronously; no heap pointer is
+ * published beyond the probe. Boot CPU only with interrupts disabled. */
+static bool heap_probe_failure(bool (*write_text)(const char *),
+    uint64_t physical_address, bool backing_owned)
+{
+    /* Once initialization succeeds, the descriptor contains a usable pointer
+     * into the backing page even when a later self-test fails. Retire it before
+     * returning that frame to M2 so no stale metadata can authorize access to a
+     * page whose ownership has ended. This is safe before initialization too:
+     * the static descriptor begins zeroed and retirement is idempotent. */
+    heap_probe_retire_descriptor();
+    if (backing_owned) {
+        (void)frame_release(&boot_allocator, FRAME_OWNER_KERNEL,
+                            physical_address);
+    }
+    (void)write_text("SPIFFOS_HEAP_ERROR\r\n");
+    return false;
+}
+
+/* Retire the diagnostic descriptor before returning its arena frame to M2. On
+ * success the heap is already empty and coalesced; on failure live block records
+ * are abandoned because boot stops, but the descriptor must still lose every
+ * pointer before frame ownership ends. Explicit stores avoid a hosted memset.
+ * Static records are harmless stale bytes and initialization clears them before
+ * any hypothetical reuse. No arena payload or external record is dereferenced. */
+static void heap_probe_retire_descriptor(void)
+{
+    boot_heap.arena = NULL;
+    boot_heap.arena_bytes = 0;
+    boot_heap.blocks = NULL;
+    boot_heap.block_capacity = 0;
+    boot_heap.first_block_index = 0;
+    boot_heap.active_blocks = 0;
+    boot_heap.allocated_bytes = 0;
+    boot_heap.free_bytes = 0;
+    boot_heap.live_allocations = 0;
+    for (size_t owner = 0; owner < KERNEL_HEAP_OWNER_COUNT; ++owner) {
+        boot_heap.owner_bytes[owner] = 0;
+        boot_heap.owner_allocations[owner] = 0;
+    }
+    boot_heap.initialized = false;
+}
+
+/* Build a one-page M4 heap only over a page obtained through the validated M3
+ * direct-map path. Prove 16-byte alignment, real byte write/read, independent
+ * kernel/session/two-workspace ownership, wrong-owner rejection and atomic OOM.
+ * Resetting workspace 1 must retain workspace 2, kernel, session and the M2
+ * reserve; separate session teardown must retain workspace 2 and kernel. The
+ * probe then checks free/reuse with zero-before-publication. Success releases
+ * every block/backing frame, restores M2 counters, and emits both lifecycle and
+ * heap markers last. Unsupported M3 responses emit
+ * UNAVAILABLE without changing the existing editor path. All mappings, callback
+ * and static metadata are borrowed; one boot CPU owns them with IRQs disabled. */
+bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
+    const struct limine_paging_mode_response *paging,
+    bool (*write_text)(const char *text))
+{
+    if (write_text == NULL) {
+        return false;
+    }
+    struct page_access_policy policy;
+    if (!boot_allocator_available ||
+        !memory_boot_page_policy(hhdm, paging, &boot_allocator, &policy)) {
+        return write_text("SPIFFOS_HEAP_UNAVAILABLE\r\n");
+    }
+    if (!frame_allocator_check(&boot_allocator)) {
+        return heap_probe_failure(write_text, 0, false);
+    }
+
+    uint64_t ordinary_before = boot_allocator.ordinary_free;
+    uint64_t reserve_before = boot_allocator.reserve_free;
+    uint64_t physical_address = UINT64_MAX;
+    if (page_access_allocate_zero(&boot_allocator, &policy, FRAME_OWNER_KERNEL,
+            kernel_page_zero, NULL, &physical_address) != PAGE_ACCESS_OK) {
+        return heap_probe_failure(write_text, 0, false);
+    }
+    uint64_t mapped_address = 0;
+    if (page_access_resolve(&policy, FRAME_OWNER_KERNEL, physical_address,
+            &mapped_address) != PAGE_ACCESS_OK ||
+        mapped_address % KERNEL_HEAP_ALIGNMENT_BYTES != 0) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+
+    if (kernel_heap_initialize(&boot_heap, (void *)(uintptr_t)mapped_address,
+            MEMORY_PAGE_BYTES, boot_heap_blocks,
+            BOOT_HEAP_BLOCK_CAPACITY) != KERNEL_HEAP_OK) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+    void *kernel_allocation = NULL;
+    void *session_allocation = NULL;
+    void *workspace1_first = NULL;
+    void *workspace2_allocation = NULL;
+    void *workspace1_second = NULL;
+    enum kernel_heap_owner workspace1 = KERNEL_HEAP_OWNER_FIRST_WORKSPACE;
+    enum kernel_heap_owner workspace2 =
+        (enum kernel_heap_owner)(KERNEL_HEAP_OWNER_FIRST_WORKSPACE + 1);
+    if (kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_KERNEL, 17,
+            &kernel_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_SESSION, 32,
+            &session_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, workspace1, 16,
+            &workspace1_first) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, workspace2, 16,
+            &workspace2_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, workspace1, 16,
+            &workspace1_second) != KERNEL_HEAP_OK ||
+        (uintptr_t)kernel_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        (uintptr_t)session_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        (uintptr_t)workspace1_first % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        (uintptr_t)workspace2_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        (uintptr_t)workspace1_second % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        !heap_bytes_write_and_verify(kernel_allocation, 32, UINT8_C(0xa1)) ||
+        !heap_bytes_write_and_verify(session_allocation, 32, UINT8_C(0xb2)) ||
+        !heap_bytes_write_and_verify(workspace1_first, 16, UINT8_C(0xc3)) ||
+        !heap_bytes_write_and_verify(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !heap_bytes_write_and_verify(workspace1_second, 16, UINT8_C(0xe5)) ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] != 32 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] != 32 ||
+        boot_heap.owner_bytes[workspace1] != 32 ||
+        boot_heap.owner_allocations[workspace1] != 2 ||
+        boot_heap.owner_bytes[workspace2] != 16 ||
+        !kernel_heap_check(&boot_heap)) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+
+    /* A wrong owner and an over-capacity request must preserve live ownership,
+     * output and dirty payload. The subsequent valid free/allocation proves the
+     * OOM was recoverable rather than retiring or partially mutating the heap. */
+    void *oom_output = kernel_allocation;
+    if (kernel_heap_release(&boot_heap, KERNEL_HEAP_OWNER_KERNEL,
+            session_allocation) != KERNEL_HEAP_WRONG_OWNER ||
+        kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_KERNEL,
+            MEMORY_PAGE_BYTES, &oom_output) != KERNEL_HEAP_OOM ||
+        oom_output != kernel_allocation ||
+        !heap_bytes_have_value(kernel_allocation, 32, UINT8_C(0xa1)) ||
+        !heap_bytes_have_value(session_allocation, 32, UINT8_C(0xb2)) ||
+        !heap_bytes_have_value(workspace1_first, 16, UINT8_C(0xc3)) ||
+        !heap_bytes_have_value(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !heap_bytes_have_value(workspace1_second, 16, UINT8_C(0xe5)) ||
+        !kernel_heap_check(&boot_heap)) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+
+    /* M5 workspace reset is owner-scoped. The arena backing frame is still
+     * kernel-owned, so neither M2 pool counter may change. Session teardown is
+     * deliberately a separate call and must retain kernel/workspace 2 bytes. */
+    if (kernel_heap_release_workspace(&boot_heap, workspace1) != KERNEL_HEAP_OK ||
+        boot_heap.owner_bytes[workspace1] != 0 ||
+        boot_heap.owner_allocations[workspace1] != 0 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] != 32 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] != 32 ||
+        boot_heap.owner_bytes[workspace2] != 16 ||
+        boot_allocator.ordinary_free != ordinary_before - 1 ||
+        boot_allocator.reserve_free != reserve_before ||
+        !heap_bytes_have_value(kernel_allocation, 32, UINT8_C(0xa1)) ||
+        !heap_bytes_have_value(session_allocation, 32, UINT8_C(0xb2)) ||
+        !heap_bytes_have_value(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !kernel_heap_check(&boot_heap) ||
+        kernel_heap_release_session(&boot_heap) != KERNEL_HEAP_OK ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] != 0 ||
+        boot_heap.owner_allocations[KERNEL_HEAP_OWNER_SESSION] != 0 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] != 32 ||
+        boot_heap.owner_bytes[workspace2] != 16 ||
+        boot_allocator.ordinary_free != ordinary_before - 1 ||
+        boot_allocator.reserve_free != reserve_before ||
+        !heap_bytes_have_value(kernel_allocation, 32, UINT8_C(0xa1)) ||
+        !heap_bytes_have_value(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !kernel_heap_check(&boot_heap)) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+
+    void *reused = NULL;
+    if (kernel_heap_release(&boot_heap, KERNEL_HEAP_OWNER_KERNEL,
+            kernel_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_KERNEL, 17,
+            &reused) != KERNEL_HEAP_OK ||
+        reused != kernel_allocation ||
+        !heap_bytes_have_value(reused, 32, 0) ||
+        !heap_bytes_write_and_verify(reused, 32, UINT8_C(0xf6)) ||
+        kernel_heap_release(&boot_heap, KERNEL_HEAP_OWNER_KERNEL,
+            reused) != KERNEL_HEAP_OK ||
+        kernel_heap_release(&boot_heap, workspace2,
+            workspace2_allocation) != KERNEL_HEAP_OK ||
+        !kernel_heap_check(&boot_heap) || boot_heap.live_allocations != 0 ||
+        boot_heap.allocated_bytes != 0 ||
+        boot_heap.free_bytes != MEMORY_PAGE_BYTES ||
+        boot_heap.active_blocks != 1) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+    for (size_t owner = KERNEL_HEAP_OWNER_KERNEL;
+         owner < KERNEL_HEAP_OWNER_COUNT; ++owner) {
+        if (boot_heap.owner_bytes[owner] != 0 ||
+            boot_heap.owner_allocations[owner] != 0) {
+            return heap_probe_failure(write_text, physical_address, true);
+        }
+    }
+    heap_probe_retire_descriptor();
+    if (frame_release(&boot_allocator, FRAME_OWNER_KERNEL,
+            physical_address) != FRAME_OK ||
+        !frame_allocator_check(&boot_allocator) ||
+        boot_allocator.ordinary_free != ordinary_before ||
+        boot_allocator.reserve_free != reserve_before) {
+        return heap_probe_failure(write_text, 0, false);
+    }
+    return write_text("SPIFFOS_OWNER_CLEANUP_OK\r\n") &&
+        write_text("SPIFFOS_HEAP_OK\r\n");
 }

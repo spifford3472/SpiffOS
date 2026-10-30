@@ -9,6 +9,57 @@
 #include <stdint.h>
 #include "page-access.h"
 
+/* Describe one nonempty half-open object-address range without overflowing.
+ * Numeric comparisons are used only to reject output aliasing; this helper
+ * never dereferences, orders or subtracts unrelated C pointers. */
+static bool page_access_object_range(uintptr_t start, size_t length,
+    uintptr_t *end)
+{
+    if (length == 0 || length > UINTPTR_MAX - start) {
+        return false;
+    }
+    *end = start + length;
+    return true;
+}
+
+/* Report whether one uint64_t output object is disjoint from every borrowed
+ * policy/allocator metadata range that resolution relies on. The allocator was
+ * already checked, so the used region and ownership-array byte counts fit in
+ * size_t. Rejecting aliases before publication prevents an otherwise valid
+ * result from corrupting the authority that justified it. Pure numeric checks;
+ * no metadata, frame contents or output bytes are changed. */
+static bool page_access_output_disjoint(const struct page_access_policy *policy,
+    const uint64_t *output)
+{
+    const struct frame_allocator *allocator = policy->allocator;
+    uintptr_t output_start = (uintptr_t)output;
+    uintptr_t ranges_start[4] = {
+        (uintptr_t)policy,
+        (uintptr_t)allocator,
+        (uintptr_t)allocator->regions,
+        (uintptr_t)allocator->owners
+    };
+    size_t ranges_length[4] = {
+        sizeof *policy,
+        sizeof *allocator,
+        allocator->region_count * sizeof *allocator->regions,
+        (size_t)allocator->total_frames * sizeof *allocator->owners
+    };
+    uintptr_t output_end;
+    if (!page_access_object_range(output_start, sizeof *output, &output_end)) {
+        return false;
+    }
+    for (size_t index = 0; index < 4; ++index) {
+        uintptr_t range_end;
+        if (!page_access_object_range(ranges_start[index],
+                                      ranges_length[index], &range_end) ||
+            (output_start < range_end && ranges_start[index] < output_end)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /* Find the unique M2 ordinal for one aligned physical candidate frame.
  * allocator and ordinal are borrowed for the call; the caller has already
  * validated the complete M1 map and proved total_frames matches that map.
@@ -83,6 +134,9 @@ enum page_access_result page_access_resolve(
     }
     const struct frame_allocator *allocator = policy->allocator;
     if (!frame_allocator_check(allocator)) {
+        return PAGE_ACCESS_INVALID;
+    }
+    if (!page_access_output_disjoint(policy, mapped_address)) {
         return PAGE_ACCESS_INVALID;
     }
 
@@ -168,6 +222,13 @@ enum page_access_result page_access_allocate_zero(
     if (allocator == NULL || policy == NULL ||
         policy->allocator != allocator || backend == NULL ||
         physical_address == NULL || !frame_owner_valid(owner)) {
+        return PAGE_ACCESS_INVALID;
+    }
+    /* Allocation is the first mutation in this operation. Independently prove
+     * M2 counters/owners and output separation before allowing it, rather than
+     * relying on the later resolver to discover corruption after acquisition. */
+    if (!frame_allocator_check(allocator) ||
+        !page_access_output_disjoint(policy, physical_address)) {
         return PAGE_ACCESS_INVALID;
     }
 
