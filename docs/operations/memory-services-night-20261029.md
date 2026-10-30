@@ -307,3 +307,51 @@ runtime evidence remains applicable to unchanged production code, but is not
 reclaimed as a new run. M4 heap and M5 cleanup remain unimplemented and no
 commit, merge, push, deployment, dependency, service, firmware or disk change
 was performed by this checkpoint.
+
+## Checkpoint 5: bounded M4 heap header and design
+
+The owner reported that the small Qwen attempt for this slice exited 53. Its log
+was unavailable inside the sandbox. Codex therefore inspected the clean actual
+worktree and found no heap source, header or design change to accept as Qwen
+output. Direct Codex fallback was used under the memory-specific authorization;
+no model or agent was delegated and no Qwen result is represented as success.
+
+Codex added only `src/kernel/kernel-heap.h` and the detailed M4 contract in
+`docs/decisions/ADR-memory-services.md`. The proposed internal heap has a
+caller-owned contiguous arena bounded at 4 MiB, 16-byte alignment, a 1-byte
+through 1 MiB request range, and at most 1024 caller-owned external metadata
+records. Records form a checked address-ordered list. First fit, explicit split
+failure on metadata exhaustion, immediate coalescing, exact owner checks and
+global/per-owner counters are specified. Invalid pointers are range/alignment
+checked and matched by offset; heap code never dereferences them or reads
+in-band metadata. The header gives full initialization, allocate, release and
+invariant-check contracts, including storage ownership, lifetimes, side effects,
+errors and single-CPU/interrupt restrictions required by AGENTS.md.
+
+This is deliberately a header/design checkpoint. There is no heap
+implementation, arena/page adapter, boot integration, allocation test, owner
+cleanup, M5 lifecycle operation, serial marker or replacement of static editor
+storage. The limits are diagnostic internal bounds and establish no user ABI,
+quota, final virtual-memory layout or supervisor-reserve size.
+
+Actual checks in this isolated checkout:
+
+- `git diff --check`: passed before the test run.
+- Host `cc` and freestanding x86-64 `clang` syntax-only translation units that
+  force-include `kernel-heap.h`, using C11 with `-Wall -Wextra -Werror`: passed.
+- `ASAN_OPTIONS=detect_leaks=0 make test-memory-map test-frame-allocator
+  test-page-access test-keyboard-memory`: passed with AddressSanitizer and
+  UndefinedBehaviorSanitizer instrumentation. M1 inventory, M2 ownership,
+  reserve/OOM and rejected frees, M3 ownership/rollback/boundaries/backend
+  guards, keyboard events, logical input/submission, wrapped console retention,
+  cursor modes, navigation, insert/overwrite and reflow all reported PASS.
+- `make -B all`: passed a forced strict freestanding rebuild and static kernel
+  link of the unchanged M1/M2/M3 and editor runtime sources.
+
+LeakSanitizer alone was disabled because the earlier sandbox/ptrace failure is
+already documented; no LeakSanitizer pass is claimed. The heap header is not
+included by runtime code, so these are contract syntax and existing-regression
+checks, not allocator behavior tests. No QEMU was started, stopped or inspected;
+there is no new guest, pixel or runtime-heap evidence, and the owner's QEMU was
+not touched. No commit, merge, push, deployment, dependency pin, runner control,
+service, infrastructure, firmware or disk was changed.

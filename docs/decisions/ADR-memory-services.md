@@ -85,6 +85,65 @@ counters/output on errors. Never consume supervisor reserve on ordinary demand.
 Track kernel/session/workspace groups. No user ABI, quotas or final VM design
 is established. Do not silently replace existing static editor storage yet.
 
+### M4 bounded heap contract
+
+This checkpoint fixes the implementation contract before allocator code. The
+heap uses one caller-supplied contiguous, kernel-accessible byte arena. A later
+adapter may assemble that arena only from M3-validated, kernel-owned, completely
+zeroed ordinary pages; this contract neither obtains pages nor assumes that
+arbitrary physical pages are virtually contiguous. Supervisor-reserve pages
+are not eligible backing. The arena remains caller-owned and borrowed for the
+heap lifetime. Its diagnostic bound is 4 MiB, its base and length are 16-byte
+aligned, and a single request is 1 byte through 1 MiB. Requests round upward to
+16 bytes with checked arithmetic, so the smallest occupied block is 16 bytes.
+These conservative bounds are internal checkpoint choices, not final RAM
+limits, quotas, process layout or a user-visible ABI.
+
+All block metadata is in a separate caller-owned array of 1 through 1024
+records, disjoint from the arena and descriptor. A record stores an arena
+offset and length, owner/state, and checked previous/next indices. Active
+records form one list in strictly increasing address order and cover the arena
+exactly, with no gaps or overlaps. Inactive records are reusable metadata
+capacity. Initialization validates address/range multiplication and all storage
+disjointness before changing anything, then creates one free record spanning
+the arena. Heap code never discovers metadata by subtracting from or reading
+before an allocation pointer. This intentionally spends bounded external
+storage so a foreign or interior pointer cannot trigger an unchecked metadata
+dereference.
+
+Allocation is bounded first fit over the address-ordered records. Exact fits
+change the selected record to the requested kernel, session or workspace owner.
+A larger free record splits only if one inactive metadata record is available;
+otherwise allocation returns explicit metadata exhaustion without consuming an
+oversized block. Zero-sized/oversized requests, alignment overflow, ordinary
+out-of-memory, invalid owners and corrupt descriptors have distinct failures.
+Only success publishes the pointer. Returned bytes are uninitialized: initial
+page zeroing does not promise zero on reuse, and this internal heap does not yet
+expose memory to ring 3.
+
+Free first validates the descriptor, converts the supplied pointer to an
+integer address only for overflow/range/alignment checks, then searches active
+external records for an exact block-start offset. It never dereferences the
+supplied pointer. An exact live block with a different owner returns wrong
+owner. An exact current free-block start returns double free. Interior, foreign
+or stale pointers whose old boundary disappeared during coalescing return bad
+pointer; stale-handle generations remain deferred as already recorded for M3–
+M5. Every such case is rejected before mutation. A valid free marks the block
+free, updates checked counters, immediately merges a free predecessor and/or
+successor, and returns retired records to the inactive pool. Freed bytes are not
+cleared because no cross-protection-domain reuse is introduced by this heap.
+
+Before a mutation, the implementation must independently validate every list
+index before dereference, reciprocal links, strict order, complete gap-free
+coverage, 16-byte nonzero ranges, owner/state agreement, absence of adjacent
+free records and recomputed global/per-owner counters. Kernel, session and nine
+workspace groups have separate aligned-byte and live-allocation counts. Error
+paths preserve output, counters, records and arena bytes. Metadata corruption
+retires the heap with an explicit error rather than attempting repair. The heap
+has one boot-CPU owner with interrupts disabled; locks, SMP, interrupt-context
+allocation, teardown, owner cleanup and stale handles are outside this M4
+header/design checkpoint.
+
 ## M5: ownership lifecycle and diagnostics
 Provide a tested internal owner-scoped cleanup operation for workspace reset.
 It releases only that workspace's allocations, leaving other workspaces, kernel,
