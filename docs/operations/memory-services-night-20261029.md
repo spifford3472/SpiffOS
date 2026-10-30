@@ -847,3 +847,24 @@ interrupt allocation, quotas, stale-handle generations and ring-3 protection
 remain open. Rollback: isolated build of M3 merge 0beaad8, preserving current
 checkouts/history. Physical disks, USB, firmware, network and infrastructure
 remain untouched. Manual GUI acceptance can occur when the owner gets home.
+
+## PR22 merge and local deployment — 2026-10-30
+Reviewed head 923508f06d4be17cdbc66b4aed4687e11649b007 merged as
+401d92c054d0aa521c6242ae983ef410f469d677 under renewed owner authority
+through 14:00 Eastern. Git diff from head to merge was empty. The already
+verified runtime source is unchanged by the final teaching/status documentation
+and one header-comment correction; no extra post-merge test execution is
+claimed. Full unrestricted coordinator gate evidence remains the 61.19-second
+passing run recorded above.
+
+The clean /home/geoff/projects/spiffos-qemu-main checkout fast-forwarded to
+401d92c. The tested feature-build ISO was copied to a .next file and atomically
+renamed into its build/spiffos.iso. Both validation/deployed SHA256 values match:
+47dc4a57d816355fbb507b82a71d8162d75d6d6c06841a95572ce3742fd62204
+No guest was terminated; no owner guest process was observed running at this
+check. The next launch uses the updated image; manual GUI testing remains for
+the owner when home. No physical media, firmware or infrastructure was changed.
+
+All M3-M5 runtime work is now merged. Persistent retained backing and real
+session/workspace allocation are the next checkpoint; the failed/stopped night
+services have not been restarted or repurposed for that additional work.
