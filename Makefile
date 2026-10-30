@@ -185,7 +185,7 @@ build/memory-map-test: src/kernel/frame-allocator.c src/kernel/frame-allocate.c 
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
+test-memory: test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 
@@ -238,3 +238,12 @@ build/kernel-heap-model-test: tests/kernel-heap-model-test.c src/kernel/kernel-h
 test-kernel-heap: build/kernel-heap-test build/kernel-heap-model-test
 	./build/kernel-heap-test
 	./build/kernel-heap-model-test
+
+# M6 pure service core only; not linked into the boot image in this checkpoint.
+build/memory-service-test: tests/memory-service-test.c src/kernel/memory-service.c src/kernel/memory-service.h src/kernel/kernel-heap.c src/kernel/kernel-heap.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/memory-service-test.c src/kernel/memory-service.c src/kernel/kernel-heap.c -o $@
+
+.PHONY: test-memory-service
+test-memory-service: build/memory-service-test
+	./build/memory-service-test
