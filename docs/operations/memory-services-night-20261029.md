@@ -426,3 +426,65 @@ contiguity or consume frames itself. `kernel_heap_release()`, coalescing, heap
 teardown/backing-frame return, boot integration and M5 owner cleanup remain
 unfinished. No commit, merge, push, deployment, dependency pin, runner control,
 service, infrastructure, firmware or disk was changed.
+
+## Checkpoint 7: checked M4 release, coalescing and reuse
+
+The owner reported that the small Qwen attempt for this slice exited 55. Its log
+was not available inside the sandbox, so Codex inspected the actual clean source
+instead of inferring a cause or accepting any Qwen implementation or test claim.
+The source contained the completed checkpoint-6 initialization/allocation path
+but no `kernel_heap_release()` implementation or release tests. Direct Codex
+fallback was used under the memory-specific authorization; no model or agent was
+delegated.
+
+Codex implemented only the existing M4 release contract in
+`src/kernel/kernel-heap.c`. Release first validates the owner and complete heap
+graph/accounting state, converts the supplied pointer to an integer solely for
+checked arena-range/alignment classification, and searches external active
+records for an exact block-start offset. It never dereferences caller-supplied
+allocation memory as metadata. Null, foreign, unaligned interior, aligned
+interior, stale coalesced, wrong-owner, double-free and corrupt-heap paths return
+their documented errors before mutation.
+
+A valid release subtracts the live allocation and owner counters exactly once,
+leaves payload bytes unchanged, and immediately merges a free predecessor and/or
+successor. Coalesced-away records are reset through explicit field stores and
+returned to inactive metadata capacity; reciprocal links and the first-block
+identity remain intact. No fallible operation occurs after mutation begins.
+The existing independent `kernel_heap_check()` accepts the resulting graph and
+recomputed global/per-owner accounting.
+
+The guarded sanitizer test now creates separated 32-byte and 64-byte holes with
+96 total free bytes and proves an 80-byte request initially returns OOM without
+changes. Releasing the 16-byte allocation between them exercises two-sided
+coalescing into one 112-byte range. First fit then reuses the earliest old hole,
+clears all 80 republished bytes, reuses retired metadata for the remainder, and
+preserves both guard regions. Separate atomic-rejection cases cover null,
+foreign, unaligned and aligned interior pointers, invalid and wrong owners,
+current-boundary double free, stale boundary after coalescing and corrupt
+metadata. They compare the complete descriptor, record array and arena bytes
+before and after every rejected operation. A successful free is also checked to
+retain dirty payload bytes while preserving global/per-owner counters.
+
+Actual checks run in this isolated checkout:
+
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-kernel-heap`:
+  passed with AddressSanitizer and UndefinedBehaviorSanitizer. The final marker
+  was `PASS kernel heap: checked free, coalescing, reuse and atomic failures`.
+- `ASAN_OPTIONS=detect_leaks=0 make test-memory-map test-frame-allocator
+  test-page-access test-kernel-heap test-keyboard-memory && make -B all && git
+  diff --check`: passed. M1 inventory, M2 ownership/reserve/OOM/rejected frees,
+  M3 ownership/rollback/boundaries/backend guards, the expanded M4 test,
+  keyboard transport, logical input/submission, scroll retention, cursor modes,
+  navigation, insert/overwrite and reflow all reported PASS. The forced strict
+  freestanding Clang compile and static kernel link included the release code.
+
+LeakSanitizer alone remained disabled because the previously recorded sandbox
+ptrace incompatibility still applies; no LeakSanitizer pass is claimed. This
+checkpoint did not start, stop or inspect QEMU, so it did not disturb the
+owner's guest and adds no 128/256/512 MiB guest, serial heap marker or editor
+pixel evidence. The heap remains unintegrated with the boot path and still
+depends on caller-supplied virtually contiguous M3-validated kernel-owned
+ordinary backing. Heap teardown/backing-frame return and M5 owner-scoped cleanup
+remain unfinished. No commit, merge, push, deployment, dependency pin, runner
+control, service, infrastructure, firmware or disk was changed.

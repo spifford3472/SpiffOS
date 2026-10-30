@@ -1,6 +1,7 @@
-/* Purpose: implement bounded initialization and allocation for the M4 heap.
+/* Purpose: implement bounded allocation and checked release for the M4 heap.
  * Responsibilities: validate caller-owned storage, maintain an externally
- * described address-ordered block list, split by first fit and clear allocations.
+ * described address-ordered block list, split by first fit, clear allocations,
+ * reject invalid frees and immediately coalesce adjacent free blocks.
  * Dependencies: kernel-heap.h and ordinary byte stores; the caller must supply
  * a contiguous arena assembled from M3-validated, kernel-owned ordinary pages.
  * Invariants: no metadata lives in the arena; failures preserve all storage;
@@ -364,5 +365,125 @@ enum kernel_heap_result kernel_heap_allocate(struct kernel_heap *heap,
     ++heap->owner_allocations[owner];
 
     *allocation = &heap->arena[selected_offset];
+    return KERNEL_HEAP_OK;
+}
+
+/* Return one coalesced-away metadata record to the inactive pool. The caller
+ * has already redirected every active-list link away from index. Explicit
+ * field stores keep the freestanding implementation independent of memset(). */
+static void kernel_heap_retire_block(struct kernel_heap *heap, size_t index)
+{
+    heap->blocks[index].offset_bytes = 0;
+    heap->blocks[index].length_bytes = 0;
+    heap->blocks[index].previous_index = SIZE_MAX;
+    heap->blocks[index].next_index = SIZE_MAX;
+    heap->blocks[index].owner = KERNEL_HEAP_OWNER_FREE;
+    heap->blocks[index].slot_active = false;
+    heap->blocks[index].allocated = false;
+}
+
+/* Release one exact block-start pointer owned by owner. Descriptor, graph,
+ * counters and pointer arithmetic are validated before mutation. The supplied
+ * pointer is used only as an integer address and is never dereferenced. Success
+ * invalidates the allocation, retains payload bytes, and merges a free block on
+ * either side so the active graph never contains adjacent free records. All
+ * storage remains caller-owned; boot CPU only, interrupts disabled, no IRQ use. */
+enum kernel_heap_result kernel_heap_release(struct kernel_heap *heap,
+    enum kernel_heap_owner owner, void *allocation)
+{
+    if (heap == NULL) {
+        return KERNEL_HEAP_INVALID;
+    }
+    if (!kernel_heap_owner_valid(owner)) {
+        return KERNEL_HEAP_BAD_OWNER;
+    }
+    if (!kernel_heap_check(heap)) {
+        return KERNEL_HEAP_CORRUPT;
+    }
+    if (allocation == NULL) {
+        return KERNEL_HEAP_BAD_POINTER;
+    }
+
+    uintptr_t arena_start = (uintptr_t)heap->arena;
+    uintptr_t allocation_address = (uintptr_t)allocation;
+    uintptr_t arena_end;
+    /* kernel_heap_check() already proved this range representable. Repeating
+     * the checked construction here keeps all pointer classification local and
+     * avoids C pointer comparisons or subtraction across unrelated objects. */
+    if (!kernel_heap_range(arena_start, heap->arena_bytes, &arena_end) ||
+        allocation_address < arena_start || allocation_address >= arena_end) {
+        return KERNEL_HEAP_BAD_POINTER;
+    }
+    size_t allocation_offset = (size_t)(allocation_address - arena_start);
+    if (allocation_offset % KERNEL_HEAP_ALIGNMENT_BYTES != 0) {
+        return KERNEL_HEAP_BAD_POINTER;
+    }
+
+    size_t selected_index = SIZE_MAX;
+    size_t current_index = heap->first_block_index;
+    for (size_t visited = 0; visited < heap->active_blocks; ++visited) {
+        const struct kernel_heap_block *block = &heap->blocks[current_index];
+        if (block->offset_bytes == allocation_offset) {
+            selected_index = current_index;
+            break;
+        }
+        if (block->offset_bytes > allocation_offset) {
+            break;
+        }
+        current_index = block->next_index;
+    }
+    if (selected_index == SIZE_MAX) {
+        return KERNEL_HEAP_BAD_POINTER;
+    }
+
+    const struct kernel_heap_block *selected = &heap->blocks[selected_index];
+    if (!selected->allocated) {
+        return KERNEL_HEAP_DOUBLE_FREE;
+    }
+    if (selected->owner != owner) {
+        return KERNEL_HEAP_WRONG_OWNER;
+    }
+
+    size_t released_bytes = selected->length_bytes;
+    size_t previous_index = selected->previous_index;
+    size_t next_index = selected->next_index;
+
+    /* The full invariant check proved these counters contain this allocation,
+     * so the subtractions cannot underflow. No fallible work remains below. */
+    heap->allocated_bytes -= released_bytes;
+    heap->free_bytes += released_bytes;
+    --heap->live_allocations;
+    heap->owner_bytes[owner] -= released_bytes;
+    --heap->owner_allocations[owner];
+    heap->blocks[selected_index].owner = KERNEL_HEAP_OWNER_FREE;
+    heap->blocks[selected_index].allocated = false;
+
+    size_t merged_index = selected_index;
+    if (previous_index != SIZE_MAX &&
+        !heap->blocks[previous_index].allocated) {
+        /* Coverage validation proved the predecessor ends exactly where this
+         * block starts, so their lengths form one representable arena range. */
+        heap->blocks[previous_index].length_bytes += released_bytes;
+        heap->blocks[previous_index].next_index = next_index;
+        if (next_index != SIZE_MAX) {
+            heap->blocks[next_index].previous_index = previous_index;
+        }
+        kernel_heap_retire_block(heap, selected_index);
+        --heap->active_blocks;
+        merged_index = previous_index;
+    }
+
+    next_index = heap->blocks[merged_index].next_index;
+    if (next_index != SIZE_MAX && !heap->blocks[next_index].allocated) {
+        size_t after_next = heap->blocks[next_index].next_index;
+        heap->blocks[merged_index].length_bytes +=
+            heap->blocks[next_index].length_bytes;
+        heap->blocks[merged_index].next_index = after_next;
+        if (after_next != SIZE_MAX) {
+            heap->blocks[after_next].previous_index = merged_index;
+        }
+        kernel_heap_retire_block(heap, next_index);
+        --heap->active_blocks;
+    }
     return KERNEL_HEAP_OK;
 }

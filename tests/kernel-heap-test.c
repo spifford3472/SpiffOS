@@ -1,6 +1,7 @@
-/* Purpose: verify bounded M4 initialization/allocation and failure atomicity.
+/* Purpose: verify bounded M4 allocation, checked release and failure atomicity.
  * Responsibilities: exercise owned ordinary-page backing, alignment, splitting,
- * complete zero-before-publish, capacity failures and metadata corruption.
+ * complete zero-before-publish, invalid-free rejection, fragmentation,
+ * two-sided coalescing, reuse, capacity failures and metadata corruption.
  * Dependencies: production M1/M2/M3 policy and M4 heap over guarded host RAM.
  * Invariants: numeric physical/direct-map values are never host pointers; only
  * the injected backend translates its one expected page into ordinary test RAM.
@@ -182,6 +183,29 @@ static void assert_failed_allocation_unchanged(struct kernel_heap *heap,
     assert(memcmp(saved_arena, arena, arena_bytes) == 0);
 }
 
+/* Compare descriptor, every record and payload after a rejected release. The
+ * candidate pointer is passed through unchanged and production must not read it;
+ * this helper borrows all fixture storage and performs no lasting mutation. */
+static void assert_failed_release_unchanged(struct kernel_heap *heap,
+    struct kernel_heap_block *blocks, size_t block_capacity,
+    uint8_t *arena, size_t arena_bytes, enum kernel_heap_owner owner,
+    void *allocation, enum kernel_heap_result expected)
+{
+    struct kernel_heap saved_heap;
+    struct kernel_heap_block saved_blocks[TEST_BLOCK_CAPACITY];
+    uint8_t saved_arena[TEST_PAGE_BYTES];
+    assert(block_capacity <= TEST_BLOCK_CAPACITY);
+    assert(arena_bytes <= TEST_PAGE_BYTES);
+    memcpy(&saved_heap, heap, sizeof saved_heap);
+    memcpy(saved_blocks, blocks, block_capacity * sizeof *blocks);
+    memcpy(saved_arena, arena, arena_bytes);
+    assert(kernel_heap_release(heap, owner, allocation) == expected);
+    assert(memcmp(&saved_heap, heap, sizeof saved_heap) == 0);
+    assert(memcmp(saved_blocks, blocks,
+                  block_capacity * sizeof *blocks) == 0);
+    assert(memcmp(saved_arena, arena, arena_bytes) == 0);
+}
+
 /* Exercise distinct input/OOM/capacity results and prove each preserves output,
  * descriptor, records and payload. Metadata exhaustion must not silently hand
  * the caller an oversized block. */
@@ -284,11 +308,139 @@ static void test_initialization_and_corruption_failures(void)
         KERNEL_HEAP_OWNER_KERNEL, 16, KERNEL_HEAP_CORRUPT);
 }
 
+/* Reject null, foreign, interior, wrong-owner and repeated frees before any
+ * storage changes. The first block remains a current free-block boundary after
+ * release, which makes its immediate second release an unambiguous double free. */
+static void test_release_rejections_are_atomic(void)
+{
+    _Alignas(KERNEL_HEAP_ALIGNMENT_BYTES) uint8_t arena[128];
+    struct kernel_heap_block blocks[TEST_BLOCK_CAPACITY];
+    struct kernel_heap heap = {0};
+    memset(arena, 0x6a, sizeof arena);
+    assert(kernel_heap_initialize(&heap, arena, sizeof arena, blocks,
+                                  TEST_BLOCK_CAPACITY) == KERNEL_HEAP_OK);
+    void *first = NULL;
+    void *second = NULL;
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_KERNEL, 32, &first) ==
+           KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_SESSION, 16, &second) ==
+           KERNEL_HEAP_OK);
+    assert(first == arena && second == &arena[32]);
+
+    uint8_t foreign_byte = 0;
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_KERNEL, NULL,
+        KERNEL_HEAP_BAD_POINTER);
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_FREE, first,
+        KERNEL_HEAP_BAD_OWNER);
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_KERNEL, &foreign_byte,
+        KERNEL_HEAP_BAD_POINTER);
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_KERNEL, &arena[1],
+        KERNEL_HEAP_BAD_POINTER);
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_KERNEL, &arena[16],
+        KERNEL_HEAP_BAD_POINTER);
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_KERNEL, second,
+        KERNEL_HEAP_WRONG_OWNER);
+
+    memset(first, 0xd4, 32);
+    assert(kernel_heap_release(&heap, KERNEL_HEAP_OWNER_KERNEL, first) ==
+           KERNEL_HEAP_OK);
+    for (size_t index = 0; index < 32; ++index) {
+        assert(arena[index] == 0xd4); /* Free deliberately does not clear. */
+    }
+    assert(heap.allocated_bytes == 16 && heap.free_bytes == 112);
+    assert(heap.live_allocations == 1);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] == 0);
+    assert(heap.owner_allocations[KERNEL_HEAP_OWNER_KERNEL] == 0);
+    assert(kernel_heap_check(&heap));
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_KERNEL, first,
+        KERNEL_HEAP_DOUBLE_FREE);
+
+    blocks[heap.first_block_index].offset_bytes = 16;
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        arena, sizeof arena, KERNEL_HEAP_OWNER_SESSION, second,
+        KERNEL_HEAP_CORRUPT);
+}
+
+/* Create two separated holes whose total space can satisfy a request but whose
+ * largest member cannot. Releasing the intervening allocation must merge a free
+ * predecessor and successor, after which first fit reuses the earliest address
+ * and clears the complete rounded replacement block without touching guards. */
+static void test_fragmentation_coalescing_and_reuse(void)
+{
+    struct guarded_arena storage;
+    memset(&storage, 0x5c, sizeof storage);
+    struct kernel_heap_block blocks[TEST_BLOCK_CAPACITY];
+    struct kernel_heap heap = {0};
+    assert(kernel_heap_initialize(&heap, storage.bytes, 128, blocks,
+                                  TEST_BLOCK_CAPACITY) == KERNEL_HEAP_OK);
+
+    void *first = NULL;
+    void *left_hole = NULL;
+    void *bridge = NULL;
+    void *right_hole = NULL;
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_KERNEL, 16, &first) ==
+           KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_SESSION, 32,
+                                &left_hole) == KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_FIRST_WORKSPACE, 16,
+                                &bridge) == KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_KERNEL, 32,
+                                &right_hole) == KERNEL_HEAP_OK);
+    assert(first == &storage.bytes[0] && left_hole == &storage.bytes[16]);
+    assert(bridge == &storage.bytes[48] && right_hole == &storage.bytes[64]);
+    memset(left_hole, 0xb1, 32);
+    memset(bridge, 0xb2, 16);
+    memset(right_hole, 0xb3, 32);
+
+    assert(kernel_heap_release(&heap, KERNEL_HEAP_OWNER_SESSION, left_hole) ==
+           KERNEL_HEAP_OK);
+    assert(kernel_heap_release(&heap, KERNEL_HEAP_OWNER_KERNEL, right_hole) ==
+           KERNEL_HEAP_OK);
+    assert(heap.free_bytes == 96 && heap.active_blocks == 4);
+    assert(kernel_heap_check(&heap));
+    assert_failed_allocation_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        storage.bytes, 128, KERNEL_HEAP_OWNER_SESSION, 80, KERNEL_HEAP_OOM);
+
+    assert(kernel_heap_release(&heap, KERNEL_HEAP_OWNER_FIRST_WORKSPACE,
+                               bridge) == KERNEL_HEAP_OK);
+    assert(heap.free_bytes == 112 && heap.active_blocks == 2);
+    assert(heap.live_allocations == 1 && heap.allocated_bytes == 16);
+    assert(kernel_heap_check(&heap));
+
+    /* The old bridge boundary disappeared into the predecessor, so it is a
+     * stale coalesced pointer rather than a current free-block double free. */
+    assert_failed_release_unchanged(&heap, blocks, TEST_BLOCK_CAPACITY,
+        storage.bytes, 128, KERNEL_HEAP_OWNER_FIRST_WORKSPACE, bridge,
+        KERNEL_HEAP_BAD_POINTER);
+    void *reused = NULL;
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_SESSION, 80, &reused) ==
+           KERNEL_HEAP_OK);
+    assert(reused == left_hole);
+    for (size_t index = 16; index < 96; ++index) {
+        assert(storage.bytes[index] == 0);
+    }
+    assert(heap.free_bytes == 32 && heap.allocated_bytes == 96);
+    assert(heap.live_allocations == 2);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] == 16);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] == 80);
+    assert(kernel_heap_check(&heap));
+    assert_guards(&storage, 0x5c);
+}
+
 /* Assertion or sanitizer failure terminates with nonzero status. */
 int main(void)
 {
     test_owned_page_initialization_and_allocation();
     test_allocation_failures_are_atomic();
     test_initialization_and_corruption_failures();
-    puts("PASS kernel heap: owned ordinary backing, init, zero, split and atomic failures");
+    test_release_rejections_are_atomic();
+    test_fragmentation_coalescing_and_reuse();
+    puts("PASS kernel heap: checked free, coalescing, reuse and atomic failures");
 }
