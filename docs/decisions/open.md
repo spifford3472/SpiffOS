@@ -183,3 +183,10 @@ persistent multi-page service or nine running workspaces. Ring-3 mappings,
 SMP/IRQ safety, quotas and stale-handle protection remain open. See the
 [memory services decision](../decisions/ADR-memory-services.md) and
 [actual validation record](../operations/memory-services-night-20261029.md).
+
+## M6 retained memory service — 2026-10-30
+Owner authorized continuing the next section: retain ordinary heap backing and
+heap-allocated session/nine-workspace identity/lifetime records after boot.
+See [M6 ADR](../decisions/ADR-persistent-memory-service.md). This is a bounded
+one-page service, not a complete workspace manager or multi-page growth policy.
+Local merge/deployment authority expires today at 14:00 Eastern (18:00 UTC).
