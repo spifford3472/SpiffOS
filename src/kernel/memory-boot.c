@@ -1,7 +1,7 @@
-/* Purpose: adapt validated Limine memory metadata to M1-M4 boot diagnostics.
+/* Purpose: adapt validated Limine memory metadata to M1-M5 boot diagnostics.
  * Responsibilities: inventory candidate RAM, exercise M2 ownership, validate
- * the HHDM/paging mode, touch only owned M3 pages, and smoke-test the M4 heap.
- * Dependencies: pinned limine.h, M1/M2/M3/M4 policy and a serial callback.
+ * the HHDM/paging mode, touch only owned M3 pages, and probe M4/M5 lifetimes.
+ * Dependencies: pinned limine.h, M1/M2/M3/M4/M5 policy and a serial callback.
  * Invariants: static bounded metadata; one startup CPU, interrupts disabled;
  * unsupported M3 responses never change mappings, frames or editor pixels.
  * References: ADR-memory-foundation.md, ADR-frame-allocator.md,
@@ -440,10 +440,12 @@ static void heap_probe_retire_descriptor(void)
 
 /* Build a one-page M4 heap only over a page obtained through the validated M3
  * direct-map path. Prove 16-byte alignment, real byte write/read, independent
- * kernel/session/workspace ownership, wrong-owner rejection, atomic OOM and
- * recovery, then free/reuse at the same address with zero-before-publication.
- * Success releases every heap block and its backing frame, restores M2 ordinary
- * and reserve counters, and emits HEAP_OK last. Unsupported M3 responses emit
+ * kernel/session/two-workspace ownership, wrong-owner rejection and atomic OOM.
+ * Resetting workspace 1 must retain workspace 2, kernel, session and the M2
+ * reserve; separate session teardown must retain workspace 2 and kernel. The
+ * probe then checks free/reuse with zero-before-publication. Success releases
+ * every block/backing frame, restores M2 counters, and emits both lifecycle and
+ * heap markers last. Unsupported M3 responses emit
  * UNAVAILABLE without changing the existing editor path. All mappings, callback
  * and static metadata are borrowed; one boot CPU owns them with IRQs disabled. */
 bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
@@ -483,25 +485,37 @@ bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
     }
     void *kernel_allocation = NULL;
     void *session_allocation = NULL;
-    void *workspace_allocation = NULL;
+    void *workspace1_first = NULL;
+    void *workspace2_allocation = NULL;
+    void *workspace1_second = NULL;
+    enum kernel_heap_owner workspace1 = KERNEL_HEAP_OWNER_FIRST_WORKSPACE;
+    enum kernel_heap_owner workspace2 =
+        (enum kernel_heap_owner)(KERNEL_HEAP_OWNER_FIRST_WORKSPACE + 1);
     if (kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_KERNEL, 17,
             &kernel_allocation) != KERNEL_HEAP_OK ||
         kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_SESSION, 32,
             &session_allocation) != KERNEL_HEAP_OK ||
-        kernel_heap_allocate(&boot_heap, KERNEL_HEAP_OWNER_FIRST_WORKSPACE, 16,
-            &workspace_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, workspace1, 16,
+            &workspace1_first) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, workspace2, 16,
+            &workspace2_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_allocate(&boot_heap, workspace1, 16,
+            &workspace1_second) != KERNEL_HEAP_OK ||
         (uintptr_t)kernel_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
         (uintptr_t)session_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
-        (uintptr_t)workspace_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
-        kernel_allocation == session_allocation ||
-        kernel_allocation == workspace_allocation ||
-        session_allocation == workspace_allocation ||
+        (uintptr_t)workspace1_first % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        (uintptr_t)workspace2_allocation % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
+        (uintptr_t)workspace1_second % KERNEL_HEAP_ALIGNMENT_BYTES != 0 ||
         !heap_bytes_write_and_verify(kernel_allocation, 32, UINT8_C(0xa1)) ||
         !heap_bytes_write_and_verify(session_allocation, 32, UINT8_C(0xb2)) ||
-        !heap_bytes_write_and_verify(workspace_allocation, 16, UINT8_C(0xc3)) ||
+        !heap_bytes_write_and_verify(workspace1_first, 16, UINT8_C(0xc3)) ||
+        !heap_bytes_write_and_verify(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !heap_bytes_write_and_verify(workspace1_second, 16, UINT8_C(0xe5)) ||
         boot_heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] != 32 ||
         boot_heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] != 32 ||
-        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_FIRST_WORKSPACE] != 16 ||
+        boot_heap.owner_bytes[workspace1] != 32 ||
+        boot_heap.owner_allocations[workspace1] != 2 ||
+        boot_heap.owner_bytes[workspace2] != 16 ||
         !kernel_heap_check(&boot_heap)) {
         return heap_probe_failure(write_text, physical_address, true);
     }
@@ -517,7 +531,37 @@ bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
         oom_output != kernel_allocation ||
         !heap_bytes_have_value(kernel_allocation, 32, UINT8_C(0xa1)) ||
         !heap_bytes_have_value(session_allocation, 32, UINT8_C(0xb2)) ||
-        !heap_bytes_have_value(workspace_allocation, 16, UINT8_C(0xc3)) ||
+        !heap_bytes_have_value(workspace1_first, 16, UINT8_C(0xc3)) ||
+        !heap_bytes_have_value(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !heap_bytes_have_value(workspace1_second, 16, UINT8_C(0xe5)) ||
+        !kernel_heap_check(&boot_heap)) {
+        return heap_probe_failure(write_text, physical_address, true);
+    }
+
+    /* M5 workspace reset is owner-scoped. The arena backing frame is still
+     * kernel-owned, so neither M2 pool counter may change. Session teardown is
+     * deliberately a separate call and must retain kernel/workspace 2 bytes. */
+    if (kernel_heap_release_workspace(&boot_heap, workspace1) != KERNEL_HEAP_OK ||
+        boot_heap.owner_bytes[workspace1] != 0 ||
+        boot_heap.owner_allocations[workspace1] != 0 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] != 32 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] != 32 ||
+        boot_heap.owner_bytes[workspace2] != 16 ||
+        boot_allocator.ordinary_free != ordinary_before - 1 ||
+        boot_allocator.reserve_free != reserve_before ||
+        !heap_bytes_have_value(kernel_allocation, 32, UINT8_C(0xa1)) ||
+        !heap_bytes_have_value(session_allocation, 32, UINT8_C(0xb2)) ||
+        !heap_bytes_have_value(workspace2_allocation, 16, UINT8_C(0xd4)) ||
+        !kernel_heap_check(&boot_heap) ||
+        kernel_heap_release_session(&boot_heap) != KERNEL_HEAP_OK ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] != 0 ||
+        boot_heap.owner_allocations[KERNEL_HEAP_OWNER_SESSION] != 0 ||
+        boot_heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] != 32 ||
+        boot_heap.owner_bytes[workspace2] != 16 ||
+        boot_allocator.ordinary_free != ordinary_before - 1 ||
+        boot_allocator.reserve_free != reserve_before ||
+        !heap_bytes_have_value(kernel_allocation, 32, UINT8_C(0xa1)) ||
+        !heap_bytes_have_value(workspace2_allocation, 16, UINT8_C(0xd4)) ||
         !kernel_heap_check(&boot_heap)) {
         return heap_probe_failure(write_text, physical_address, true);
     }
@@ -529,13 +573,11 @@ bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
             &reused) != KERNEL_HEAP_OK ||
         reused != kernel_allocation ||
         !heap_bytes_have_value(reused, 32, 0) ||
-        !heap_bytes_write_and_verify(reused, 32, UINT8_C(0xd4)) ||
+        !heap_bytes_write_and_verify(reused, 32, UINT8_C(0xf6)) ||
         kernel_heap_release(&boot_heap, KERNEL_HEAP_OWNER_KERNEL,
             reused) != KERNEL_HEAP_OK ||
-        kernel_heap_release(&boot_heap, KERNEL_HEAP_OWNER_SESSION,
-            session_allocation) != KERNEL_HEAP_OK ||
-        kernel_heap_release(&boot_heap, KERNEL_HEAP_OWNER_FIRST_WORKSPACE,
-            workspace_allocation) != KERNEL_HEAP_OK ||
+        kernel_heap_release(&boot_heap, workspace2,
+            workspace2_allocation) != KERNEL_HEAP_OK ||
         !kernel_heap_check(&boot_heap) || boot_heap.live_allocations != 0 ||
         boot_heap.allocated_bytes != 0 ||
         boot_heap.free_bytes != MEMORY_PAGE_BYTES ||
@@ -557,5 +599,6 @@ bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
         boot_allocator.reserve_free != reserve_before) {
         return heap_probe_failure(write_text, 0, false);
     }
-    return write_text("SPIFFOS_HEAP_OK\r\n");
+    return write_text("SPIFFOS_OWNER_CLEANUP_OK\r\n") &&
+        write_text("SPIFFOS_HEAP_OK\r\n");
 }

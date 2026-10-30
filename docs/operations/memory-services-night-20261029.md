@@ -573,3 +573,83 @@ user ABI, quota, VM layout or supervisor-reserve consumer. M5 owner-scoped
 cleanup remains unfinished. No owner QEMU was inspected or stopped; each test
 ended only its own child. No commit, merge, push, deployment, dependency pin,
 runner control, service, infrastructure, firmware or disk was changed.
+
+## Checkpoint 9: M5 owner-scoped workspace cleanup and session lifetime
+
+The owner reported that the small Qwen attempt for this slice exited 53. Its
+log was not available inside the sandbox, so Codex inspected the clean actual
+source rather than inferring a cause or accepting any Qwen implementation or
+test result. The tree contained the completed M4 heap and guest probe but no M5
+cleanup API, cleanup tests or serial marker. Direct Codex fallback was used
+under the memory-specific authorization; no model or agent was delegated.
+
+Codex added two deliberately separate internal lifecycle entry points.
+`kernel_heap_release_workspace()` accepts only workspace 1..9 owner tokens and
+rejects FREE, kernel and session tokens. `kernel_heap_release_session()` has no
+owner parameter and can release only session allocations. Both validate the
+complete external-metadata graph and independently recomputed counters before
+mutation, retain freed payload bytes, release every block in the selected
+lifetime and coalesce all newly adjacent free ranges. Empty-owner cleanup is
+idempotent. Neither operation calls M2, releases the M3 arena backing frame nor
+has a path to the supervisor reserve. Corrupt metadata and invalid workspace
+tokens are rejected without changing descriptor, records or arena bytes.
+
+The guarded host test creates live kernel, session, workspace 1 and workspace 2
+blocks over a real M2/M3-authorized ordinary kernel page. It resets two
+non-adjacent workspace-1 allocations, then proves workspace-2, kernel and
+session counters and dirty payloads remain unchanged. A byte-for-byte snapshot
+of the M2 descriptor and all ownership slots proves the backing frame and the
+one-page supervisor reserve are unchanged. It then invokes the separate session
+teardown and proves kernel/workspace-2 remain live. Invalid-owner, corrupt-heap,
+empty-owner, coalescing and final frame-restoration cases are also checked.
+
+The real boot probe performs the same lifetime separation inside the validated
+one-page direct-map heap. It retains kernel, session and workspace 2 across a
+workspace-1 reset; retains kernel/workspace 2 across session teardown; checks
+ordinary and reserve frame counters throughout; then releases the remaining
+blocks/backing and restores M2. Only after all those checks does it emit
+`SPIFFOS_OWNER_CLEANUP_OK`, followed by the existing `SPIFFOS_HEAP_OK`.
+`scripts/test-memory.py` now requires exactly one cleanup marker.
+
+Actual checks run in this isolated checkout:
+
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-kernel-heap`:
+  passed with AddressSanitizer and UndefinedBehaviorSanitizer. The marker was
+  `PASS kernel heap: checked free, owner cleanup, coalescing and isolation`.
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-memory-map
+  test-frame-allocator test-page-access test-kernel-heap test-keyboard-memory
+  test-workspace-memory && make -B all && git diff --check`: passed. M1
+  inventory, M2 ownership/reserve/OOM/rejected frees, M3 access/rollback, M4/M5
+  heap behavior, keyboard/editor/reflow and workspace/logo-reset host tests all
+  passed. The forced freestanding Clang compile and static link included M5.
+- `ASAN_OPTIONS=detect_leaks=0 make test-memory` passed all host prerequisites
+  and rebuilt the ISO, but the QMP-backed 128 MiB child produced no serial
+  output and the target failed with `serial marker absent`. No guest or pixel
+  result is claimed from that failed attempt, and the screenshot assertion was
+  not removed or weakened.
+- Separate real serial-only child guests passed at 128, 256 and 512 MiB with
+  18,923, 51,691 and 117,227 candidate frames respectively. Each emitted
+  exactly one `SPIFFOS_OWNER_CLEANUP_OK`, retained the existing M1-M4,
+  framebuffer, console, boot and keyboard-ready markers, and showed the restored
+  `FRAME_POOL` counters with all 64 reserve frames free. Each command used
+  `scripts/qemu.py test --wait-keyboard-ready` without QMP and ended only its
+  own child.
+- A final-source 128 MiB child used the established inherited HMP monitor only
+  for `screendump`, then exited through its own `quit` command.
+  `scripts/check-framebuffer.py --powerup --console --workspace` passed every
+  pixel of the 1280x800 capture. The capture is
+  `build/m5-owner-cleanup-editor.ppm`, SHA-256
+  `d22bd34e7998e134c9ec8824ce3e68cddca003234b1a3e87c9fc79a3eeb46863`.
+  Its serial log contains one cleanup marker, one heap marker and no
+  `SPIFFOS_*ERROR`; the log SHA-256 is
+  `ed80379c3c5cce731860666dd9e6e2c06281dda7745cdc17177c8359c2724b11`.
+
+The capture checksum above is recorded from the actual command output; this
+checkpoint does not claim the combined QMP-backed `make test-memory` target
+passed. LeakSanitizer alone remained disabled for the already documented
+sandbox/ptrace incompatibility; ASan and UBSan remained enabled. This is trusted
+internal heap ownership bookkeeping and a boot diagnostic, not a real workspace
+reset UI, process manager, ring-3 isolation boundary, persistent session service
+or final teardown policy. No owner QEMU was inspected or stopped. No commit,
+merge, push, deployment, dependency pin, AGENTS/runner control, service,
+infrastructure, firmware or disk was changed.

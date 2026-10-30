@@ -1,6 +1,6 @@
-/* Purpose: define the bounded internal M4 kernel-heap contract.
+/* Purpose: define the bounded internal M4-M5 kernel-heap contract.
  * Responsibilities: describe caller-owned arena/metadata storage, owner groups,
- * explicit results and allocation/free/invariant-check entry points.
+ * explicit results, allocation/free, lifecycle cleanup and invariant checks.
  * Dependencies: fixed-width C types only; a later implementation may consume
  * M3-validated, kernel-accessible backing memory supplied by its caller.
  * Invariants: metadata is external to the arena; one boot CPU owns all state
@@ -118,6 +118,25 @@ enum kernel_heap_result kernel_heap_allocate(struct kernel_heap *heap,
  * success; one CPU, interrupts disabled, no concurrent/interrupt-context use. */
 enum kernel_heap_result kernel_heap_release(struct kernel_heap *heap,
     enum kernel_heap_owner owner, void *allocation);
+
+/* Release every allocation belonging to exactly one workspace owner. The owner
+ * must be WORKSPACE 1..9; kernel and session tokens are rejected so a workspace
+ * reset cannot cross either lifetime. Success is also returned when that
+ * workspace owns no blocks. Payload bytes are retained, all newly adjacent free
+ * blocks are coalesced, and other owners/counters remain unchanged. A corrupt
+ * heap or invalid owner is rejected before mutation. This operation does not
+ * release arena backing frames or supervisor reserve: those remain owned by the
+ * caller outside M4/M5. One boot CPU, interrupts disabled; no IRQ/concurrent use. */
+enum kernel_heap_result kernel_heap_release_workspace(
+    struct kernel_heap *heap, enum kernel_heap_owner workspace_owner);
+
+/* Release every SESSION allocation as a separate lifetime operation. This API
+ * takes no arbitrary owner token, so it cannot be used to reset a workspace or
+ * release kernel blocks. Success is idempotent when the session owns no blocks;
+ * payload is retained and adjacent free blocks are coalesced. Corruption is
+ * rejected before mutation. Arena backing/reserve ownership is unchanged.
+ * One boot CPU, interrupts disabled; no interrupt or concurrent use. */
+enum kernel_heap_result kernel_heap_release_session(struct kernel_heap *heap);
 
 /* Validate the complete external-metadata graph before any mutating operation:
  * bounded indices before dereference, reciprocal links, strict address order,

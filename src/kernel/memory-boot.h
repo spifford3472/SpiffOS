@@ -1,5 +1,5 @@
-/* Purpose: adapt borrowed Limine memory metadata to M1-M4 boot diagnostics.
- * Dependencies: M1 inventory, M2 ownership, M3 checked access, M4 heap and a
+/* Purpose: adapt borrowed Limine memory metadata to M1-M5 boot diagnostics.
+ * Dependencies: M1/M2/M3 memory, M4 heap, M5 cleanup and a
  * borrowed synchronous NUL-string writer.
  * Invariants: boot CPU, interrupts disabled; only an exactly owned M3 probe
  * page is touched, and all successful probes restore ownership before return.
@@ -47,9 +47,10 @@ bool memory_boot_page_probe(const struct limine_hhdm_response *hhdm,
     bool (*write_text)(const char *text));
 
 /* Allocate one ordinary kernel frame through M3, build a bounded one-page heap,
- * and prove byte access, alignment, owner separation, recoverable OOM and
- * free/reuse with zeroing. Success releases all blocks/backing and restores M2
- * counters before HEAP_OK. Unsupported policy emits UNAVAILABLE and preserves
+ * and prove byte access, alignment, owner separation, recoverable OOM, scoped
+ * workspace reset, separate session teardown and free/reuse with zeroing.
+ * Success releases all blocks/backing and restores M2 counters before
+ * OWNER_CLEANUP_OK and HEAP_OK. Unsupported policy emits UNAVAILABLE and preserves
  * the editor path; self-test, rollback or writer failure returns false. Borrow
  * responses/callback synchronously; one boot CPU, interrupts disabled. */
 bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,

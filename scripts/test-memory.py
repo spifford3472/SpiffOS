@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify M1-M4 memory probes and exact editor pixels at three RAM sizes."""
+"""Verify M1-M5 memory probes and exact editor pixels at three RAM sizes."""
 from pathlib import Path
 import hashlib
 import json
@@ -27,6 +27,7 @@ def verify_serial(serial, ram_mib):
     assert lines.count(b"SPIFFOS_HEAP_OK") == 1
     assert b"SPIFFOS_HEAP_UNAVAILABLE" not in lines
     assert b"SPIFFOS_HEAP_ERROR" not in lines
+    assert lines.count(b"SPIFFOS_OWNER_CLEANUP_OK") == 1
     pools = [tuple(map(int, line[11:].split(b","))) for line in lines
              if line.startswith(b"FRAME_POOL:")]
     regions = [tuple(map(int, line[14:].split(b","))) for line in lines

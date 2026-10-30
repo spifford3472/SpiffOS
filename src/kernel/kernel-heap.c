@@ -1,7 +1,7 @@
-/* Purpose: implement bounded allocation and checked release for the M4 heap.
+/* Purpose: implement bounded M4 allocation and M5 owner-lifetime cleanup.
  * Responsibilities: validate caller-owned storage, maintain an externally
  * described address-ordered block list, split by first fit, clear allocations,
- * reject invalid frees and immediately coalesce adjacent free blocks.
+ * reject invalid frees, coalesce free blocks and isolate workspace/session cleanup.
  * Dependencies: kernel-heap.h and ordinary byte stores; the caller must supply
  * a contiguous arena assembled from M3-validated, kernel-owned ordinary pages.
  * Invariants: no metadata lives in the arena; failures preserve all storage;
@@ -486,4 +486,79 @@ enum kernel_heap_result kernel_heap_release(struct kernel_heap *heap,
         --heap->active_blocks;
     }
     return KERNEL_HEAP_OK;
+}
+
+/* Release every block for one already validated owner. kernel_heap_check()
+ * proves the complete graph and counters before mutation, so the saved owner
+ * totals can be subtracted once without overflow or underflow. The second pass
+ * merges every newly adjacent free pair and retires only records removed from
+ * the active list. No frame allocator or arena payload is accessed. */
+static enum kernel_heap_result kernel_heap_release_owner(
+    struct kernel_heap *heap, enum kernel_heap_owner owner)
+{
+    if (heap == NULL) {
+        return KERNEL_HEAP_INVALID;
+    }
+    if (!kernel_heap_check(heap)) {
+        return KERNEL_HEAP_CORRUPT;
+    }
+
+    size_t released_bytes = heap->owner_bytes[owner];
+    size_t released_allocations = heap->owner_allocations[owner];
+    size_t current_index = heap->first_block_index;
+    for (size_t visited = 0; visited < heap->active_blocks; ++visited) {
+        struct kernel_heap_block *block = &heap->blocks[current_index];
+        size_t next_index = block->next_index;
+        if (block->allocated && block->owner == owner) {
+            block->owner = KERNEL_HEAP_OWNER_FREE;
+            block->allocated = false;
+        }
+        current_index = next_index;
+    }
+    heap->allocated_bytes -= released_bytes;
+    heap->free_bytes += released_bytes;
+    heap->live_allocations -= released_allocations;
+    heap->owner_bytes[owner] = 0;
+    heap->owner_allocations[owner] = 0;
+
+    current_index = heap->first_block_index;
+    while (heap->blocks[current_index].next_index != SIZE_MAX) {
+        size_t next_index = heap->blocks[current_index].next_index;
+        if (!heap->blocks[current_index].allocated &&
+            !heap->blocks[next_index].allocated) {
+            size_t after_index = heap->blocks[next_index].next_index;
+            /* The validated list covers the arena exactly, so adjacent lengths
+             * fit in arena_bytes and therefore cannot overflow size_t here. */
+            heap->blocks[current_index].length_bytes +=
+                heap->blocks[next_index].length_bytes;
+            heap->blocks[current_index].next_index = after_index;
+            if (after_index != SIZE_MAX) {
+                heap->blocks[after_index].previous_index = current_index;
+            }
+            kernel_heap_retire_block(heap, next_index);
+            --heap->active_blocks;
+        } else {
+            current_index = next_index;
+        }
+    }
+    return KERNEL_HEAP_OK;
+}
+
+/* Reset exactly one workspace allocation group. The wrapper rejects FREE,
+ * kernel and session before the shared validated mutation path is entered. */
+enum kernel_heap_result kernel_heap_release_workspace(
+    struct kernel_heap *heap, enum kernel_heap_owner workspace_owner)
+{
+    if (workspace_owner < KERNEL_HEAP_OWNER_FIRST_WORKSPACE ||
+        workspace_owner > KERNEL_HEAP_OWNER_LAST_WORKSPACE) {
+        return KERNEL_HEAP_BAD_OWNER;
+    }
+    return kernel_heap_release_owner(heap, workspace_owner);
+}
+
+/* End the session allocation lifetime independently of every workspace. The
+ * fixed owner token prevents callers from broadening this into kernel cleanup. */
+enum kernel_heap_result kernel_heap_release_session(struct kernel_heap *heap)
+{
+    return kernel_heap_release_owner(heap, KERNEL_HEAP_OWNER_SESSION);
 }

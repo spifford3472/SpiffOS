@@ -1,7 +1,7 @@
-/* Purpose: verify bounded M4 allocation, checked release and failure atomicity.
+/* Purpose: verify bounded M4 allocation/release and M5 lifetime cleanup.
  * Responsibilities: exercise owned ordinary-page backing, alignment, splitting,
  * complete zero-before-publish, invalid-free rejection, fragmentation,
- * two-sided coalescing, reuse, capacity failures and metadata corruption.
+ * coalescing, workspace/session isolation, reserve preservation and corruption.
  * Dependencies: production M1/M2/M3 policy and M4 heap over guarded host RAM.
  * Invariants: numeric physical/direct-map values are never host pointers; only
  * the injected backend translates its one expected page into ordinary test RAM.
@@ -434,6 +434,138 @@ static void test_fragmentation_coalescing_and_reuse(void)
     assert_guards(&storage, 0x5c);
 }
 
+/* Prove workspace reset is exactly owner-scoped and session teardown is a
+ * separate operation. The M2 descriptor and all owner slots are snapshotted so
+ * this also proves M5 heap cleanup cannot free its kernel backing frame or the
+ * supervisor reserve. Payload for surviving owners remains readable and dirty. */
+static void test_owner_scoped_lifetimes(void)
+{
+    struct guarded_arena storage;
+    struct frame_allocator allocator;
+    uint16_t owner_slots[3];
+    uint64_t physical_address;
+    prepare_owned_backing(&storage, &allocator, owner_slots, &physical_address);
+
+    struct kernel_heap heap = {0};
+    struct kernel_heap_block blocks[TEST_BLOCK_CAPACITY];
+    assert(kernel_heap_initialize(&heap, storage.bytes, sizeof storage.bytes,
+        blocks, TEST_BLOCK_CAPACITY) == KERNEL_HEAP_OK);
+    void *kernel = NULL;
+    void *workspace1_first = NULL;
+    void *session = NULL;
+    void *workspace2 = NULL;
+    void *workspace1_second = NULL;
+    enum kernel_heap_owner workspace1 = KERNEL_HEAP_OWNER_FIRST_WORKSPACE;
+    enum kernel_heap_owner workspace2_owner =
+        (enum kernel_heap_owner)(KERNEL_HEAP_OWNER_FIRST_WORKSPACE + 1);
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_KERNEL, 16, &kernel) ==
+        KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, workspace1, 32, &workspace1_first) ==
+        KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, KERNEL_HEAP_OWNER_SESSION, 48, &session) ==
+        KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, workspace2_owner, 64, &workspace2) ==
+        KERNEL_HEAP_OK);
+    assert(kernel_heap_allocate(&heap, workspace1, 16, &workspace1_second) ==
+        KERNEL_HEAP_OK);
+    memset(kernel, 0x11, 16);
+    memset(workspace1_first, 0x21, 32);
+    memset(session, 0x31, 48);
+    memset(workspace2, 0x41, 64);
+    memset(workspace1_second, 0x22, 16);
+
+    struct frame_allocator saved_allocator;
+    uint16_t saved_owner_slots[3];
+    memcpy(&saved_allocator, &allocator, sizeof allocator);
+    memcpy(saved_owner_slots, owner_slots, sizeof owner_slots);
+
+    struct kernel_heap before_rejection;
+    struct kernel_heap_block blocks_before_rejection[TEST_BLOCK_CAPACITY];
+    uint8_t arena_before_rejection[TEST_PAGE_BYTES];
+    memcpy(&before_rejection, &heap, sizeof heap);
+    memcpy(blocks_before_rejection, blocks, sizeof blocks);
+    memcpy(arena_before_rejection, storage.bytes, sizeof storage.bytes);
+    assert(kernel_heap_release_workspace(&heap, KERNEL_HEAP_OWNER_KERNEL) ==
+        KERNEL_HEAP_BAD_OWNER);
+    assert(kernel_heap_release_workspace(&heap, KERNEL_HEAP_OWNER_SESSION) ==
+        KERNEL_HEAP_BAD_OWNER);
+    assert(memcmp(&before_rejection, &heap, sizeof heap) == 0);
+    assert(memcmp(blocks_before_rejection, blocks, sizeof blocks) == 0);
+    assert(memcmp(arena_before_rejection, storage.bytes,
+                  sizeof storage.bytes) == 0);
+
+    /* Both lifetime APIs must retire a corrupt heap without attempting repair
+     * or partially releasing their owner. Restore the deliberate corruption
+     * only because this isolated fixture continues with the valid-path proof. */
+    size_t first_index = heap.first_block_index;
+    size_t first_offset = blocks[first_index].offset_bytes;
+    blocks[first_index].offset_bytes = KERNEL_HEAP_ALIGNMENT_BYTES;
+    memcpy(&before_rejection, &heap, sizeof heap);
+    memcpy(blocks_before_rejection, blocks, sizeof blocks);
+    memcpy(arena_before_rejection, storage.bytes, sizeof storage.bytes);
+    assert(kernel_heap_release_workspace(&heap, workspace1) ==
+        KERNEL_HEAP_CORRUPT);
+    assert(kernel_heap_release_session(&heap) == KERNEL_HEAP_CORRUPT);
+    assert(memcmp(&before_rejection, &heap, sizeof heap) == 0);
+    assert(memcmp(blocks_before_rejection, blocks, sizeof blocks) == 0);
+    assert(memcmp(arena_before_rejection, storage.bytes,
+                  sizeof storage.bytes) == 0);
+    blocks[first_index].offset_bytes = first_offset;
+    assert(kernel_heap_check(&heap));
+
+    assert(kernel_heap_release_workspace(&heap, workspace1) == KERNEL_HEAP_OK);
+    assert(heap.owner_bytes[workspace1] == 0);
+    assert(heap.owner_allocations[workspace1] == 0);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] == 16);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] == 48);
+    assert(heap.owner_bytes[workspace2_owner] == 64);
+    assert(heap.live_allocations == 3);
+    assert(memcmp(kernel, "\x11\x11\x11\x11\x11\x11\x11\x11"
+                          "\x11\x11\x11\x11\x11\x11\x11\x11", 16) == 0);
+    for (size_t index = 0; index < 48; ++index) {
+        assert(((uint8_t *)session)[index] == 0x31);
+    }
+    for (size_t index = 0; index < 64; ++index) {
+        assert(((uint8_t *)workspace2)[index] == 0x41);
+    }
+    assert(memcmp(&saved_allocator, &allocator, sizeof allocator) == 0);
+    assert(memcmp(saved_owner_slots, owner_slots, sizeof owner_slots) == 0);
+    assert(allocator.reserve_free == 1);
+    assert(owner_slots[0] == FRAME_OWNER_FREE);
+    assert(owner_slots[1] == FRAME_OWNER_KERNEL);
+    assert(kernel_heap_check(&heap));
+
+    assert(kernel_heap_release_session(&heap) == KERNEL_HEAP_OK);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_SESSION] == 0);
+    assert(heap.owner_allocations[KERNEL_HEAP_OWNER_SESSION] == 0);
+    assert(heap.owner_bytes[KERNEL_HEAP_OWNER_KERNEL] == 16);
+    assert(heap.owner_bytes[workspace2_owner] == 64);
+    assert(heap.live_allocations == 2);
+    for (size_t index = 0; index < 16; ++index) {
+        assert(((uint8_t *)kernel)[index] == 0x11);
+    }
+    for (size_t index = 0; index < 64; ++index) {
+        assert(((uint8_t *)workspace2)[index] == 0x41);
+    }
+    assert(memcmp(&saved_allocator, &allocator, sizeof allocator) == 0);
+    assert(memcmp(saved_owner_slots, owner_slots, sizeof owner_slots) == 0);
+    assert(kernel_heap_release_session(&heap) == KERNEL_HEAP_OK);
+    assert(kernel_heap_release_workspace(&heap, workspace1) == KERNEL_HEAP_OK);
+    assert(kernel_heap_check(&heap));
+
+    assert(kernel_heap_release(&heap, KERNEL_HEAP_OWNER_KERNEL, kernel) ==
+        KERNEL_HEAP_OK);
+    assert(kernel_heap_release(&heap, workspace2_owner, workspace2) ==
+        KERNEL_HEAP_OK);
+    assert(kernel_heap_check(&heap));
+    heap = (struct kernel_heap){0};
+    assert(frame_release(&allocator, FRAME_OWNER_KERNEL, physical_address) ==
+        FRAME_OK);
+    assert(allocator.reserve_free == 1 && allocator.ordinary_free == 2);
+    assert(frame_allocator_check(&allocator));
+    assert_guards(&storage, 0x5a);
+}
+
 /* Assertion or sanitizer failure terminates with nonzero status. */
 int main(void)
 {
@@ -442,5 +574,6 @@ int main(void)
     test_initialization_and_corruption_failures();
     test_release_rejections_are_atomic();
     test_fragmentation_coalescing_and_reuse();
-    puts("PASS kernel heap: checked free, coalescing, reuse and atomic failures");
+    test_owner_scoped_lifetimes();
+    puts("PASS kernel heap: checked free, owner cleanup, coalescing and isolation");
 }
