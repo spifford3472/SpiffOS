@@ -253,3 +253,57 @@ The resumed service is spiffos-memory-resume-20261030; it stops by 02:55 Eastern
 with no unattended merge/deployment. Original status is preserved in
 status-first-attempt.json beside the existing logs. No new three-hour completion
 claim is made: the earlier interruption left only the remaining approval window.
+
+## Checkpoint 4: M3 adversarial failure-path host coverage
+
+The owner reported that the small Qwen attempt for this slice exited 53. Its log
+was not available inside the sandbox, so Codex did not infer a cause or accept
+any unverified model result. The resumed branch worktree was clean at `848a2d5`;
+inspection of the actual committed M3 policy, allocator, boot adapter and tests
+found the production rollback/output contracts already present. No other model
+or agent was delegated.
+
+Codex kept this slice to `tests/page-access-test.c` plus this operations record.
+The expanded guarded host matrix now covers null resolve/allocation outputs,
+invalid owner rejection, ordinary-pool exhaustion, exact-owner rejection,
+resolve failure after allocation but before backend invocation, backend failure
+after a partial page write, successful rollback with restored counters/output,
+and defensive `PAGE_ACCESS_ROLLBACK_FAILED` reporting when a deliberately
+contract-violating backend corrupts the allocated owner slot. The fixture is
+restored immediately after that last adversarial branch because the API contract
+requires retiring corrupted allocator state in production.
+
+Boundary cases now distinguish mapped-start addition overflow from exclusive-end
+overflow and accept exact low/high canonical page boundaries in both 48- and
+57-bit modes. Guard bytes are checked after success, partial backend failure,
+rollback, null/OOM failures and dirty-page release/reallocation. The reuse case
+proves all 4096 dirty bytes are cleared again before the same first-fit physical
+page is republished. Test helpers include explicit borrowing, side-effect and
+contract comments required by AGENTS.md. No production source change was needed:
+the new cases passed against the existing M3 implementation.
+
+Actual checks in this isolated checkout:
+
+- Baseline `ASAN_OPTIONS=detect_leaks=0 make test-page-access`: passed before
+  edits with the prior focused matrix.
+- After the test expansion, `git diff --check && ASAN_OPTIONS=detect_leaks=0
+  make test-page-access`: passed with AddressSanitizer and
+  UndefinedBehaviorSanitizer instrumentation. The final marker was `PASS page
+  access: ownership, null/OOM failures, rollback, boundaries and backend guards`.
+- `ASAN_OPTIONS=detect_leaks=0 make test-memory-map test-frame-allocator
+  test-page-access test-keyboard-memory all && git diff --check`: passed. M1
+  inventory, M2 ownership/reserve/OOM/rejected-free accounting, expanded M3,
+  keyboard events, logical input/submission, scroll retention, cursor modes,
+  navigation, insert/overwrite and reflow all reported PASS. The first `all`
+  target was already up to date.
+- `make -B all`: passed a forced strict freestanding Clang rebuild and static
+  link of the complete kernel, including M1, M2, M3 and existing editor code.
+
+LeakSanitizer was disabled only because the prior sandbox/ptrace incompatibility
+is already recorded; ASan and UBSan remained active. This checkpoint did not
+start, stop or inspect any QEMU, so it adds no new 128/256/512 MiB guest or pixel
+evidence and did not disturb the owner's running guest. The already recorded M3
+runtime evidence remains applicable to unchanged production code, but is not
+reclaimed as a new run. M4 heap and M5 cleanup remain unimplemented and no
+commit, merge, push, deployment, dependency, service, firmware or disk change
+was performed by this checkpoint.
