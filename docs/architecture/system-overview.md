@@ -166,3 +166,16 @@ scoped cleanup, using a persistent three-hour Forge engineering job. See
 not settle ring-3 mappings, syscalls, quotas, SMP or final reserve sizing.
 Merge/local deployment authority expires 2026-10-30 03:00 Eastern; concrete
 results must pass review and tests. The worker pushes its feature branch only.
+
+## Memory checkpoint completion and renewed authority — 2026-10-30
+The owner renewed local QEMU merge/deployment authorization through 14:00
+America/New_York on 2026-10-30 (18:00 UTC), superseding the earlier 03:00 expiry
+for subsequent reviewed checkpoints. Physical/infrastructure deployment remains
+outside scope. M4 now implements a caller-owned bounded heap with 16-byte
+alignment, zero-before-publication, split/coalesce and explicit failures. M5
+provides workspace-only cleanup and a separate session cleanup operation.
+The current boot probe uses and releases one ordinary page; it is not yet a
+persistent multi-page service or nine running workspaces. Ring-3 mappings,
+SMP/IRQ safety, quotas and stale-handle protection remain open. See the
+[memory services decision](../decisions/ADR-memory-services.md) and
+[actual validation record](../operations/memory-services-night-20261029.md).

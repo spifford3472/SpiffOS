@@ -1,8 +1,8 @@
 /* Purpose: define the bounded internal M4-M5 kernel-heap contract.
  * Responsibilities: describe caller-owned arena/metadata storage, owner groups,
  * explicit results, allocation/free, lifecycle cleanup and invariant checks.
- * Dependencies: fixed-width C types only; a later implementation may consume
- * M3-validated, kernel-accessible backing memory supplied by its caller.
+ * Dependencies: fixed-width C types and caller-supplied accessible backing;
+ * the boot adapter supplies a kernel-owned page validated through M3.
  * Invariants: metadata is external to the arena; one boot CPU owns all state
  * with interrupts disabled; this is not a user ABI or virtual-memory design.
  * Reference: docs/decisions/ADR-memory-services.md, M4 heap design. */

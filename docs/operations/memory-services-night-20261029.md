@@ -797,3 +797,53 @@ synchronization, persistent multi-page heap service, ring-3 isolation and final
 reserve sizing remain outside M3-M5. No owner QEMU, commit, merge, push,
 deployment, dependency pin, AGENTS/runner control, service, infrastructure,
 firmware or disk was changed.
+
+## Coordinator completion — 2026-10-30, renewed daytime authority
+The owner renewed reviewed local merge/deployment approval through 14:00
+America/New_York today (18:00 UTC). The resumed worker had completed page error
+coverage, heap contracts, allocation, coalescing free, guest integration, owner
+cleanup, independent model tests and invariant review. It stopped at 02:55
+Eastern during packaging (worker exit 124); no complete packaging pass or
+automatic merge was claimed. Qwen slices reached their bounded turn/tool/time
+limits and Codex completed the focused fallback work, as retained per-step logs
+show. The coordinator completed review, teaching/status documentation and
+release packaging under the renewed authority. No new runtime algorithm was
+written by the coordinator in this completion pass; only a stale header comment
+was corrected alongside documentation.
+
+The coordinator read AGENTS, accepted/open, system overview, memory ADRs, the
+complete heap implementation/contracts, M3 changes, boot lifecycle probe and
+focused/model test structure. Source review confirmed range checks precede
+mutations, exact-owner frees, external metadata, zero-before-publication,
+workspace/session lifetime separation, coalescing and descriptor retirement
+before backing ownership ends.
+
+Fresh unrestricted Forge validation: make test-memory test-keyboard
+test-workspace test-workspace-scroll followed by python3 scripts/test-safe-launcher.py
+completed with combined exit 0 in 61.19 seconds. Normal host ASan/UBSan and leak
+checks were enabled; no ASAN_OPTIONS workaround was needed. Evidence:
+build/night/day-validation.log and day-launcher.log. The full matrix included
+M1-M5 host suites, deterministic model/guard checks, real 128/256/512 MiB guests,
+independent serial counters, all heap/cleanup success markers, exact initial
+workspace pixels at every RAM size, real keyboard injection and five editing
+captures, forced scrolling, launcher locking and close/signal cleanup.
+
+| RAM MiB | Candidate frames | Ordinary free restored | Reserve free restored |
+|---|---:|---:|---:|
+| 128 | 18922 | 18858 | 64 |
+| 256 | 51690 | 51626 | 64 |
+| 512 | 117226 | 117162 | 64 |
+
+All three initial workspace captures share SHA256
+d22bd34e7998e134c9ec8824ce3e68cddca003234b1a3e87c9fc79a3eeb46863
+and independently passed the existing full-pixel expectations.
+git diff --check passed after final documentation/comment changes.
+
+This checkpoint is a usable bounded allocator library and reversible one-page
+boot proof, not a persistent multi-page runtime heap or real workspace manager.
+The next checkpoint must establish retained backing/lifetime and a small memory
+service before moving real session/workspace state off static storage. SMP,
+interrupt allocation, quotas, stale-handle generations and ring-3 protection
+remain open. Rollback: isolated build of M3 merge 0beaad8, preserving current
+checkouts/history. Physical disks, USB, firmware, network and infrastructure
+remain untouched. Manual GUI acceptance can occur when the owner gets home.

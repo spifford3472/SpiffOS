@@ -181,3 +181,15 @@ bounded small Qwen attempts and Codex fallback. It must record honest progress
 and stop on blockers rather than idle to fill time. It may prepare commits and
 push only its feature branch. Runtime merge/deployment follows review of concrete
 tested results under the existing owner authority. No autonomous main pushes.
+
+## Current implementation and authority — 2026-10-30
+Owner renewed reviewed local merge/deployment authority through 14:00 Eastern
+(18:00 UTC) today. This supersedes the initial night-window expiry for new work;
+it does not authorize physical hardware or infrastructure changes.
+M4 allocation/free and M5 workspace/session cleanup are implemented. Earlier
+header-only status and cleanup-out-of-scope sentences above describe the staged
+design history; M5 below and the current implementation supersede those limits.
+The boot integration is a reversible one-page probe with 8 external records,
+not a retained production heap. The general heap accepts a disjoint aligned
+arena up to 4 MiB, at most 1024 metadata records, and requests up to 1 MiB.
+These are internal bounds rather than minimum-RAM or user ABI promises.
