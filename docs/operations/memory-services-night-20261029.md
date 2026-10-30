@@ -79,3 +79,61 @@ Actual checks for this documentation/header-only slice:
 
 M3 implementation and sanitizer behavior tests, direct-map QEMU
 write/read/zero/reuse evidence and `SPIFFOS_PAGE_ACCESS_OK` remain unfinished.
+
+## Checkpoint 2: pure checked page-access policy and host tests
+
+The owner reported that the bounded Qwen attempt for this slice exited 55. Its
+log was not available inside this sandbox. Codex therefore inspected the actual
+source and clean starting diff rather than assuming Qwen produced or verified a
+change, under the memory-specific direct-fallback authorization. No additional
+model or agent was delegated.
+
+Codex implemented `page_access_resolve()` and `page_access_zero()` in the new
+`src/kernel/page-access.c`, added the file to the strict freestanding build, and
+added a focused guarded host test. The pure resolver first checks the complete
+M2 ownership/counter state, re-analyzes the borrowed M1 map and requires its
+candidate count to match M2. It accepts only aligned, nonzero physical addresses
+that identify a complete candidate frame, then requires that ordinal's exact
+live non-FREE owner. Physical and direct-map page ranges are checked for
+overflow; only 48- and 57-bit x86-64 canonical virtual ranges are supported,
+and both the first and last byte must be canonical. Every error preserves the
+caller output and allocator metadata.
+
+Numeric addresses remain arithmetic values in policy code. `page_access_zero()`
+can act only through a caller-injected synchronous backend after resolution and
+passes exactly 4096 bytes. The host backend recognizes one expected numeric
+address, translates only that address to guarded ordinary RAM, and verifies
+complete zeroing plus untouched guards. Wrong ownership and resolve failures do
+not invoke it; backend rejection is explicit and does not release ownership.
+
+The first focused run stopped at the intended upper-bound assertion and exposed
+that production code had checked only whether the last byte was representable.
+The ADR instead requires the 4096-byte half-open range's exclusive end to be
+representable. Production checks were strengthened from `start + 4095` to
+`start + 4096`; the existing test was retained rather than weakened. The
+corrected implementation passed. A separate case proves rejection when a
+page's first byte is canonical but its last byte enters the 48-bit hole.
+
+Actual checks run in this isolated checkout:
+
+- `git diff --check`: passed.
+- `make all`: passed strict freestanding compilation and static kernel link,
+  including `page-access.c`.
+- `ASAN_OPTIONS=detect_leaks=0 make test-page-access test-memory-map
+  test-frame-allocator test-keyboard-memory`: passed with AddressSanitizer and
+  UndefinedBehaviorSanitizer instrumentation. Reported PASS groups covered M3
+  ownership (including supervisor-only reserve ordinals), full-frame
+  membership/alignment/arithmetic/48- and 57-bit canonicality/backend guards;
+  M1 interval inventory; M2 owners, holes,
+  reserve/OOM, rejected frees and counters; keyboard transport/events; logical
+  line submission; wrapped input/scroll retention; and editor cursor,
+  navigation, insert/overwrite and reflow. LeakSanitizer remained disabled for
+  the previously recorded ptrace incompatibility; this is not claimed as a
+  LeakSanitizer run.
+
+This checkpoint deliberately did not add Limine HHDM/paging-mode requests, a
+kernel pointer-writing backend, allocate-zero-rollback integration, page-table
+changes, logging or a boot success marker. No QEMU was started or touched, so
+128/256/512 MiB direct-map write/read/zero/reuse evidence and unchanged rendered
+editor pixels remain unverified. M1/M2 and editor runtime behavior were not
+changed; only their host regressions and the strict link were checked here.

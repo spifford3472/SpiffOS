@@ -39,7 +39,8 @@ struct page_access_policy {
  * page length in bytes. It borrows context synchronously and returns true only
  * after zeroing the complete range. The kernel implementation is the sole M3
  * code allowed to convert mapped_address to a C pointer; host tests instead
- * translate it into guarded test RAM. No allocation or ownership transfer. */
+ * translate it into guarded test RAM. Context must not alias or mutate the
+ * policy, allocator, map or owner slots. No allocation or ownership transfer. */
 typedef bool (*page_access_zero_backend)(void *context,
     uint64_t mapped_address, size_t length_bytes);
 
@@ -48,7 +49,8 @@ typedef bool (*page_access_zero_backend)(void *context,
  * call. Validate allocator consistency, exact owner, physical/direct-map range
  * overflow and 48- or 57-bit canonicality. Success writes mapped_address;
  * every error preserves it and all allocator state. Pure: no RAM access,
- * allocation, pointer conversion, logging, locks or interrupt handling. */
+ * allocation, pointer conversion, logging, locks or interrupt handling.
+ * mapped_address must not alias the policy, allocator, map or owner slots. */
 enum page_access_result page_access_resolve(
     const struct page_access_policy *policy, enum frame_owner owner,
     uint64_t physical_address, uint64_t *mapped_address);
