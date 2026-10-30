@@ -173,13 +173,13 @@ build/memory-map.o: src/kernel/memory-map.c src/kernel/memory-map.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/memory-boot.o: src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/memory-map.h src/kernel/frame-allocator.h src/kernel/page-access.h include/limine.h Makefile
+build/memory-boot.o: src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/memory-map.h src/kernel/frame-allocator.h src/kernel/page-access.h src/kernel/kernel-heap.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/memory-map-test: src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-map.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/page-access.c src/kernel/page-access.h include/limine.h Makefile
+build/memory-map-test: src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-map.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/page-access.c src/kernel/page-access.h src/kernel/kernel-heap.c src/kernel/kernel-heap.h include/limine.h Makefile
 	mkdir -p build
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-boot.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/page-access.c -o $@
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-boot.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/page-access.c src/kernel/kernel-heap.c -o $@
 
 .PHONY: test-memory-map test-memory
 test-memory-map: build/memory-map-test

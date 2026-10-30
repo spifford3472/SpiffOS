@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Verify M1/M2 plus real M3 page access at three RAM sizes."""
+"""Verify M1-M4 memory probes and exact editor pixels at three RAM sizes."""
 from pathlib import Path
+import hashlib
 import json
+import shutil
 import subprocess
 import sys
 
@@ -22,6 +24,9 @@ def verify_serial(serial, ram_mib):
     assert lines.count(b"SPIFFOS_PAGE_ACCESS_OK") == 1
     assert b"SPIFFOS_PAGE_ACCESS_UNAVAILABLE" not in lines
     assert b"SPIFFOS_PAGE_ACCESS_ERROR" not in lines
+    assert lines.count(b"SPIFFOS_HEAP_OK") == 1
+    assert b"SPIFFOS_HEAP_UNAVAILABLE" not in lines
+    assert b"SPIFFOS_HEAP_ERROR" not in lines
     pools = [tuple(map(int, line[11:].split(b","))) for line in lines
              if line.startswith(b"FRAME_POOL:")]
     regions = [tuple(map(int, line[14:].split(b","))) for line in lines
@@ -59,18 +64,26 @@ def main():
     for ram_mib in (128, 256, 512):
         with (build / f"memory-{ram_mib}-run.log").open("wb") as log:
             subprocess.run([sys.executable, str(ROOT / "scripts/qemu.py"),
-                            "test", "--wait-keyboard-ready", "--memory-mib",
-                            str(ram_mib), "--timeout", "30"],
+                            "test", "--wait-keyboard-ready", "--screenshot",
+                            "--memory-mib", str(ram_mib), "--timeout", "30"],
                            cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                            check=True, timeout=40)
         serial = (build / "serial.log").read_bytes()
-        (build / f"memory-{ram_mib}-serial.log").write_bytes(serial)
+        serial_path = build / f"memory-{ram_mib}-serial.log"
+        serial_path.write_bytes(serial)
+        capture_path = build / f"memory-{ram_mib}-editor.ppm"
+        shutil.copyfile(build / "framebuffer.ppm", capture_path)
+        subprocess.run([sys.executable, str(ROOT / "scripts/check-framebuffer.py"),
+                        str(capture_path), "--powerup", "--console", "--workspace",
+                        "--serial", str(serial_path)], cwd=ROOT, check=True)
         result = verify_serial(serial, ram_mib)
+        result["editor_capture"] = capture_path.name
+        result["editor_sha256"] = hashlib.sha256(capture_path.read_bytes()).hexdigest()
         if results:
             assert result["candidate_frames"] > results[-1]["candidate_frames"]
         results.append(result)
         print(f"PASS memory QEMU {ram_mib}MiB: {result['candidate_frames']} candidate "
-              f"frames, {result['regions']} regions, exact serial counters")
+              f"frames, {result['regions']} regions, exact serial counters and pixels")
     (build / "memory-inventory-results.json").write_text(
         json.dumps(results, indent=2) + "\n")
 

@@ -488,3 +488,88 @@ depends on caller-supplied virtually contiguous M3-validated kernel-owned
 ordinary backing. Heap teardown/backing-frame return and M5 owner-scoped cleanup
 remain unfinished. No commit, merge, push, deployment, dependency pin, runner
 control, service, infrastructure, firmware or disk was changed.
+
+## Checkpoint 8: actual M4 heap boot smoke probe
+
+The owner reported that the small Qwen attempt for this slice exited 53. Its
+log was unavailable inside this sandbox, so Codex did not infer a cause or
+accept any Qwen source/test result. Inspection of the clean actual branch found
+the completed host-tested M4 allocator/release implementation but no boot heap
+probe, heap serial marker or guest screenshot validation. Direct Codex fallback
+was used under the memory-specific authorization; no model or agent was
+delegated.
+
+Codex added one boot-only `memory_boot_heap_probe()` after the existing M3 page
+probe. It obtains one ordinary kernel frame exclusively through
+`page_access_allocate_zero()`, resolves it through the validated revision-0
+HHDM/paging policy, and uses its complete 4096-byte mapping as the bounded heap
+arena. Eight external records and the single-boot descriptor remain in kernel
+BSS, outside the arena and supervisor reserve. The probe requires 16-byte
+alignment, writes and reads distinct byte patterns through kernel/session/
+workspace allocations, checks per-owner counters and rejects a wrong-owner
+free. A 4096-byte request after live allocations must return OOM without
+changing its output or dirty live payload. A subsequent valid free/allocation
+must recover, reuse the same first-fit address, publish all 32 rounded bytes
+zeroed, and permit another write/read check.
+
+Success releases every allocation, proves one completely coalesced free page
+and zero owner counters, explicitly retires the descriptor, releases the exact
+kernel-owned backing frame and verifies that ordinary and reserve M2 counters
+match their pre-probe values. Only then is `SPIFFOS_HEAP_OK` emitted. Missing
+M3 policy emits `SPIFFOS_HEAP_UNAVAILABLE`; any self-test or restoration failure
+emits `SPIFFOS_HEAP_ERROR` and cannot emit the success marker. The existing
+unavailable host-adapter test was extended, and `test-memory.py` now requires
+the heap marker at 128/256/512 MiB, retains one editor PPM per size and runs the
+independent full-frame pixel checker.
+
+The first forced kernel link after integration failed honestly: Clang lowered a
+local aggregate descriptor clear to unavailable hosted `memset`. No linker or
+test was weakened. The descriptor was moved to zero-initialized bounded BSS and
+is retired with explicit field stores; the next forced freestanding link passed.
+
+Actual checks during this checkpoint in the isolated checkout:
+
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-memory-map
+  test-frame-allocator test-page-access test-kernel-heap test-keyboard-memory
+  test-workspace-memory && make -B all && make iso`: passed. AddressSanitizer
+  and UndefinedBehaviorSanitizer remained enabled for host tests; M1 inventory,
+  M2 ownership/reserve/OOM/rejected frees, M3 rollback/boundaries, M4 checked
+  free/coalescing/reuse, keyboard/editor/reflow and workspace/logo reset tests
+  all reported PASS. The strict freestanding kernel compiled and linked without
+  a hosted runtime, and the ISO rebuilt.
+- The first `ASAN_OPTIONS=detect_leaks=0 make test-memory` attempt passed all
+  host prerequisites and built the ISO, but its 128 MiB guest never started:
+  this sandbox denied QEMU binding the private QMP Unix socket with `Operation
+  not permitted`. The target correctly failed; no guest result is claimed from
+  that attempt, and the screenshot requirement was not removed.
+- Preliminary serial-only isolated `scripts/qemu.py` guests passed at all three
+  sizes without QMP. After the final descriptor-lifetime tightening and complete
+  rebuild, the retained HMP-capture guests below repeated the same serial checks
+  on the final source rather than relying on those preliminary runs.
+- To retain the required visual evidence despite the sandbox's Unix-socket
+  denial, three additional isolated guests used QEMU's inherited standard HMP
+  monitor only for `screendump`; no repository launcher/runner control was
+  edited. `scripts/check-framebuffer.py --powerup --console --workspace` passed
+  every pixel of all three 1280x800 captures against the independent logo/font/
+  editor-cursor reference. Their final serial results were 18,926 candidate
+  frames at 128 MiB, 51,694 at 256 MiB and 117,230 at 512 MiB, with 32 map
+  entries each. Independent verification required exactly one each of
+  `SPIFFOS_MEMORY_OK`, `SPIFFOS_ALLOCATOR_OK`, `SPIFFOS_PAGE_ACCESS_OK` and
+  `SPIFFOS_HEAP_OK`, framebuffer/boot/keyboard readiness, no corresponding
+  unavailable/error marker, restored frame-pool counters and increasing
+  recomputed capacity. The retained files are
+  `build/memory-128-editor.ppm`, `build/memory-256-editor.ppm` and
+  `build/memory-512-editor.ppm`; each SHA-256 is
+  `d22bd34e7998e134c9ec8824ce3e68cddca003234b1a3e87c9fc79a3eeb46863`.
+  Their matching per-size serial logs are `build/memory-*-serial.log`.
+
+LeakSanitizer was disabled only for the previously documented sandbox/ptrace
+incompatibility; ASan and UBSan passed. The QMP-backed combined `make
+test-memory` target is not claimed as a pass in this sandbox, although its exact
+serial and pixel assertions were exercised through the separated successful
+guest runs above. This is still a one-page boot diagnostic with static external
+metadata, not a persistent general kernel heap, multi-page contiguous arena,
+user ABI, quota, VM layout or supervisor-reserve consumer. M5 owner-scoped
+cleanup remains unfinished. No owner QEMU was inspected or stopped; each test
+ended only its own child. No commit, merge, push, deployment, dependency pin,
+runner control, service, infrastructure, firmware or disk was changed.
