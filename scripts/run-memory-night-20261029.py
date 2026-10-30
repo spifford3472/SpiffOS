@@ -15,11 +15,12 @@ QWEN = '/home/geoff/.local/share/ki5vnb-coding/qwen-code/node_modules/.bin/qwen'
 CODEX = '/home/geoff/.local/npm-global/bin/codex'
 BRANCH = 'feat/memory-services-night'
 HARD_STOP = datetime(2026, 10, 30, 7, tzinfo=timezone.utc).timestamp()
+START_STEP = int(os.environ.get('SPIFFOS_RESUME_STEP', '0'))
 START = time.time()
 END = min(START + 3 * 3600, HARD_STOP - 300)
 ENV = {k:v for k,v in os.environ.items() if k in ('PATH','HOME','USER','LOGNAME','LANG','TERM','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS')}
 ENV['PYTHONDONTWRITEBYTECODE'] = '1'
-STATE = {'started_utc':datetime.now(timezone.utc).isoformat(), 'budget_seconds':int(END-START), 'branch':BRANCH, 'status':'starting', 'steps':[]}
+STATE = {'started_utc':datetime.now(timezone.utc).isoformat(), 'budget_seconds':int(END-START), 'branch':BRANCH, 'status':'starting', 'resume_from_step':START_STEP, 'steps':[]}
 
 # Ordered dependency slices: Qwen sees one file/function; Codex coordinates the
 # specific checkpoint after reviewing the local attempt, never the entire OS.
@@ -73,7 +74,7 @@ def git(*args):
 
 def allowed(path):
     """Limit automatic feature commits to the authorized memory code and docs."""
-    return (path == 'Makefile' or path.startswith(('src/kernel/','tests/','docs/')) or
+    return (path in ('Makefile', 'scripts/qemu.py') or path.startswith(('src/kernel/','tests/','docs/')) or
             (path.startswith('scripts/test-memory') and path.endswith('.py')))
 
 def checkpoint(name):
@@ -100,6 +101,7 @@ def main():
         assert git('branch','--show-current') == BRANCH
         status('running: memory services queue')
         for index,(name,file,small,goal) in enumerate(TASKS):
+            if index < START_STEP: continue
             if END-time.time() < 150: break
             status('step '+str(index+1)+'/'+str(len(TASKS))+': '+name+' Qwen')
             qenv=dict(ENV,QWEN_HOME='/home/geoff/.local/share/ki5vnb-coding/qwen-home',OLLAMA_API_KEY='ollama')

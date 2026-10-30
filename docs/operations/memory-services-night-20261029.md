@@ -137,3 +137,99 @@ changes, logging or a boot success marker. No QEMU was started or touched, so
 128/256/512 MiB direct-map write/read/zero/reuse evidence and unchanged rendered
 editor pixels remain unverified. M1/M2 and editor runtime behavior were not
 changed; only their host regressions and the strict link were checked here.
+
+## Checkpoint 3: validated boot direct map and real page probe
+
+The bounded Qwen attempt for this slice exited 53. Its model log was unavailable
+inside the Codex sandbox, so no cause or partial success is inferred. Codex
+inspected the committed checkpoint-2 source (`f018aca`) and found the pure M3
+policy and host tests present, but no HHDM/paging-mode requests, boot adapter,
+kernel backend, rollback helper or runtime marker. No model or agent was
+delegated under the owner's memory-specific direct-fallback authorization.
+
+Codex added revision-0 Limine HHDM and x86-64 paging-mode requests without
+changing the pinned header, Limine binary, base revision or link layout. The
+adapter accepts only non-NULL revision-0 HHDM/paging responses and the pinned
+header's explicit four- or five-level x86-64 mode. Missing, newer or unknown
+responses emit `SPIFFOS_PAGE_ACCESS_UNAVAILABLE` and continue the existing
+framebuffer/editor boot. M3 also stays unavailable unless the complete M2 boot
+probe restored its pools and emitted its success marker.
+
+`page_access_allocate_zero()` now allocates only from the ordinary pool, uses
+the existing exact-owner resolver and injected 4096-byte zero backend, and
+publishes the physical address only after success. Resolve or backend failure
+releases the page with the same owner and preserves output; a failed release is
+reported separately as rollback failure. New host cases prove successful full
+zeroing, backend-failure rollback, restored counters/output, policy/allocator
+identity, response revision/mode rejection, 48/57-bit width selection and the
+unsupported-M2 boot path.
+
+The narrow kernel backend alone converts an authorized direct-map number to a
+volatile byte pointer. The boot probe allocates and zeros one kernel page,
+verifies every byte is zero, writes and reads `0xa5` across all 4096 bytes,
+releases it, requires first-fit reallocation of the same physical page, zeros
+and verifies all 4096 bytes again, releases it, then independently checks M2
+counters/invariants. Only after all checks and restored pools does it emit
+`SPIFFOS_PAGE_ACCESS_OK`; failures emit `SPIFFOS_PAGE_ACCESS_ERROR` and cannot
+claim success. No free page, reserve page, framebuffer, page table or CR3 is
+written by this probe.
+
+`make test-memory` now depends on the new M3 host test and requires exactly one
+page-access success marker with no unavailable/error marker at 128, 256 and
+512 MiB. The existing keyboard-ready assertion initially exposed a pre-existing
+serial race: ordinary `qemu.py test` terminated as soon as it saw the earlier
+`SPIFFOS_BOOT_OK`, and the 256 MiB run was killed before the immediately
+following readiness line was captured. The assertion was not removed or
+weakened. A serial-only `--wait-keyboard-ready` option now keeps the isolated
+guest alive until both complete lines arrive; it does not request QMP or alter
+guest behavior.
+
+Actual final checks in this isolated checkout, with no commit made by Codex:
+
+- `ASAN_OPTIONS=detect_leaks=0 make test-page-access test-memory-map
+  test-frame-allocator test-keyboard-memory all && git diff --check`: passed.
+  ASan/UBSan remained enabled; LeakSanitizer alone stayed disabled for the
+  previously recorded ptrace incompatibility. M1 inventory, M2 allocation,
+  M3 policy/adapter/rollback, keyboard transport, logical input, scroll
+  retention, cursor modes, navigation, insert/overwrite and reflow reported
+  PASS; the strict freestanding kernel linked; diff whitespace checks passed.
+- Final `ASAN_OPTIONS=detect_leaks=0 make test-memory`: passed its sanitizer
+  prerequisites and real QEMU boots. Results were 18,935 candidate frames at
+  128 MiB, 51,703 at 256 MiB and 117,239 at 512 MiB, with 32 memory-map entries
+  each. Every retained serial log contains one `SPIFFOS_MEMORY_OK`,
+  `SPIFFOS_ALLOCATOR_OK`, `SPIFFOS_PAGE_ACCESS_OK`, `SPIFFOS_BOOT_OK` and
+  `SPIFFOS_KEYBOARD_READY`, no corresponding unavailable/error marker, and the
+  fully restored `FRAME_POOL` counters checked by the script.
+
+An attempted stronger `qemu.py test --keyboard` run did not start a guest:
+QEMU was denied while binding its QMP Unix socket with `Operation not permitted`
+in this sandbox. Therefore no new QMP-injected keyboard run or guest screenshot
+pixel comparison is claimed here. Existing editor pixel/behavior host sanitizer
+tests passed, and the successful normal guests reached framebuffer, logo, text,
+console and keyboard-ready markers, but unchanged rendered pixels remain a
+runtime visual-validation limitation for a less restricted environment. No
+owner QEMU, infrastructure, service, firmware, disk, dependency pin, merge,
+push or deployment was touched.
+
+## Coordinator recovery — 2026-10-30 02:04 Eastern
+The persistent worker stopped at 21:29:35 Eastern after about 17 minutes, not
+three hours. Its third checkpoint added a narrowly scoped scripts/qemu.py
+readiness wait; the outer commit allowlist omitted that path and raised before
+commit/push. No automatic wakeup or merge occurred. M4 heap and M5 cleanup were
+not implemented by this run. The first two WIP checkpoints were pushed; the
+third remained safely uncommitted in the isolated checkout.
+
+The coordinator reviewed the readiness diff, M3 policy and boot backend, then
+ran make test-memory test-keyboard test-workspace test-workspace-scroll and
+python3 scripts/test-safe-launcher.py directly on Forge, outside the restricted
+model sandbox. Combined exit 0 in 60.36s. ASan/UBSan and leak checks remained
+enabled by the normal host invocation. The three real RAM-size probes, exact
+editor/workspace/scroll pixel expectations, QMP injection and launcher close/
+signal/lock cleanup passed. Evidence: build/night/host-review-gates.log and
+build/night/host-review-launcher.log. No model test claim alone was accepted.
+
+The allowlist now explicitly permits only the reviewed qemu.py path alongside
+the prior scope. SPIFFOS_RESUME_STEP supports continuing after completed work;
+the hard cutoff remains 07:00 UTC, with engineering stopping five minutes
+earlier. A restarted queue must not rerun or overwrite completed checkpoints.
+No claim that heap or workspace cleanup is ready follows from M3 passing.

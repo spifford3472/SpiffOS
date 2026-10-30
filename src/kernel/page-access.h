@@ -21,7 +21,9 @@ enum page_access_result {
     PAGE_ACCESS_WRONG_OWNER,
     PAGE_ACCESS_ADDRESS_OVERFLOW,
     PAGE_ACCESS_NONCANONICAL,
-    PAGE_ACCESS_BACKEND_FAILED
+    PAGE_ACCESS_BACKEND_FAILED,
+    PAGE_ACCESS_ALLOCATION_FAILED,
+    PAGE_ACCESS_ROLLBACK_FAILED
 };
 
 enum page_access_virtual_bits {
@@ -65,5 +67,17 @@ enum page_access_result page_access_zero(
     const struct page_access_policy *policy, enum frame_owner owner,
     uint64_t physical_address, page_access_zero_backend backend,
     void *backend_context);
+
+/* Allocate one ordinary (never reserve) frame, authorize and zero all of it,
+ * then publish its physical address. allocator must be the exact mutable M2
+ * allocator referenced by policy. Any resolve/backend failure releases the
+ * just-allocated frame with the same owner; output is preserved on every
+ * failure. ROLLBACK_FAILED means ownership could not be restored and callers
+ * must treat allocator state as unavailable. Borrow backend/context for the
+ * synchronous call. One boot CPU, interrupts disabled; no locks or heap. */
+enum page_access_result page_access_allocate_zero(
+    struct frame_allocator *allocator, const struct page_access_policy *policy,
+    enum frame_owner owner, page_access_zero_backend backend,
+    void *backend_context, uint64_t *physical_address);
 
 #endif

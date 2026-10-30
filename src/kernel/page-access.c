@@ -154,3 +154,35 @@ enum page_access_result page_access_zero(
     }
     return PAGE_ACCESS_OK;
 }
+
+/* Allocate one ordinary page and zero it before publishing the physical
+ * address. The exact owner acquired below is also used for rollback, so a
+ * failed initialization cannot leak a live ownership slot. Output is written
+ * only after zeroing succeeds. Borrow all state exclusively and synchronously;
+ * boot CPU only, interrupts disabled, no locks or heap allocation. */
+enum page_access_result page_access_allocate_zero(
+    struct frame_allocator *allocator, const struct page_access_policy *policy,
+    enum frame_owner owner, page_access_zero_backend backend,
+    void *backend_context, uint64_t *physical_address)
+{
+    if (allocator == NULL || policy == NULL ||
+        policy->allocator != allocator || backend == NULL ||
+        physical_address == NULL || !frame_owner_valid(owner)) {
+        return PAGE_ACCESS_INVALID;
+    }
+
+    uint64_t allocated_address;
+    if (frame_allocate(allocator, owner, false, &allocated_address) != FRAME_OK) {
+        return PAGE_ACCESS_ALLOCATION_FAILED;
+    }
+    enum page_access_result result = page_access_zero(
+        policy, owner, allocated_address, backend, backend_context);
+    if (result != PAGE_ACCESS_OK) {
+        if (frame_release(allocator, owner, allocated_address) != FRAME_OK) {
+            return PAGE_ACCESS_ROLLBACK_FAILED;
+        }
+        return result;
+    }
+    *physical_address = allocated_address;
+    return PAGE_ACCESS_OK;
+}

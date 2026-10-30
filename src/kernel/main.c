@@ -2,7 +2,7 @@
  * Purpose: boot via Limine, draw initial workspace and poll diagnostic input.
  * Dependencies: pinned official limine.h, Limine-supplied stack and mappings.
  * Invariants: ring 0, one CPU, interrupts disabled; no heap or host C library.
- * See ADR-011 and docs/operations/first-boot-2026-10-28.md.
+ * See ADR-011, ADR-memory-services and first-boot-2026-10-28.md.
  * This smoke test does not implement BASIC, user processes or storage.
  */
 #include <stdbool.h>
@@ -41,6 +41,25 @@ __attribute__((used, section(".limine_requests")))
 static volatile struct limine_memmap_request memory_request = {
     .id = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0
+};
+
+/* Request the loader's higher-half direct map explicitly. Missing or newer
+ * revision responses leave M3 unavailable without changing the editor path. */
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0
+};
+
+/* Ask the pinned loader to report either supported x86-64 paging depth. M3
+ * derives canonical width only from the validated revision-0 response. */
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_paging_mode_request paging_mode_request = {
+    .id = LIMINE_PAGING_MODE_REQUEST_ID,
+    .revision = 0,
+    .mode = LIMINE_PAGING_MODE_X86_64_DEFAULT,
+    .max_mode = LIMINE_PAGING_MODE_X86_64_5LVL,
+    .min_mode = LIMINE_PAGING_MODE_X86_64_4LVL
 };
 
 enum {
@@ -298,6 +317,10 @@ void kmain(void)
     }
     if (!memory_boot_report(memory_request.response, serial_write) ||
         !memory_boot_allocator_probe(serial_write)) {
+        halt_forever();
+    }
+    if (!memory_boot_page_probe(hhdm_request.response,
+                                paging_mode_request.response, serial_write)) {
         halt_forever();
     }
     /* The response and its pointer array are owned by the bootloader. Borrow

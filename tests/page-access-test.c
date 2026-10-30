@@ -261,6 +261,63 @@ static void test_injected_zero_backend(void)
     assert(allocator.owned[FRAME_OWNER_KERNEL] == 1);
 }
 
+/* Prove the higher-level operation publishes only a fully zeroed allocation
+ * and rolls ownership/counters back when the backend rejects initialization.
+ * The guarded backend translates only the first currently free fixture page. */
+static void test_allocate_zero_and_rollback(void)
+{
+    struct memory_region regions[3];
+    uint16_t slots[8];
+    struct frame_allocator allocator;
+    uint64_t kernel_page, session_page;
+    initialize_fixture(&allocator, regions, slots, &kernel_page, &session_page);
+    (void)kernel_page;
+    (void)session_page;
+    struct page_access_policy policy = {
+        .allocator = &allocator,
+        .direct_map_offset = UINT64_C(0xffff800000000000),
+        .virtual_address_bits = PAGE_ACCESS_X86_64_4_LEVEL_BITS
+    };
+    struct guarded_page memory;
+    memset(&memory, 0x6b, sizeof memory);
+    struct zero_backend_context backend = {
+        .expected_address = policy.direct_map_offset + UINT64_C(0x4000),
+        .memory = &memory,
+        .fail = true
+    };
+    uint64_t free_before = allocator.ordinary_free;
+    uint64_t owned_before = allocator.owned[FRAME_OWNER_KERNEL];
+    uint64_t output = UINT64_C(0x1122334455667788);
+    assert(page_access_allocate_zero(&allocator, &policy, FRAME_OWNER_KERNEL,
+               guarded_zero, &backend, &output) == PAGE_ACCESS_BACKEND_FAILED);
+    assert(output == UINT64_C(0x1122334455667788));
+    assert(allocator.ordinary_free == free_before);
+    assert(allocator.owned[FRAME_OWNER_KERNEL] == owned_before);
+    assert(frame_allocator_check(&allocator));
+    assert(memory.page[0] == 0x6b);
+
+    backend.fail = false;
+    assert(page_access_allocate_zero(&allocator, &policy, FRAME_OWNER_KERNEL,
+               guarded_zero, &backend, &output) == PAGE_ACCESS_OK);
+    assert(output == UINT64_C(0x4000));
+    assert(allocator.ordinary_free == free_before - 1);
+    assert(allocator.owned[FRAME_OWNER_KERNEL] == owned_before + 1);
+    for (size_t index = 0; index < MEMORY_PAGE_BYTES; ++index) {
+        assert(memory.page[index] == 0);
+    }
+    assert(frame_release(&allocator, FRAME_OWNER_KERNEL, output) == FRAME_OK);
+    assert(allocator.ordinary_free == free_before);
+    assert(frame_allocator_check(&allocator));
+
+    struct page_access_policy other_policy = policy;
+    other_policy.allocator = NULL;
+    output = UINT64_C(0x8877665544332211);
+    assert(page_access_allocate_zero(&allocator, &other_policy,
+               FRAME_OWNER_KERNEL, guarded_zero, &backend, &output) ==
+           PAGE_ACCESS_INVALID);
+    assert(output == UINT64_C(0x8877665544332211));
+}
+
 /* Assertion or sanitizer failures terminate nonzero; PASS means every focused
  * pure-policy and guarded-backend case above completed. */
 int main(void)
@@ -269,5 +326,6 @@ int main(void)
     test_supervisor_reserve_ownership();
     test_arithmetic_and_canonicality();
     test_injected_zero_backend();
+    test_allocate_zero_and_rollback();
     puts("PASS page access: ownership, membership, arithmetic, canonicality and backend guards");
 }
