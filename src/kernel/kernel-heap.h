@@ -97,11 +97,13 @@ enum kernel_heap_result kernel_heap_initialize(struct kernel_heap *heap,
  * size_bytes must be 1..1 MiB and is rounded up to 16 bytes after checked
  * arithmetic. A larger free block is split only when an unused external record
  * exists; metadata exhaustion is explicit and never consumes the whole block.
- * Success alone stores the 16-byte-aligned arena pointer in *allocation. All
- * failures preserve *allocation, counters, arena bytes and every record. The
- * returned storage is uninitialized and remains borrowed from the heap until a
- * matching release; it must not outlive the descriptor/backing storage. One
- * CPU, interrupts disabled; allocation is forbidden in interrupt context. */
+ * Success clears the complete rounded block, then stores its 16-byte-aligned
+ * arena pointer in *allocation. All failures preserve *allocation, counters,
+ * arena bytes and every record. The returned storage remains borrowed from the
+ * heap until a matching release; it must not outlive the descriptor/backing
+ * storage. One CPU, interrupts disabled; allocation is forbidden in interrupt
+ * context. allocation points to caller-owned output storage disjoint from the
+ * descriptor, arena and record array. */
 enum kernel_heap_result kernel_heap_allocate(struct kernel_heap *heap,
     enum kernel_heap_owner owner, size_t size_bytes, void **allocation);
 

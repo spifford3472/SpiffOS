@@ -121,6 +121,14 @@ Only success publishes the pointer. Returned bytes are uninitialized: initial
 page zeroing does not promise zero on reuse, and this internal heap does not yet
 expose memory to ring 3.
 
+Owner checkpoint refinement, 2026-10-30: the bounded initialization/allocation
+slice must zero the complete 16-byte-rounded block before publishing its pointer.
+This supersedes only the preceding uninitialized-return sentence. It does not
+promise that free clears bytes, expose memory to ring 3, or permit ordinary heap
+backing to consume the supervisor reserve. Allocation failures, including a
+corruption result, preserve heap state and output; the caller must retire a heap
+reported corrupt rather than asking the allocator to mutate or repair it.
+
 Free first validates the descriptor, converts the supplied pointer to an
 integer address only for overflow/range/alignment checks, then searches active
 external records for an exact block-start offset. It never dereferences the

@@ -355,3 +355,74 @@ checks, not allocator behavior tests. No QEMU was started, stopped or inspected;
 there is no new guest, pixel or runtime-heap evidence, and the owner's QEMU was
 not touched. No commit, merge, push, deployment, dependency pin, runner control,
 service, infrastructure, firmware or disk was changed.
+
+## Checkpoint 6: bounded M4 initialization and allocation
+
+The owner reported that the small Qwen attempt for this slice exited 55. Its log
+was not available inside the sandbox, so Codex verified the actual clean source
+at `e64cd24` and found the M4 header/design but no heap implementation or tests.
+Direct Codex fallback was used under the memory-specific authorization. No model
+or agent was delegated, and no Qwen source or verification result is claimed.
+
+Codex added `src/kernel/kernel-heap.c` for the allocation-only M4 slice. Heap
+initialization validates the 16-byte-aligned arena bound, record-count
+multiplication, representable half-open address ranges, record alignment, all
+descriptor/arena/record-array disjointness and the required unused zeroed
+descriptor before changing caller storage. Success creates one address-ordered
+free block and clears inactive external records. `kernel_heap_check()` validates
+bounded and reciprocal links before dereference, active-record reachability,
+strict gap-free coverage, aligned nonzero ranges, owner/state agreement, no
+adjacent free records and independently recomputed global/per-owner counters.
+
+Allocation uses checked 16-byte rounding and bounded first fit. Exact fits need
+no additional record; a larger first fit requires a reusable inactive record or
+returns `KERNEL_HEAP_METADATA_EXHAUSTED` without consuming the block. All
+fallible validation, split-capacity discovery and counter checks complete before
+payload writes. The complete rounded block is then zeroed, metadata/counters are
+updated and the pointer is published last. Null, bad-owner, zero/oversized,
+ordinary OOM, metadata exhaustion, aliased-output and corrupt-descriptor failures
+preserve output, descriptor, records and arena bytes. This owner checkpoint's
+explicit zero-before-publish requirement supersedes the design header's earlier
+uninitialized-return sentence; the preserved history and refinement are recorded
+in `ADR-memory-services.md` and the public function contract.
+
+The guarded host test obtains one kernel page through the real M2/M3
+`page_access_allocate_zero()` path, using a narrow injected mapping backend. It
+proves the ordinary pool decreases while the one-page supervisor reserve remains
+untouched, initializes M4 over that validated owned page, dirties the kernel-only
+arena to model reuse, and verifies complete rounded zeroing, aligned split
+pointers, per-owner/global counters and untouched guard bytes. Additional cases
+cover checked initialization failures, exact fit with one metadata record,
+metadata exhaustion, OOM, zero/`SIZE_MAX`/over-limit requests, owner rejection,
+output alias rejection and corrupt-list failure atomicity. `test-memory` now
+depends on `test-kernel-heap`, and the heap object participates in the strict
+freestanding kernel link.
+
+Actual checks run in this isolated checkout:
+
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-kernel-heap`:
+  passed with AddressSanitizer and UndefinedBehaviorSanitizer; the marker was
+  `PASS kernel heap: owned ordinary backing, init, zero, split and atomic
+  failures`.
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-memory-map
+  test-frame-allocator test-page-access test-kernel-heap test-keyboard-memory &&
+  make -B all`: all host tests passed, then the initial forced freestanding link
+  failed because Clang lowered an aggregate record/descriptor clear to an
+  unavailable hosted `memset`. Tests were not weakened. Production initialization
+  was changed to explicit field stores and to reuse the already-proven zeroed
+  descriptor state.
+- `ASAN_OPTIONS=detect_leaks=0 make test-kernel-heap && make -B all && git diff
+  --check` after that correction: passed. The strict Clang compile and static
+  link include `kernel-heap.c` without a C runtime.
+
+LeakSanitizer alone was disabled because the previously recorded ptrace
+incompatibility applies in this sandbox; ASan and UBSan remained enabled. The
+full `make test-memory` target was not run because it starts QEMU; this checkpoint
+did not start, stop or inspect any QEMU and therefore did not disturb the owner's
+guest. There is no new 128/256/512 MiB guest, editor-pixel or runtime heap-marker
+evidence. M4 still relies on its caller to supply a virtually contiguous arena
+assembled from M3-validated, kernel-owned ordinary pages; it does not infer
+contiguity or consume frames itself. `kernel_heap_release()`, coalescing, heap
+teardown/backing-frame return, boot integration and M5 owner cleanup remain
+unfinished. No commit, merge, push, deployment, dependency pin, runner control,
+service, infrastructure, firmware or disk was changed.
