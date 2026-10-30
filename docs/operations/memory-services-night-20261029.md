@@ -233,3 +233,23 @@ the prior scope. SPIFFOS_RESUME_STEP supports continuing after completed work;
 the hard cutoff remains 07:00 UTC, with engineering stopping five minutes
 earlier. A restarted queue must not rerun or overwrite completed checkpoints.
 No claim that heap or workspace cleanup is ready follows from M3 passing.
+
+## M3 merge/deployment and remaining queue
+PR21 head 83720870ed2be4a0e0f63e983787265bbe2c6687 merged as
+0beaad849d23e2f6e03570310d7b9dd3cb908d0b under the existing timed approval.
+Git diff between tested head and merge was empty, so the already passing
+60.36-second full regression result applies to the identical source tree; no
+second independent post-merge execution is claimed. Main fast-forwarded cleanly.
+The tested ISO was atomically installed for the next QEMU launch, matching SHA256:
+ee59cb1725892116b6f88096de53ac2d263be04738d66481cde6715edd850fd6
+An initial local main fast-forward failed because that checkout had not fetched
+the merge object; fetching then fast-forwarding succeeded before image install.
+No running guest was stopped. Heap/cleanup are not part of this deployment.
+
+The remaining queue resumes from zero-based step 3 on feat/memory-heap-night,
+using SPIFFOS_WORK_BRANCH and SPIFFOS_RESUME_STEP. It first completes focused M3
+error coverage, then heap design/implementation and owner cleanup as time permits.
+The resumed service is spiffos-memory-resume-20261030; it stops by 02:55 Eastern,
+with no unattended merge/deployment. Original status is preserved in
+status-first-attempt.json beside the existing logs. No new three-hour completion
+claim is made: the earlier interruption left only the remaining approval window.
