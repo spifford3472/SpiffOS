@@ -447,6 +447,36 @@ static void test_failure_path_matrix(void)
     assert(memcmp(saved_slots, slots, sizeof slots) == 0);
     assert_guards_equal(&memory, 0x4d);
 
+    /* Result publication must not overwrite any metadata that authorized it.
+     * Exact field aliases exercise the policy and allocator ranges without
+     * forming a misaligned uint64_t pointer into the smaller owner slots. */
+    uint64_t saved_offset = policy.direct_map_offset;
+    assert(page_access_resolve(&policy, FRAME_OWNER_KERNEL, kernel_page,
+               &policy.direct_map_offset) == PAGE_ACCESS_INVALID);
+    assert(policy.direct_map_offset == saved_offset);
+    struct memory_region saved_first_region = regions[0];
+    assert(page_access_resolve(&policy, FRAME_OWNER_KERNEL, kernel_page,
+               &regions[0].base) == PAGE_ACCESS_INVALID);
+    assert(memcmp(&saved_first_region, &regions[0], sizeof regions[0]) == 0);
+    assert(page_access_allocate_zero(&allocator, &policy, FRAME_OWNER_KERNEL,
+               guarded_zero, &backend, &allocator.total_frames) ==
+           PAGE_ACCESS_INVALID);
+    assert(memcmp(&saved_allocator, &allocator, sizeof allocator) == 0);
+    assert(memcmp(saved_slots, slots, sizeof slots) == 0);
+    assert(backend.calls == 0);
+
+    /* Corrupt accounting is rejected before frame_allocate() can mutate an
+     * ownership slot or counter; the later resolver is not the first guard. */
+    ++allocator.ordinary_free;
+    struct frame_allocator corrupt_allocator = allocator;
+    output = UINT64_C(0x123456789abcdef0);
+    assert(page_access_allocate_zero(&allocator, &policy, FRAME_OWNER_KERNEL,
+               guarded_zero, &backend, &output) == PAGE_ACCESS_INVALID);
+    assert(memcmp(&corrupt_allocator, &allocator, sizeof allocator) == 0);
+    assert(memcmp(saved_slots, slots, sizeof slots) == 0);
+    assert(output == UINT64_C(0x123456789abcdef0) && backend.calls == 0);
+    allocator = saved_allocator;
+
     /* Allocation succeeds, unsupported policy rejects resolution before the
      * backend, and the exact-owner release restores all M2 state. */
     policy.virtual_address_bits = 56;

@@ -713,3 +713,87 @@ running guest was not disturbed. Existing M1-M5 runtime evidence applies only
 to its previously tested source; this checkpoint changes host-test wiring only.
 No commit, merge, push, deployment, dependency pin, AGENTS/runner control,
 service, infrastructure, firmware or disk was changed.
+
+## Checkpoint 11: fresh complete memory-diff correctness review
+
+The owner reported that the small Qwen attempt for this slice exited 55. Its
+log was not available inside this sandbox. Codex therefore reviewed the actual
+clean feature source at `3813ce4` and the complete M3-M5 diff from the recorded
+night-job base, without assuming Qwen changed or verified anything. No model or
+agent was delegated. The review covered mapping authorization, physical range
+bounds, metadata lifetime, owner accounting, reserve isolation, rollback,
+invalid frees, zero-before-publish and unsupported Limine response paths.
+
+Three actionable contract gaps were corrected. First, a caller could supply an
+M3 result pointer that overlapped the policy, allocator descriptor, borrowed M1
+region array or used M2 owner slots. A successful publication could therefore
+overwrite the metadata that authorized it. `page_access_resolve()` and
+`page_access_allocate_zero()` now reject every such output range before writing
+or allocating. Second, allocate-and-zero previously let `frame_allocate()` be
+the first consistency check and relied on the later resolver to notice broader
+M2 counter/slot corruption after acquisition. It now runs the complete
+`frame_allocator_check()` before mutation. Adversarial host cases prove exact
+policy/allocator output aliases and corrupt accounting preserve all metadata,
+output bytes and backend call count.
+
+Third, a boot-heap self-test failure after M4 initialization released the
+kernel-owned backing frame but left the static descriptor initialized and still
+pointing at that page. The boot path halted immediately, but the metadata
+lifetime nevertheless violated the stated ownership contract. Every heap-probe
+failure now retires the descriptor before attempting to return the frame to M2;
+the successful path already used that ordering. Retirement only clears the
+static descriptor and never dereferences the arena or stale payload pointers.
+
+The remaining reviewed paths matched their documented bounds and ownership
+rules. M1 rejects overflowing/overlapping USABLE ranges and admits only complete
+aligned nonzero frames. M3 checks the physical exclusive end, mapped exclusive
+end and first/last canonical bytes, then requires exact live ownership. Ordinary
+allocate-and-zero never requests reserve, and M4/M5 cannot discover or release
+the M2 reserve. Backend failure rolls back with the exact owner and reports a
+distinct rollback failure if corrupted metadata prevents release. Heap release
+classifies foreign/interior/stale, double and wrong-owner pointers before
+mutation. Both page publication and rounded heap-block publication clear the
+complete range first. Missing/newer HHDM or paging responses and unknown paging
+modes retain the non-fatal unavailable path; there is still no identity-map
+fallback.
+
+Actual checks in this isolated checkout:
+
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-page-access
+  test-kernel-heap test-memory-map && make -B all`: passed. The strengthened M3
+  failure matrix, both M4/M5 suites, M1 adapter checks and a forced strict
+  freestanding compile/static link all passed.
+- `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-memory-map
+  test-frame-allocator test-page-access test-kernel-heap test-keyboard-memory
+  test-workspace-memory && git diff --check`: passed. ASan/UBSan reported the
+  M1 inventory, M2 owners/reserve/OOM/rejected frees, M3 alias/accounting/
+  rollback/boundary cases, focused and deterministic M4/M5 accounting, keyboard,
+  logical-line/editor reflow and workspace/logo-reset groups as PASS.
+- After adding the final borrowed-region output-alias case,
+  `git diff --check && ASAN_OPTIONS=detect_leaks=0 make test-page-access && git
+  diff --check` passed again with ASan/UBSan.
+- `make iso && python3 scripts/qemu.py test --wait-keyboard-ready --memory-mib
+  128 --timeout 30`: passed in one launcher-locked child guest and ended only
+  that child. The retained `build/checkpoint-review-128.log` contains 32 map
+  entries, 18,922 candidate frames, restored `FRAME_POOL:18922,18858,64,64,0`,
+  exactly one each of `SPIFFOS_MEMORY_OK`, `SPIFFOS_ALLOCATOR_OK`,
+  `SPIFFOS_PAGE_ACCESS_OK`, `SPIFFOS_OWNER_CLEANUP_OK`, `SPIFFOS_HEAP_OK`,
+  `SPIFFOS_BOOT_OK` and `SPIFFOS_KEYBOARD_READY`, with no memory-service error
+  or unavailable marker. Calling the existing `verify_serial()` directly over
+  the retained serial log independently recomputed 77,504,512 candidate bytes
+  and the same pool counters.
+
+LeakSanitizer alone was disabled because of the already recorded sandbox/ptrace
+incompatibility; ASan and UBSan remained enabled. This review did not repeat the
+256/512 MiB guests because the fixes affect pre-mutation metadata validation and
+failure-path retirement, not RAM-size-dependent success behavior, and the owner
+explicitly requested evidence-driven tests rather than repetition. No fresh
+QMP keyboard injection or framebuffer screenshot/pixel comparison is claimed;
+the full host editor/workspace regressions passed, and the 128 MiB guest reached
+framebuffer, console, boot and keyboard-ready markers. The descriptor-retirement
+failure ordering was verified by source review and the freestanding build, not
+by fault-injecting a real guest failure. Stale-handle generations, SMP/interrupt
+synchronization, persistent multi-page heap service, ring-3 isolation and final
+reserve sizing remain outside M3-M5. No owner QEMU, commit, merge, push,
+deployment, dependency pin, AGENTS/runner control, service, infrastructure,
+firmware or disk was changed.

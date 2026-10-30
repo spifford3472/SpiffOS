@@ -400,6 +400,11 @@ static bool heap_bytes_have_value(const void *bytes, size_t length,
     return true;
 }
 
+/* Defined below the failure helper because the same retirement operation is
+ * also used on the successful path. It only clears the static descriptor and
+ * never touches its arena or external records. */
+static void heap_probe_retire_descriptor(void);
+
 /* Release the one M3 backing frame after a failed M4 self-test and emit the
  * fatal diagnostic. A failed release is deliberately still failure and never
  * permits HEAP_OK. The callback is borrowed synchronously; no heap pointer is
@@ -407,6 +412,12 @@ static bool heap_bytes_have_value(const void *bytes, size_t length,
 static bool heap_probe_failure(bool (*write_text)(const char *),
     uint64_t physical_address, bool backing_owned)
 {
+    /* Once initialization succeeds, the descriptor contains a usable pointer
+     * into the backing page even when a later self-test fails. Retire it before
+     * returning that frame to M2 so no stale metadata can authorize access to a
+     * page whose ownership has ended. This is safe before initialization too:
+     * the static descriptor begins zeroed and retirement is idempotent. */
+    heap_probe_retire_descriptor();
     if (backing_owned) {
         (void)frame_release(&boot_allocator, FRAME_OWNER_KERNEL,
                             physical_address);
@@ -415,11 +426,12 @@ static bool heap_probe_failure(bool (*write_text)(const char *),
     return false;
 }
 
-/* Retire the successful diagnostic descriptor before returning its arena frame
- * to M2. The heap has already been proven empty and coalesced. Explicit stores
- * avoid a hosted memset and ensure no initialized descriptor remains capable of
- * naming a page after ownership is released. Static records are harmless stale
- * bytes and would be cleared by initialization if this probe were ever reused. */
+/* Retire the diagnostic descriptor before returning its arena frame to M2. On
+ * success the heap is already empty and coalesced; on failure live block records
+ * are abandoned because boot stops, but the descriptor must still lose every
+ * pointer before frame ownership ends. Explicit stores avoid a hosted memset.
+ * Static records are harmless stale bytes and initialization clears them before
+ * any hypothetical reuse. No arena payload or external record is dereferenced. */
 static void heap_probe_retire_descriptor(void)
 {
     boot_heap.arena = NULL;

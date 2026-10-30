@@ -74,7 +74,9 @@ enum page_access_result page_access_zero(
  * just-allocated frame with the same owner; output is preserved on every
  * failure. ROLLBACK_FAILED means ownership could not be restored and callers
  * must treat allocator state as unavailable. Borrow backend/context for the
- * synchronous call. One boot CPU, interrupts disabled; no locks or heap. */
+ * synchronous call. physical_address must be disjoint from the policy,
+ * allocator, borrowed map and used owner slots. One boot CPU, interrupts
+ * disabled; no locks or heap. */
 enum page_access_result page_access_allocate_zero(
     struct frame_allocator *allocator, const struct page_access_policy *policy,
     enum frame_owner owner, page_access_zero_backend backend,
