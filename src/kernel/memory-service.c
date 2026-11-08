@@ -320,8 +320,9 @@ static enum memory_service_result memory_service_validate(
  * failure. Explicit field stores avoid a giant aggregate clear that a compiler
  * might lower to an unavailable freestanding memset(). Root and backing pointers
  * are cleared before retired is published. Caller still owns/reclaims backing. */
-static void memory_service_retire(struct memory_service *service)
+void memory_service_retire(struct memory_service *service)
 {
+    if (service == NULL) return;
     service->session_root = NULL;
     for (size_t index = 0; index < MEMORY_SERVICE_WORKSPACE_COUNT; ++index) {
         service->workspace_roots[index] = NULL;

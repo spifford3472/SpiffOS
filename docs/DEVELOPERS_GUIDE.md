@@ -379,3 +379,14 @@ tests, or make test-memory for all memory suites and real guest/pixel checks
 at 128/256/512 MiB. Persistent multi-page backing, scheduler synchronization,
 real session/workspace services and ring-3 exposure are separate milestones.
 See decisions/ADR-memory-services.md and the memory-services night record.
+
+## Retained boot memory — M6
+After reversible M1-M5 probes, boot acquires one ordinary 4096-byte frame through
+M3. M6 initializes ten protected heap roots and keeps that frame allocated.
+Physical ownership remains kernel; heap owner tags separate session/workspace
+lifetimes inside the page. Ordinary clients cannot free a root. Retire clears
+every root/descriptor pointer before failed startup returns physical backing.
+The initial summary reports one retained frame; checks after console and actual
+editor initialization prove the ten roots remain valid. This is identity and
+lifetime state, not the full workspace scheduler or migrated screen storage.
+Run make test-memory for M1-M6 sanitizer/three-size QEMU/pixel verification.

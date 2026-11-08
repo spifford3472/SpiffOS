@@ -28,6 +28,14 @@ def verify_serial(serial, ram_mib):
     assert b"SPIFFOS_HEAP_UNAVAILABLE" not in lines
     assert b"SPIFFOS_HEAP_ERROR" not in lines
     assert lines.count(b"SPIFFOS_OWNER_CLEANUP_OK") == 1
+    assert lines.count(b"SPIFFOS_MEMORY_SERVICE_OK") == 1
+    assert lines.count(b"SPIFFOS_MEMORY_RETAINED_OK") == 1
+    assert lines.count(b"SPIFFOS_MEMORY_EDITOR_OK") == 1
+    assert lines.index(b"SPIFFOS_MEMORY_SERVICE_OK") < lines.index(b"SPIFFOS_MEMORY_RETAINED_OK") < lines.index(b"SPIFFOS_BOOT_OK") < lines.index(b"SPIFFOS_MEMORY_EDITOR_OK") < lines.index(b"SPIFFOS_KEYBOARD_READY")
+    assert b"SPIFFOS_MEMORY_SERVICE_ERROR" not in lines
+    assert b"SPIFFOS_MEMORY_SERVICE_UNAVAILABLE" not in lines
+    retained = [tuple(map(int, line[len(b"MEMORY_SERVICE:"):].split(b",")))
+                for line in lines if line.startswith(b"MEMORY_SERVICE:")]
     pools = [tuple(map(int, line[11:].split(b","))) for line in lines
              if line.startswith(b"FRAME_POOL:")]
     regions = [tuple(map(int, line[14:].split(b","))) for line in lines
@@ -53,7 +61,8 @@ def verify_serial(serial, ram_mib):
     assert summaries[0] == expected, (summaries[0], expected)
     assert 0 < frames * PAGE <= usable_bytes < ram_mib * 1024 * 1024
     assert frames >= 75 and pools == [(frames, frames - 64, 64, 64, 0)], pools
-    return dict(frame_pool=pools[0], ram_mib=ram_mib, regions=len(regions), usable_bytes=usable_bytes,
+    assert retained == [(4096, 1, 1, 9, frames - 65, 64)], retained
+    return dict(retained_service=retained[0], frame_pool=pools[0], ram_mib=ram_mib, regions=len(regions), usable_bytes=usable_bytes,
                 candidate_frames=frames, candidate_bytes=frames * PAGE,
                 excluded_usable_bytes=expected[3])
 

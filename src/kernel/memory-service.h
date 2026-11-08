@@ -150,4 +150,9 @@ enum memory_service_result memory_service_release(
 enum memory_service_result memory_service_reset_workspace(
     struct memory_service *service, size_t workspace_id);
 
+/* Retire trusted caller-owned state before returning backing to its owner.
+ * Clears all descriptor/root pointers without accessing payload or freeing RAM.
+ * Idempotent, NULL-safe, exclusive boot CPU only; callers must end all borrows. */
+void memory_service_retire(struct memory_service *service);
+
 #endif

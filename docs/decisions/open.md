@@ -197,3 +197,11 @@ and focused sanitizer tests; kernel linkage, retained boot backing and M6
 guest/late-retention evidence remain open. See ADR-persistent-memory-service
 and operations/persistent-memory-service-20261030.md. This specific merge
 instruction supersedes the expired time window only for this checkpoint.
+
+## M6 boot integration — 2026-11-08
+Owner authorized implementation, test, merge and local QEMU deployment. The
+service now retains one ordinary M3-owned page and ten protected state roots.
+A workspace reset is checked against another workspace's live client payload.
+State/backing are revalidated after console and editor initialization. Capacity
+growth, workspace UI, process isolation and concurrent allocation remain open.
+See operations/m6-boot-retention-20261108.md for actual evidence/deployment limits.
