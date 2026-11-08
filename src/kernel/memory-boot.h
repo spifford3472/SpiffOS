@@ -56,4 +56,13 @@ bool memory_boot_page_probe(const struct limine_hhdm_response *hhdm,
 bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
     const struct limine_paging_mode_response *paging,
     bool (*write_text)(const char *text));
+/* Retain one ordinary M3 page and ten service roots through the boot lifetime.
+ * Missing mapping/OOM reports unavailable; invariant/serial errors return false.
+ * Borrow metadata/callback synchronously, exclusive boot CPU, IRQs disabled. */
+bool memory_boot_service_start(const struct limine_hhdm_response *hhdm,
+    const struct limine_paging_mode_response *paging, bool (*writer)(const char *));
+/* Read-only late proof after screen setup; same exclusive callback contract. */
+bool memory_boot_service_check(bool (*writer)(const char *));
+/* Read-only retained-state proof after editor initialization; boot CPU only. */
+bool memory_boot_service_editor_check(bool (*writer)(const char *));
 #endif

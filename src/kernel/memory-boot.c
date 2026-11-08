@@ -14,6 +14,7 @@
 #include "frame-allocator.h"
 #include "page-access.h"
 #include "kernel-heap.h"
+#include "memory-service.h"
 
 _Static_assert(MEMORY_REGION_USABLE == LIMINE_MEMMAP_USABLE,
     "inventory usable type must match the pinned Limine header");
@@ -613,4 +614,133 @@ bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
     }
     return write_text("SPIFFOS_OWNER_CLEANUP_OK\r\n") &&
         write_text("SPIFFOS_HEAP_OK\r\n");
+}
+
+/* Retained service storage is kernel metadata, never inside its owned arena.
+ * Exactly one ordinary physical frame remains live for this boot lifetime. */
+static struct memory_service retained_service;
+static struct page_access_policy retained_policy;
+static uint64_t retained_physical;
+static uint64_t retained_free_before;
+static bool retained_started;
+
+/* End every service borrow before returning backing on a fatal probe failure.
+ * No success marker follows a failure; caller stops boot. Exclusive boot CPU. */
+static bool retained_failure(bool (*writer)(const char *), bool owns_frame)
+{
+    retained_started = false;
+    memory_service_retire(&retained_service);
+    if (owns_frame) {
+        (void)frame_release(&boot_allocator, FRAME_OWNER_KERNEL, retained_physical);
+    }
+    (void)writer("SPIFFOS_MEMORY_SERVICE_ERROR\r\n");
+    return false;
+}
+
+/* Revalidate the backing authority, roots and expected lifetimes before reads.
+ * Called again after screen initialization; never allocates or changes state. */
+static bool retained_valid(void)
+{
+    uint64_t mapped;
+    const struct memory_service_session *session = NULL;
+    if (!retained_started || !frame_allocator_check(&boot_allocator) ||
+        boot_allocator.ordinary_free != retained_free_before - 1 ||
+        boot_allocator.reserve_free != BOOT_RESERVE_FRAMES ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != 1 ||
+        page_access_resolve(&retained_policy, FRAME_OWNER_KERNEL,
+            retained_physical, &mapped) != PAGE_ACCESS_OK ||
+        mapped != (uintptr_t)retained_service.heap.arena ||
+        memory_service_check(&retained_service) != MEMORY_SERVICE_OK ||
+        retained_service.heap.live_allocations != 10 ||
+        memory_service_get_session(&retained_service, &session) != MEMORY_SERVICE_OK ||
+        session->workspace_count != 9 || session->active_workspace_id != 1) {
+        return false;
+    }
+    for (size_t id = 1; id <= MEMORY_SERVICE_WORKSPACE_COUNT; ++id) {
+        const struct memory_service_workspace *workspace = NULL;
+        if (memory_service_get_workspace(&retained_service, id, &workspace) != MEMORY_SERVICE_OK ||
+            workspace->workspace_id != id ||
+            workspace->reset_generation != (id == 1 ? 2u : 1u)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Acquire checked ordinary backing and retain ten roots after reversible probes.
+ * Only temporary client blocks are released. Missing mapping/OOM preserves the
+ * static editor path; corruption, self-test or serial errors cannot claim OK.
+ * Borrow responses/writer synchronously; one CPU, interrupts disabled. */
+bool memory_boot_service_start(const struct limine_hhdm_response *hhdm,
+    const struct limine_paging_mode_response *paging,
+    bool (*writer)(const char *))
+{
+    if (writer == NULL) return false;
+    if (retained_started || retained_service.retired) return retained_failure(writer, retained_started);
+    if (!boot_allocator_available ||
+        !memory_boot_page_policy(hhdm, paging, &boot_allocator, &retained_policy)) {
+        return writer("SPIFFOS_MEMORY_SERVICE_UNAVAILABLE\r\n");
+    }
+    if (!frame_allocator_check(&boot_allocator)) return retained_failure(writer, false);
+    retained_free_before = boot_allocator.ordinary_free;
+    enum page_access_result acquired = page_access_allocate_zero(&boot_allocator,
+        &retained_policy, FRAME_OWNER_KERNEL, kernel_page_zero, NULL, &retained_physical);
+    if (acquired != PAGE_ACCESS_OK) {
+        if (acquired == PAGE_ACCESS_ALLOCATION_FAILED && retained_free_before == 0) {
+            return writer("SPIFFOS_MEMORY_SERVICE_UNAVAILABLE\r\n");
+        }
+        return retained_failure(writer, false);
+    }
+    uint64_t mapped;
+    if (page_access_resolve(&retained_policy, FRAME_OWNER_KERNEL, retained_physical,
+            &mapped) != PAGE_ACCESS_OK ||
+        memory_service_initialize(&retained_service, (void *)(uintptr_t)mapped,
+            MEMORY_PAGE_BYTES) != MEMORY_SERVICE_OK) return retained_failure(writer, true);
+    void *first = NULL, *second = NULL;
+    const struct memory_service_session *session = NULL;
+    const struct memory_service_workspace *other = NULL;
+    enum kernel_heap_owner one = KERNEL_HEAP_OWNER_FIRST_WORKSPACE;
+    enum kernel_heap_owner two = KERNEL_HEAP_OWNER_FIRST_WORKSPACE + 1;
+    if (memory_service_get_session(&retained_service, &session) != MEMORY_SERVICE_OK ||
+        memory_service_get_workspace(&retained_service, 2, &other) != MEMORY_SERVICE_OK ||
+        memory_service_allocate(&retained_service, one, 32, &first) != MEMORY_SERVICE_OK ||
+        memory_service_allocate(&retained_service, two, 32, &second) != MEMORY_SERVICE_OK ||
+        !heap_bytes_have_value(first, 32, 0) || !heap_bytes_have_value(second, 32, 0) ||
+        !heap_bytes_write_and_verify(first, 32, 0xa5) ||
+        !heap_bytes_write_and_verify(second, 32, 0x5a) ||
+        memory_service_release(&retained_service, one, second) != MEMORY_SERVICE_WRONG_OWNER ||
+        memory_service_release(&retained_service, KERNEL_HEAP_OWNER_SESSION,
+            (void *)session) != MEMORY_SERVICE_ROOT_PROTECTED ||
+        memory_service_reset_workspace(&retained_service, 1) != MEMORY_SERVICE_OK ||
+        !heap_bytes_have_value(second, 32, 0x5a) ||
+        retained_service.session_root != session || retained_service.workspace_roots[1] != other ||
+        memory_service_release(&retained_service, two, second) != MEMORY_SERVICE_OK) {
+        return retained_failure(writer, true);
+    }
+    retained_started = true;
+    if (!retained_valid()) return retained_failure(writer, true);
+    return writer("MEMORY_SERVICE:4096,1,1,9,") &&
+        write_number(writer, boot_allocator.ordinary_free) && writer(",") &&
+        write_number(writer, boot_allocator.reserve_free) &&
+        writer("\r\nSPIFFOS_MEMORY_SERVICE_OK\r\n");
+}
+
+/* Verify retained state after framebuffer/console setup. Unsupported startup
+ * already emitted UNAVAILABLE; a serial or invariant failure stops boot. */
+bool memory_boot_service_check(bool (*writer)(const char *))
+{
+    if (writer == NULL) return false;
+    if (!retained_started) return true;
+    if (!retained_valid()) return retained_failure(writer, true);
+    return writer("SPIFFOS_MEMORY_RETAINED_OK\r\n");
+}
+
+/* Repeat the retained-state proof after screen_editor_initialize. This second
+ * phase has its own marker so tests prove ordering without duplicate success. */
+bool memory_boot_service_editor_check(bool (*writer)(const char *))
+{
+    if (writer == NULL) return false;
+    if (!retained_started) return true;
+    if (!retained_valid()) return retained_failure(writer, true);
+    return writer("SPIFFOS_MEMORY_EDITOR_OK\r\n");
 }

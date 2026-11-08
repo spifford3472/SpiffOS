@@ -77,3 +77,8 @@ checkpoint. It is deliberately not linked into the kernel or initialized at
 boot. Retained physical backing, boot/late verification markers, full failure
 injection and three-size M6 QEMU integration remain unfinished. The deployed
 M1-M5 runtime stays at its previously verified state.
+
+## Boot integration authorization — 2026-11-08
+Owner explicitly requested implementation, testing, merge and local QEMU
+deployment of M6 boot retention. This renews authority for this checkpoint.
+The connected account is rt-remote; isolated source is under its home.

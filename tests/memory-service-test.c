@@ -94,6 +94,12 @@ static void test_pressure_and_corruption(void)
     assert(memcmp(bytes, storage.arena, sizeof bytes) == 0);
     service.workspace_roots[0] = (void *)(uintptr_t)1;
     assert(memory_service_check(&service) == MEMORY_SERVICE_CORRUPT);
+    memory_service_retire(&service);
+    assert(service.retired && !service.ready && service.heap.arena == NULL);
+    assert(service.heap.blocks == NULL && service.session_root == NULL);
+    for (size_t i = 0; i < 9; ++i) assert(service.workspace_roots[i] == NULL);
+    memory_service_retire(&service);
+    assert(memory_service_check(&service) == MEMORY_SERVICE_RETIRED);
     guards(&storage);
 }
 

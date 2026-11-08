@@ -235,6 +235,7 @@ static void keyboard_run(struct text_console *console)
         (void)serial_write("SPIFFOS_KEYBOARD_UNAVAILABLE\r\n");
         halt_forever();
     }
+    if (!memory_boot_service_editor_check(serial_write)) halt_forever();
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
     bool first = true;
     for (;;) {
@@ -327,6 +328,9 @@ void kmain(void)
                                 paging_mode_request.response, serial_write)) {
         halt_forever();
     }
+    if (!memory_boot_service_start(hhdm_request.response, paging_mode_request.response, serial_write)) {
+        halt_forever();
+    }
     /* The response and its pointer array are owned by the bootloader. Borrow
      * them while those mappings remain intact; never free or reclaim them here. */
     const struct limine_framebuffer_response *response = framebuffer_request.response;
@@ -363,6 +367,7 @@ void kmain(void)
     } else {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }
+    if (!memory_boot_service_check(serial_write)) halt_forever();
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
