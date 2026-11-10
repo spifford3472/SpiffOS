@@ -268,6 +268,8 @@ static void keyboard_run(struct text_console *console)
                     action = SCREEN_EDITOR_UP; named = "EVENT:UP\r\n";
                 } else if (event.type == KEYBOARD_EVENT_DOWN) {
                     action = SCREEN_EDITOR_DOWN; named = "EVENT:DOWN\r\n";
+                } else if (event.type == KEYBOARD_EVENT_DELETE) {
+                    action = SCREEN_EDITOR_DELETE; named = "EVENT:DELETE\r\n";
                 } else if (event.type == KEYBOARD_EVENT_INSERT) {
                     action = SCREEN_EDITOR_TOGGLE_INSERT;
                     named = "EVENT:INSERT\r\n";

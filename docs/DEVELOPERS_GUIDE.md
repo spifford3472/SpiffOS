@@ -390,3 +390,18 @@ The initial summary reports one retained frame; checks after console and actual
 editor initialization prove the ten roots remain valid. This is identity and
 lifetime state, not the full workspace scheduler or migrated screen storage.
 Run make test-memory for M1-M6 sanitizer/three-size QEMU/pixel verification.
+
+## Complete US keyboard path
+A key needs three coordinated pieces: its scan-code mapping, editor acceptance
+and a visible glyph. US punctuation now passes all three while alphabet input
+retains uppercase behavior. Shift selects number-row/punctuation symbols.
+NumLock starts on; its make latches until release so repeat cannot toggle it
+repeatedly. Shift temporarily reverses keypad digit/navigation mode. Keypad
+operators and Enter do not depend on NumLock. LED synchronization and additional
+keypad navigation beyond arrows/Insert/Delete remain deferred.
+
+Delete erases at the cursor without changing its counted offset; Backspace
+erases before it and moves left. Both use the logical-line storage and the same
+row-shrink/redraw path, preserving following records when wrapping changes.
+At the end of a line Delete is harmless. Tests inject both extended Delete and
+keypad Delete and compare complete framebuffer pixels for symbols/deletion.

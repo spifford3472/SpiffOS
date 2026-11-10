@@ -201,3 +201,7 @@ A workspace reset is checked against another workspace's live client payload.
 State/backing are revalidated after console and editor initialization. Capacity
 growth, workspace UI, process isolation and concurrent allocation remain open.
 See operations/m6-boot-retention-20261108.md for actual evidence/deployment limits.
+
+The polling input diagnostic now prepares US punctuation, Delete-at-cursor and
+NumLock keypad input. It retains uppercase alphabet behavior and existing editor
+records/reflow. See decisions/ADR-keyboard-completeness.md for limits.

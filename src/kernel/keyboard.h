@@ -11,6 +11,8 @@ struct keyboard_decoder {
     uint8_t modifiers;
     uint8_t skip;
     int extended;
+    bool num_lock;
+    bool num_lock_down;
 };
 
 enum keyboard_event_type {
@@ -22,6 +24,7 @@ enum keyboard_event_type {
     KEYBOARD_EVENT_RIGHT,
     KEYBOARD_EVENT_UP,
     KEYBOARD_EVENT_DOWN,
+    KEYBOARD_EVENT_DELETE,
     KEYBOARD_EVENT_INSERT
 };
 
@@ -30,12 +33,15 @@ struct keyboard_event {
     unsigned char character;
 };
 
-/* Clear caller-owned decoder; no allocation, I/O or failure. Single caller. */
+/* Clear caller-owned decoder; NumLock starts on, without changing keyboard
+ * LEDs. No allocation, I/O or failure. Single caller. */
 void keyboard_decoder_reset(struct keyboard_decoder *decoder);
 
 /* Consume one translated set-1 byte and emit at most one make event. Breaks,
  * prefixes and modifiers update state but return false. E0 arrows and Insert
- * are named events rather than text bytes. Borrow caller state/output. */
+ * and Delete are named events. Keypad digits/operators/Enter are text; NumLock
+ * selects digits versus supported navigation, temporarily reversed by Shift.
+ * Borrow caller state/output; no hardware LED synchronization. */
 bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
     struct keyboard_event *event);
 

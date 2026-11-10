@@ -253,12 +253,49 @@ static void verify_scroll_capacity_and_boundaries(void)
     verify_guards();
 }
 
+/* Delete keeps the cursor offset, respects end boundaries and shrinks rows
+ * while retaining following logical records and framebuffer guard storage. */
+static void verify_forward_delete(void)
+{
+    struct capture capture={0};
+    initialize_console(&framebuffer,&console);
+    assert(screen_editor_initialize(&editor,&console,capture_submit,&capture));
+    for (const char *p="ABCDE"; *p; ++p) assert(screen_editor_accept(&editor,SCREEN_EDITOR_CHARACTER,*p)==SCREEN_EDITOR_ACCEPTED);
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_LEFT,0)==SCREEN_EDITOR_ACCEPTED);
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_LEFT,0)==SCREEN_EDITOR_ACCEPTED);
+    int index=editor.cursor_line;
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_DELETE,0)==SCREEN_EDITOR_ACCEPTED);
+    assert(editor.cursor_offset==3 && editor.lines[index].text.length==4);
+    assert(memcmp(editor.lines[index].text.bytes,"ABCE",4)==0);
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_DELETE,0)==SCREEN_EDITOR_ACCEPTED);
+    assert(editor.cursor_offset==3 && editor.lines[index].text.length==3);
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_DELETE,0)==SCREEN_EDITOR_IGNORED);
+    verify_guards();
+    initialize_console(&framebuffer,&console);
+    assert(screen_editor_initialize(&editor,&console,capture_submit,&capture));
+    for (const char *p="123456789"; *p; ++p) assert(screen_editor_accept(&editor,SCREEN_EDITOR_CHARACTER,*p)==SCREEN_EDITOR_ACCEPTED);
+    assert(screen_editor_seed_line(&editor,3,(const unsigned char *)"NEXT",4));
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_LEFT,0)==SCREEN_EDITOR_ACCEPTED);
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_LEFT,0)==SCREEN_EDITOR_ACCEPTED);
+    index=editor.cursor_line;
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_DELETE,0)==SCREEN_EDITOR_ACCEPTED);
+    assert(screen_editor_accept(&editor,SCREEN_EDITOR_DELETE,0)==SCREEN_EDITOR_ACCEPTED);
+    assert(editor.cursor_offset==7 && editor.lines[index].text.length==7);
+    assert(memcmp(editor.lines[index].text.bytes,"1234567",7)==0);
+    bool found=false;
+    for(size_t i=0;i<SCREEN_EDITOR_MAX_LINES;++i) if(editor.lines[i].used && editor.lines[i].text.length==4 && memcmp(editor.lines[i].text.bytes,"NEXT",4)==0) {
+        assert(editor.lines[i].start_row==2); found=true;
+    }
+    assert(found); verify_guards();
+}
+
 int main(void)
 {
     struct capture capture = {0};
     verify_cursor_shapes(&capture);
     verify_editing_and_reflow(&capture);
     verify_scroll_capacity_and_boundaries();
+    verify_forward_delete();
     initialize_console(&framebuffer, &console);
     assert(screen_editor_initialize(&editor, &console,
         capture_submit, &capture));

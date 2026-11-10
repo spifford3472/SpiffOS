@@ -22,6 +22,8 @@ void keyboard_decoder_reset(struct keyboard_decoder *decoder)
 {
     decoder->modifiers = 0;
     decoder->skip = 0;
+    decoder->num_lock = true;
+    decoder->num_lock_down = false;
     decoder->extended = 0;
 }
 
@@ -81,10 +83,23 @@ bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
         }
         return false;
     }
+    /* Lock keys latch until break, so make autorepeat cannot toggle repeatedly.
+     * No LED/host lock state is assumed; reset starts in numeric keypad mode. */
+    if (!extended && code == 0x45) {
+        if (released) decoder->num_lock_down = false;
+        else if (!decoder->num_lock_down && !(decoder->modifiers & CHORD_MASK)) {
+            decoder->num_lock = !decoder->num_lock;
+            decoder->num_lock_down = true;
+        }
+        return false;
+    }
     if (released || (decoder->modifiers & CHORD_MASK) != 0) {
         return false;
     }
     if (extended) {
+        if (code == 0x1c) return emit_event(event, KEYBOARD_EVENT_ENTER, 0);
+        if (code == 0x35) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '/');
+        if (code == 0x53) return emit_event(event, KEYBOARD_EVENT_DELETE, 0);
         if (code == 0x4b) return emit_event(event, KEYBOARD_EVENT_LEFT, 0);
         if (code == 0x4d) return emit_event(event, KEYBOARD_EVENT_RIGHT, 0);
         if (code == 0x48) return emit_event(event, KEYBOARD_EVENT_UP, 0);
@@ -93,6 +108,25 @@ bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
         return false;
     }
 
+    /* Keypad operators ignore NumLock; Shift temporarily reverses digit mode. */
+    if (code == 0x37) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '*');
+    if (code == 0x4a) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '-');
+    if (code == 0x4e) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '+');
+    static const unsigned char keypad[128] = {
+        [0x47]='7',[0x48]='8',[0x49]='9',[0x4b]='4',[0x4c]='5',
+        [0x4d]='6',[0x4f]='1',[0x50]='2',[0x51]='3',[0x52]='0',[0x53]='.'
+    };
+    if (keypad[code]) {
+        bool numeric = decoder->num_lock != ((decoder->modifiers & SHIFT_MASK) != 0);
+        if (numeric) return emit_event(event, KEYBOARD_EVENT_CHARACTER, keypad[code]);
+        if (code == 0x48) return emit_event(event, KEYBOARD_EVENT_UP, 0);
+        if (code == 0x50) return emit_event(event, KEYBOARD_EVENT_DOWN, 0);
+        if (code == 0x4b) return emit_event(event, KEYBOARD_EVENT_LEFT, 0);
+        if (code == 0x4d) return emit_event(event, KEYBOARD_EVENT_RIGHT, 0);
+        if (code == 0x52) return emit_event(event, KEYBOARD_EVENT_INSERT, 0);
+        if (code == 0x53) return emit_event(event, KEYBOARD_EVENT_DELETE, 0);
+        return false;
+    }
     /* Sparse designated entries describe physical US keys, not ASCII indexes.
      * Unlisted keys are zero-initialized and intentionally ignored. */
     static const unsigned char letters[128] = {
@@ -109,17 +143,16 @@ bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
     if (code == 0x1c) return emit_event(event, KEYBOARD_EVENT_ENTER, 0);
     if (code == 0x0e) return emit_event(event, KEYBOARD_EVENT_BACKSPACE, 0);
     if (code == 0x39) return emit_event(event, KEYBOARD_EVENT_CHARACTER, ' ');
-    if ((decoder->modifiers & SHIFT_MASK) != 0) {
-        if (code == 0x27) return emit_event(event, KEYBOARD_EVENT_CHARACTER, ':');
-        if (code == 0x35) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '?');
-        return false;
-    }
-    if (code >= 0x02 && code <= 0x0a) {
-        return emit_event(event, KEYBOARD_EVENT_CHARACTER,
-            (unsigned char)('1' + code - 2));
-    }
-    if (code == 0x0b) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '0');
-    if (code == 0x34) return emit_event(event, KEYBOARD_EVENT_CHARACTER, '.');
+    static const unsigned char plain[128] = {
+        [2]='1',[3]='2',[4]='3',[5]='4',[6]='5',[7]='6',[8]='7',[9]='8',[10]='9',[11]='0',
+        [12]='-',[13]='=',[26]='[',[27]=']',[39]=';',[40]=39,[41]='`',[43]=92,[51]=',',[52]='.',[53]='/'
+    };
+    static const unsigned char shifted[128] = {
+        [2]='!',[3]='@',[4]='#',[5]='$',[6]='%',[7]='^',[8]='&',[9]='*',[10]='(',[11]=')',
+        [12]='_',[13]='+',[26]='{',[27]='}',[39]=':',[40]='"',[41]='~',[43]='|',[51]='<',[52]='>',[53]='?'
+    };
+    unsigned char text = (decoder->modifiers & SHIFT_MASK) ? shifted[code] : plain[code];
+    if (text) return emit_event(event, KEYBOARD_EVENT_CHARACTER, text);
     return false;
 }
 
