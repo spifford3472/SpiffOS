@@ -45,16 +45,14 @@ static void decoder_test(void)
 {
     struct keyboard_decoder d; keyboard_decoder_reset(&d);
     struct keyboard_event workspace_event;
+    /* Ctrl+Alt+digits no longer switch: releases restore ordinary digits. */
     assert(!keyboard_decode_event(&d, 0x1d, &workspace_event));
     assert(!keyboard_decode_event(&d, 0x38, &workspace_event));
-    for (uint8_t scan = 0x02; scan <= 0x0a; ++scan) {
-        assert(keyboard_decode_event(&d, scan, &workspace_event));
-        assert(workspace_event.type == KEYBOARD_EVENT_WORKSPACE);
-        assert(workspace_event.character == scan - 1);
-    }
-    assert(!keyboard_decode_event(&d, 0x82, &workspace_event));
+    assert(!keyboard_decode_event(&d, 0x02, &workspace_event));
     assert(!keyboard_decode_event(&d, 0xb8, &workspace_event));
     assert(!keyboard_decode_event(&d, 0x9d, &workspace_event));
+    assert(keyboard_decode_event(&d, 0x02, &workspace_event));
+    assert(workspace_event.type == KEYBOARD_EVENT_CHARACTER && workspace_event.character == '1');
     /* F1..F9 are standalone selectors; break codes must never switch. */
     for (uint8_t scan = 0x3b; scan <= 0x43; ++scan) {
         assert(keyboard_decode_event(&d, scan, &workspace_event));
@@ -62,6 +60,12 @@ static void decoder_test(void)
         assert(workspace_event.character == scan - 0x3a);
         assert(!keyboard_decode_event(&d, (uint8_t)(scan | 0x80), &workspace_event));
     }
+    assert(keyboard_decode_event(&d, 0x44, &workspace_event));
+    assert(workspace_event.type == KEYBOARD_EVENT_SYSTEM);
+    assert(!keyboard_decode_event(&d, 0xc4, &workspace_event));
+    assert(keyboard_decode_event(&d, 0x58, &workspace_event));
+    assert(workspace_event.type == KEYBOARD_EVENT_IDENTIFY);
+    assert(!keyboard_decode_event(&d, 0xd8, &workspace_event));
     assert(keyboard_decode(&d,0x1e)=='A');
     assert(keyboard_decode(&d,0x1e)=='A'); /* Make repeats are text. */
     assert(keyboard_decode(&d,0x9e)==0);

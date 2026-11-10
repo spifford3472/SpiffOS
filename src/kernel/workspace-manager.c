@@ -8,12 +8,19 @@
 #include "workspace-manager.h"
 #include "boot-logo.h"
 #include "memory-boot.h"
+#include "framebuffer.h"
+#include "console-font.h"
 
 /* Each workspace owns exactly one snapshot; raw pixels preserve the original
  * boot logo, scrollback view and XOR cursor shape without reverse rendering.
  * This bounded static storage is not the one-page M4 heap. */
 static uint32_t workspace_pixels[WORKSPACE_COUNT]
     [WORKSPACE_MAX_HEIGHT][WORKSPACE_MAX_WIDTH];
+
+/* Save only the indicator's center rectangle, never editor backing storage.
+ * At 8x8 font pixels scaled 16x, its 128x128 region is bounded. */
+enum { INDICATOR_SIZE = 128 };
+static uint32_t indicator_pixels[INDICATOR_SIZE][INDICATOR_SIZE];
 
 /* Verify physical row bounds before touching mapped device memory. A rejected
  * large video mode cannot partially overwrite a snapshot. */
@@ -55,6 +62,8 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     manager->submit = submit;
     manager->submit_context = submit_context;
     manager->active_id = 1;
+    manager->system_visible = false;
+    manager->indicator_visible = false;
     static const unsigned char first[] = "SPIFFOS WORKSPACE";
     static const unsigned char second[] = "OUTPUT SCROLLS THE LOGO.";
     if (!screen_editor_initialize(&manager->editors[0], &manager->consoles[0],
@@ -66,6 +75,112 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     return true;
 }
 
+/* Restore the exact original 128x128 region, including any cursor overlay.
+ * This operation is idempotent and requires no allocation or interrupts. */
+void workspace_manager_hide_indicator(struct workspace_manager *manager)
+{
+    if (manager == NULL || !manager->indicator_visible) return;
+    const struct limine_framebuffer *fb = manager->framebuffer;
+    size_t x0 = (fb->width - INDICATOR_SIZE) / 2;
+    size_t y0 = (fb->height - INDICATOR_SIZE) / 2;
+    volatile uint8_t *base = fb->address;
+    for (size_t y = 0; y < INDICATOR_SIZE; ++y) {
+        volatile uint32_t *row = (volatile uint32_t *)(base + (y0+y)*fb->pitch);
+        for (size_t x = 0; x < INDICATOR_SIZE; ++x)
+            row[x0+x] = indicator_pixels[y][x];
+    }
+    manager->indicator_visible = false;
+}
+
+/* Render an opaque centered 8x8 bitmap digit at 16x pixel scale.
+ * The saved rectangle is restored before any editor or system mutation. */
+bool workspace_manager_identify(struct workspace_manager *manager)
+{
+    if (manager == NULL || manager->indicator_visible ||
+        !snapshot_supported(manager->framebuffer) ||
+        manager->framebuffer->width < INDICATOR_SIZE ||
+        manager->framebuffer->height < INDICATOR_SIZE) return false;
+    const struct limine_framebuffer *fb = manager->framebuffer;
+    size_t x0 = (fb->width - INDICATOR_SIZE) / 2;
+    size_t y0 = (fb->height - INDICATOR_SIZE) / 2;
+    volatile uint8_t *base = fb->address;
+    for (size_t y = 0; y < INDICATOR_SIZE; ++y) {
+        volatile uint32_t *row = (volatile uint32_t *)(base + (y0+y)*fb->pitch);
+        for (size_t x = 0; x < INDICATOR_SIZE; ++x)
+            indicator_pixels[y][x] = row[x0+x];
+    }
+    unsigned char digit = (unsigned char)('0' + manager->active_id);
+    for (size_t y = 0; y < INDICATOR_SIZE; ++y) {
+        uint8_t bits = console_font_row(digit, (unsigned int)(y/16));
+        volatile uint32_t *row = (volatile uint32_t *)(base + (y0+y)*fb->pitch);
+        for (size_t x = 0; x < INDICATOR_SIZE; ++x)
+            row[x0+x] = (bits & (0x80u >> (x/16))) ? 0x00ffffffu : 0x00112244u;
+    }
+    manager->indicator_visible = true;
+    return true;
+}
+
+/* Fade toward the exact saved framebuffer without altering editor state.
+ * step 1 retains 2/3 overlay; step 2 retains 1/3 overlay. Full restoration
+ * is performed by hide_indicator at the deadline. RGB channel blending uses
+ * integer arithmetic bounded to 0..255, with no heap or interrupts. */
+void workspace_manager_fade_indicator(struct workspace_manager *manager,
+                                      unsigned int step)
+{
+    if (manager == NULL || !manager->indicator_visible || step < 1 || step > 2)
+        return;
+    const struct limine_framebuffer *fb = manager->framebuffer;
+    size_t x0 = (fb->width - INDICATOR_SIZE) / 2;
+    size_t y0 = (fb->height - INDICATOR_SIZE) / 2;
+    volatile uint8_t *base = fb->address;
+    unsigned int opacity = 3 - step;
+    unsigned char digit = (unsigned char)('0' + manager->active_id);
+    for (size_t y = 0; y < INDICATOR_SIZE; ++y) {
+        uint8_t bits = console_font_row(digit, (unsigned int)(y/16));
+        volatile uint32_t *row = (volatile uint32_t *)(base + (y0+y)*fb->pitch);
+        for (size_t x = 0; x < INDICATOR_SIZE; ++x) {
+            uint32_t original = indicator_pixels[y][x];
+            uint32_t overlay = (bits & (0x80u >> (x/16))) ?
+                0x00ffffffu : 0x00112244u;
+            uint32_t blended = 0;
+            for (unsigned int shift = 0; shift <= 16; shift += 8) {
+                unsigned int from = (original >> shift) & 255u;
+                unsigned int to = (overlay >> shift) & 255u;
+                blended |= ((from * (3 - opacity) + to * opacity) / 3u) << shift;
+            }
+            row[x0+x] = blended;
+        }
+    }
+}
+
+/* F10 opens a dedicated read-only system screen. Repeated F10 is harmless;
+ * the selected user workspace remains saved and can be restored by F1..F9. */
+bool workspace_manager_system(struct workspace_manager *manager)
+{
+    if (manager == NULL || !snapshot_supported(manager->framebuffer)) return false;
+    workspace_manager_hide_indicator(manager);
+    if (manager->system_visible) return true;
+    size_t index = manager->active_id - 1;
+    snapshot_transfer(manager->framebuffer, index, true);
+    manager->snapshot_ready[index] = true;
+    struct text_console system_console = {0};
+    const struct limine_framebuffer *fb = manager->framebuffer;
+    if (!text_console_initialize(&system_console, fb, 0, 0,
+        fb->width / TEXT_CELL_PIXELS, fb->height / TEXT_CELL_PIXELS) ||
+        !text_console_write(&system_console, "SPIFFOS SYSTEM SCREEN\n\n")) {
+        snapshot_transfer(fb, index, false);
+        return false;
+    }
+    char line[] = "ACTIVE WORKSPACE: 1\nF1-F9: WORKSPACES\nF10: SYSTEM SCREEN\nF12: SHOW WORKSPACE NUMBER";
+    line[18] = (char)('0' + manager->active_id);
+    if (!text_console_write(&system_console, line)) {
+        snapshot_transfer(fb, index, false);
+        return false;
+    }
+    manager->system_visible = true;
+    return true;
+}
+
 /* Prepare a new editor only after verifying snapshot bounds and target ID.
  * Existing targets require no initialization and keep every logical line. */
 bool workspace_manager_switch(struct workspace_manager *manager, size_t id)
@@ -74,6 +189,11 @@ bool workspace_manager_switch(struct workspace_manager *manager, size_t id)
         !snapshot_supported(manager->framebuffer) || manager->active_id < 1 ||
         manager->active_id > WORKSPACE_COUNT || !manager->ready[manager->active_id - 1])
         return false;
+    workspace_manager_hide_indicator(manager);
+    if (manager->system_visible) {
+        snapshot_transfer(manager->framebuffer, manager->active_id - 1, false);
+        manager->system_visible = false;
+    }
     if (id == manager->active_id) return true;
     size_t previous = manager->active_id - 1;
     size_t target = id - 1;
@@ -119,6 +239,7 @@ bool workspace_manager_reset(struct workspace_manager *manager, size_t id)
     if (manager == NULL || id < 1 || id > WORKSPACE_COUNT ||
         !snapshot_supported(manager->framebuffer) ||
         !memory_boot_reset_workspace(id)) return false;
+    workspace_manager_hide_indicator(manager);
     size_t target = id - 1;
     manager->ready[target] = false;
     manager->snapshot_ready[target] = false;

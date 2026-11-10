@@ -213,6 +213,19 @@ static bool keyboard_submit_diagnostic(
     return serial_write("\r\n");
 }
 
+/* PIT channel 0 is left in firmware's periodic mode. Latch/read the
+ * 16-bit down-counter without reprogramming the interrupt source. At least
+ * one poll per 54.9 ms is required to observe each wrap; the loop normally
+ * polls continuously, and never sleeps while the overlay is visible.
+ * This is a boot-diagnostic timer, not a general monotonic clock service. */
+static uint16_t pit_read_counter(void)
+{
+    port_write(0x43, 0x00);
+    uint16_t low = port_read(0x40);
+    uint16_t high = port_read(0x40);
+    return (uint16_t)(low | (high << 8));
+}
+
 /* Run the diagnostic input loop. The decoder emits named navigation/mode
  * events; the editor owns pixels and stored lines. Text keys retain hexadecimal
  * serial evidence while named keys use readable EVENT records. */
@@ -233,7 +246,28 @@ static void keyboard_run(struct text_console *console)
     if (!memory_boot_service_editor_check(serial_write)) halt_forever();
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
     bool first = true;
+    bool indicator_timed = false;
+    uint16_t previous_pit = 0;
+    uint32_t elapsed_pit = 0;
+    unsigned int indicator_fade_step = 0;
     for (;;) {
+        if (indicator_timed) {
+            uint16_t current = pit_read_counter();
+            elapsed_pit += (uint16_t)(previous_pit - current);
+            previous_pit = current;
+            if (elapsed_pit >= 1014205u && indicator_fade_step < 2) {
+                workspace_manager_fade_indicator(&boot_workspaces, 2);
+                indicator_fade_step = 2;
+            } else if (elapsed_pit >= 775568u && indicator_fade_step < 1) {
+                workspace_manager_fade_indicator(&boot_workspaces, 1);
+                indicator_fade_step = 1;
+            }
+            if (elapsed_pit >= 1193182u) {
+                workspace_manager_hide_indicator(&boot_workspaces);
+                indicator_timed = false;
+                (void)serial_write("EVENT:INDICATOR_HIDDEN\r\n");
+            }
+        }
         uint8_t byte = 0;
         enum keyboard_poll poll = keyboard_ps2_poll(&io, &byte);
         if (poll == KEYBOARD_DROPPED) {
@@ -246,6 +280,28 @@ static void keyboard_run(struct text_console *console)
             }
             struct keyboard_event event;
             if (keyboard_decode_event(&decoder, byte, &event)) {
+                if (event.type == KEYBOARD_EVENT_IDENTIFY) {
+                    workspace_manager_hide_indicator(&boot_workspaces);
+                    if (workspace_manager_identify(&boot_workspaces)) {
+                        previous_pit = pit_read_counter();
+                        elapsed_pit = 0;
+                        indicator_fade_step = 0;
+                        indicator_timed = true;
+                        (void)serial_write("EVENT:INDICATOR_OK\r\n");
+                    } else (void)serial_write("EVENT:INDICATOR_UNAVAILABLE\r\n");
+                    continue;
+                }
+                if (indicator_timed) {
+                    workspace_manager_hide_indicator(&boot_workspaces);
+                    indicator_timed = false;
+                }
+                if (event.type == KEYBOARD_EVENT_SYSTEM) {
+                    (void)serial_write(workspace_manager_system(&boot_workspaces) ?
+                        "EVENT:SYSTEM_OK\r\n" : "EVENT:SYSTEM_UNAVAILABLE\r\n");
+                    continue;
+                }
+                if (boot_workspaces.system_visible &&
+                    event.type != KEYBOARD_EVENT_WORKSPACE) continue;
                 if (event.type == KEYBOARD_EVENT_WORKSPACE) {
                     if (workspace_manager_switch(&boot_workspaces, event.character)) {
                         (void)serial_write("EVENT:WORKSPACE_OK\r\n");
