@@ -55,6 +55,13 @@ static void decoder_test(void)
     assert(!keyboard_decode_event(&d, 0x82, &workspace_event));
     assert(!keyboard_decode_event(&d, 0xb8, &workspace_event));
     assert(!keyboard_decode_event(&d, 0x9d, &workspace_event));
+    /* F1..F9 are standalone selectors; break codes must never switch. */
+    for (uint8_t scan = 0x3b; scan <= 0x43; ++scan) {
+        assert(keyboard_decode_event(&d, scan, &workspace_event));
+        assert(workspace_event.type == KEYBOARD_EVENT_WORKSPACE);
+        assert(workspace_event.character == scan - 0x3a);
+        assert(!keyboard_decode_event(&d, (uint8_t)(scan | 0x80), &workspace_event));
+    }
     assert(keyboard_decode(&d,0x1e)=='A');
     assert(keyboard_decode(&d,0x1e)=='A'); /* Make repeats are text. */
     assert(keyboard_decode(&d,0x9e)==0);
