@@ -11,7 +11,7 @@ KERNEL := build/spiffos-kernel.elf
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -20,8 +20,8 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -158,11 +158,12 @@ build/screen-editor-test: tests/screen-editor-test.c src/kernel/screen-editor.c 
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel tests/screen-editor-test.c src/kernel/screen-editor.c src/kernel/logical-line.c src/kernel/text-console.c src/kernel/framebuffer.c src/kernel/console-font.c -o $@
 
-test-keyboard-memory: build/keyboard-test build/logical-line-test build/keyboard-console-test build/screen-editor-test
+test-keyboard-memory: build/keyboard-test build/logical-line-test build/keyboard-console-test build/screen-editor-test build/workspace-manager-test
 	./build/keyboard-test
 	./build/logical-line-test
 	./build/keyboard-console-test
 	./build/screen-editor-test
+	./build/workspace-manager-test
 
 test-keyboard: test-keyboard-memory iso
 	python3 scripts/qemu.py test --keyboard
@@ -256,3 +257,17 @@ build/memory-service.o: src/kernel/memory-service.c src/kernel/memory-service.h 
 .PHONY: test-build-rules
 test-build-rules:
 	python3 scripts/test-build-rules.py
+
+# M7 independent editor state and screen snapshot manager.
+build/workspace-manager.o: src/kernel/workspace-manager.c src/kernel/workspace-manager.h src/kernel/screen-editor.h src/kernel/boot-logo.h src/kernel/memory-boot.h include/limine.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# M7 hosted screen image and independent editor state tests.
+.PHONY: test-workspace-manager-memory
+build/workspace-manager-test: tests/workspace-manager-test.c src/kernel/workspace-manager.c src/kernel/workspace-manager.h src/kernel/boot-logo.c src/kernel/text-console.c src/kernel/console-font.c src/kernel/screen-editor.c src/kernel/logical-line.c src/kernel/framebuffer.c build/boot-logo-data.h include/limine.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Iinclude -Isrc/kernel -Ibuild tests/workspace-manager-test.c src/kernel/workspace-manager.c src/kernel/boot-logo.c src/kernel/text-console.c src/kernel/console-font.c src/kernel/screen-editor.c src/kernel/logical-line.c src/kernel/framebuffer.c -o $@
+
+test-workspace-manager-memory: build/workspace-manager-test
+	./build/workspace-manager-test

@@ -93,6 +93,15 @@ bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
         }
         return false;
     }
+    /* Ctrl+Alt+top-row digit is a workspace event, not printable text.
+     * Require both modifier families; do not treat keypad digits as shortcuts. */
+    if (!released && !extended &&
+        (decoder->modifiers & (CTRL_LEFT | CTRL_RIGHT)) != 0 &&
+        (decoder->modifiers & (ALT_LEFT | ALT_RIGHT)) != 0 &&
+        code >= 0x02 && code <= 0x0a) {
+        return emit_event(event, KEYBOARD_EVENT_WORKSPACE,
+                          (unsigned char)(code - 0x01));
+    }
     if (released || (decoder->modifiers & CHORD_MASK) != 0) {
         return false;
     }

@@ -46,7 +46,7 @@ enum memory_service_result {
 };
 
 /* Heap-allocated session identity. workspace_count is fixed at nine in M6 and
- * active_workspace_id starts at one. M6 exposes no workspace-switch mutation;
+ * active_workspace_id starts at one. M7 changes the active ID only through the validated selector;
  * callers receive only borrowed const pointers. */
 struct memory_service_session {
     size_t workspace_count;
@@ -95,11 +95,17 @@ enum memory_service_result memory_service_initialize(
 /* Validate the complete heap and all service accounting/root blocks before
  * reading any root payload. Root blocks must have their exact expected rounded
  * size and owner, IDs must match owners, and session fields must name nine
- * workspaces with active ID one. Pure/read-only: corruption is reported without
+ * workspaces with active ID in 1..9. Pure/read-only: corruption is reported without
  * repair or mutation. NOT_READY and RETIRED are distinct. Caller retains all
  * storage; one CPU with interrupts disabled and no concurrent mutation. */
 enum memory_service_result memory_service_check(
     const struct memory_service *service);
+
+/* Select one of nine workspace IDs. Validates all roots and accounting first;
+ * invalid IDs or corruption leave session and arena unchanged. Does not render,
+ * allocate, or prepare editor state. Single CPU, interrupts disabled. */
+enum memory_service_result memory_service_select_workspace(
+    struct memory_service *service, size_t workspace_id);
 
 /* Borrow the const session root through caller-owned output storage. On success
  * *session receives a pointer valid until service retirement. The output object

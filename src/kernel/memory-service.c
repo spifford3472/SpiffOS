@@ -304,7 +304,8 @@ static enum memory_service_result memory_service_validate(
      * root pointer, exact owner and exact allocation size passed above. */
     if (service->session_root->workspace_count !=
             MEMORY_SERVICE_WORKSPACE_COUNT ||
-        service->session_root->active_workspace_id != 1) {
+         (service->session_root->active_workspace_id < 1 ||
+         service->session_root->active_workspace_id > MEMORY_SERVICE_WORKSPACE_COUNT)) {
         return MEMORY_SERVICE_CORRUPT;
     }
     for (size_t index = 0; index < MEMORY_SERVICE_WORKSPACE_COUNT; ++index) {
@@ -454,6 +455,20 @@ enum memory_service_result memory_service_check(
     const struct memory_service *service)
 {
     return memory_service_validate(service, false);
+}
+
+/* Select a valid active workspace after validating all heap/root invariants.
+ * The caller must prepare its editor and display before requesting the switch.
+ * Failure is read-only; this API never allocates or renders. */
+enum memory_service_result memory_service_select_workspace(
+    struct memory_service *service, size_t workspace_id)
+{
+    enum memory_service_result result = memory_service_check(service);
+    if (result != MEMORY_SERVICE_OK) return result;
+    if (workspace_id < 1 || workspace_id > MEMORY_SERVICE_WORKSPACE_COUNT)
+        return MEMORY_SERVICE_BAD_WORKSPACE_ID;
+    service->session_root->active_workspace_id = workspace_id;
+    return MEMORY_SERVICE_OK;
 }
 
 /* Publish the borrowed const session root only after complete state and output

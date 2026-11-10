@@ -744,3 +744,18 @@ bool memory_boot_service_editor_check(bool (*writer)(const char *))
     if (!retained_valid()) return retained_failure(writer, true);
     return writer("SPIFFOS_MEMORY_EDITOR_OK\r\n");
 }
+
+/* Mutate only the retained session root, preserving M6 ownership and all
+ * other workspace roots. The display manager prepares its target first. */
+bool memory_boot_select_workspace(size_t workspace_id)
+{
+    return retained_started &&
+        memory_service_select_workspace(&retained_service, workspace_id) == MEMORY_SERVICE_OK;
+}
+
+/* Delegate isolated owner cleanup to the validated memory service. */
+bool memory_boot_reset_workspace(size_t workspace_id)
+{
+    return retained_started &&
+        memory_service_reset_workspace(&retained_service, workspace_id) == MEMORY_SERVICE_OK;
+}

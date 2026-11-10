@@ -34,6 +34,15 @@ static void test_lifetimes(void)
     const struct memory_service_session *session = NULL;
     assert(memory_service_get_session(&service, &session) == MEMORY_SERVICE_OK);
     assert(session->workspace_count == 9 && session->active_workspace_id == 1);
+    assert(memory_service_select_workspace(&service, 2) == MEMORY_SERVICE_OK);
+    assert(session->active_workspace_id == 2);
+    assert(memory_service_check(&service) == MEMORY_SERVICE_OK);
+    assert(memory_service_select_workspace(&service, 0) == MEMORY_SERVICE_BAD_WORKSPACE_ID);
+    assert(memory_service_select_workspace(&service, 10) == MEMORY_SERVICE_BAD_WORKSPACE_ID);
+    assert(session->active_workspace_id == 2);
+    assert(memory_service_select_workspace(&service, 9) == MEMORY_SERVICE_OK);
+    assert(session->active_workspace_id == 9);
+    assert(memory_service_select_workspace(&service, 1) == MEMORY_SERVICE_OK);
     assert(service.heap.live_allocations == 10);
     for (size_t id = 1; id <= 9; ++id) {
         const struct memory_service_workspace *workspace = NULL;

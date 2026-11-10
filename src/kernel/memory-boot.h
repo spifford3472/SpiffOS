@@ -8,6 +8,7 @@
 #ifndef SPIFFOS_MEMORY_BOOT_H
 #define SPIFFOS_MEMORY_BOOT_H
 #include <stdbool.h>
+#include <stddef.h>
 struct limine_memmap_response;
 struct limine_hhdm_response;
 struct limine_paging_mode_response;
@@ -65,4 +66,9 @@ bool memory_boot_service_start(const struct limine_hhdm_response *hhdm,
 bool memory_boot_service_check(bool (*writer)(const char *));
 /* Read-only retained-state proof after editor initialization; boot CPU only. */
 bool memory_boot_service_editor_check(bool (*writer)(const char *));
+/* Switch retained active workspace after full service validation; does not
+ * change the display. False leaves session untouched. Boot CPU only. */
+bool memory_boot_select_workspace(size_t workspace_id);
+/* Reset only one retained workspace root/owner; preserves session and others. */
+bool memory_boot_reset_workspace(size_t workspace_id);
 #endif

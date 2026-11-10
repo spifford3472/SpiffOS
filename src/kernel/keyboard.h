@@ -25,7 +25,8 @@ enum keyboard_event_type {
     KEYBOARD_EVENT_UP,
     KEYBOARD_EVENT_DOWN,
     KEYBOARD_EVENT_DELETE,
-    KEYBOARD_EVENT_INSERT
+    KEYBOARD_EVENT_INSERT,
+    KEYBOARD_EVENT_WORKSPACE
 };
 
 struct keyboard_event {

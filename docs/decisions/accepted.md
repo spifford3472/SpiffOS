@@ -368,3 +368,7 @@ See operations/m6-boot-retention-20261108.md for actual evidence/deployment limi
 Implement US punctuation, forward Delete and numeric keypad input while retaining
 uppercase text and existing cursor/reflow semantics. See ADR-keyboard-completeness.md.
 Prepared for review; no new merge or physical deployment authority inferred.
+
+## M7 workspace switching — owner authorization 2026-11-10
+
+The owner authorized implementation, testing, merge and deployment of Ctrl+Alt+1..9 independent text workspaces, subject to passing validation. Design and constraints: [M7 ADR](ADR-m7-text-workspace-switching.md). This does not approve BASIC execution or physical disk installation.

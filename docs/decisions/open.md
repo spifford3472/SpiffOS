@@ -209,3 +209,7 @@ See operations/m6-boot-retention-20261108.md for actual evidence/deployment limi
 Keyboard US punctuation, Delete and keypad completion is being implemented per
 ADR-keyboard-completeness.md. Lowercase, Unicode, alternative layouts, lock LEDs
 and keypad Home/End/PageUp/PageDown remain deferred.
+
+## M7 workspace checkpoint — 2026-11-10
+
+O-006 is partially scoped for diagnostic text workspace switching; future application composition remains OPEN. The approved checkpoint design is [M7 ADR](ADR-m7-text-workspace-switching.md).

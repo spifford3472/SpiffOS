@@ -44,6 +44,17 @@ static void write_fake(void *context,uint16_t port,uint8_t byte)
 static void decoder_test(void)
 {
     struct keyboard_decoder d; keyboard_decoder_reset(&d);
+    struct keyboard_event workspace_event;
+    assert(!keyboard_decode_event(&d, 0x1d, &workspace_event));
+    assert(!keyboard_decode_event(&d, 0x38, &workspace_event));
+    for (uint8_t scan = 0x02; scan <= 0x0a; ++scan) {
+        assert(keyboard_decode_event(&d, scan, &workspace_event));
+        assert(workspace_event.type == KEYBOARD_EVENT_WORKSPACE);
+        assert(workspace_event.character == scan - 1);
+    }
+    assert(!keyboard_decode_event(&d, 0x82, &workspace_event));
+    assert(!keyboard_decode_event(&d, 0xb8, &workspace_event));
+    assert(!keyboard_decode_event(&d, 0x9d, &workspace_event));
     assert(keyboard_decode(&d,0x1e)=='A');
     assert(keyboard_decode(&d,0x1e)=='A'); /* Make repeats are text. */
     assert(keyboard_decode(&d,0x9e)==0);
