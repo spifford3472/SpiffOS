@@ -16,6 +16,7 @@
 #include "keyboard-ps2.h"
 #include "screen-editor.h"
 #include "memory-boot.h"
+#include "workspace-manager.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -191,7 +192,7 @@ static void keyboard_port_write(void *context, uint16_t port, uint8_t byte)
 /* The screen editor contains about 266 KiB of bounded line storage, so it must
  * live in kernel BSS rather than Limine's small entry stack. One boot CPU owns
  * this diagnostic state for the lifetime of the kernel. */
-static struct screen_editor boot_editor;
+static struct workspace_manager boot_workspaces;
 
 /* Diagnostic submission boundary: emit the complete counted logical line.
  * context is unused. The callback borrows bytes only during this call.
@@ -223,15 +224,9 @@ static void keyboard_run(struct text_console *console)
     };
     struct keyboard_decoder decoder;
     keyboard_decoder_reset(&decoder);
-    static const unsigned char first_output[] = "SPIFFOS WORKSPACE";
-    static const unsigned char second_output[] = "OUTPUT SCROLLS THE LOGO.";
     if (!keyboard_ps2_initialize(&io) ||
-        !screen_editor_initialize(&boot_editor, console,
-            keyboard_submit_diagnostic, NULL) ||
-        !screen_editor_seed_line(&boot_editor, 13, first_output,
-            sizeof first_output - 1) ||
-        !screen_editor_seed_line(&boot_editor, 14, second_output,
-            sizeof second_output - 1)) {
+        !workspace_manager_initialize(&boot_workspaces, console,
+            keyboard_submit_diagnostic, NULL)) {
         (void)serial_write("SPIFFOS_KEYBOARD_UNAVAILABLE\r\n");
         halt_forever();
     }
@@ -251,6 +246,14 @@ static void keyboard_run(struct text_console *console)
             }
             struct keyboard_event event;
             if (keyboard_decode_event(&decoder, byte, &event)) {
+                if (event.type == KEYBOARD_EVENT_WORKSPACE) {
+                    if (workspace_manager_switch(&boot_workspaces, event.character)) {
+                        (void)serial_write("EVENT:WORKSPACE_OK\r\n");
+                    } else {
+                        (void)serial_write("EVENT:WORKSPACE_UNAVAILABLE\r\n");
+                    }
+                    continue;
+                }
                 enum screen_editor_action action = SCREEN_EDITOR_CHARACTER;
                 unsigned char character = event.character;
                 const char *named = NULL;
@@ -275,7 +278,7 @@ static void keyboard_run(struct text_console *console)
                     named = "EVENT:INSERT\r\n";
                 }
                 enum screen_editor_result accepted =
-                    screen_editor_accept(&boot_editor, action, character);
+                    screen_editor_accept(workspace_manager_active(&boot_workspaces), action, character);
                 if (accepted == SCREEN_EDITOR_ERROR) {
                     (void)serial_write("SPIFFOS_INPUT_ERROR\r\n");
                     halt_forever();

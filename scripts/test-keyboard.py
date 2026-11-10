@@ -121,6 +121,33 @@ def run_keyboard_test(socket_path, serial, build):
                 assert events() == expected_events, (events(), expected_events)
 
             rpc("qmp_capabilities")
+            # M7: real modifier chord must preserve both independent pixel
+            # images, editor state, and existing boot workspace unchanged.
+            initial_path = build / "m7-initial.ppm"
+            rpc("screendump", {"filename":str(initial_path)})
+            key(["ctrl", "alt", "2"], named="WORKSPACE_OK")
+            second_path = build / "m7-second.ppm"
+            rpc("screendump", {"filename":str(second_path)})
+            assert initial_path.read_bytes() != second_path.read_bytes()
+            key(["z"], "Z")
+            key(["ctrl", "alt", "1"], named="WORKSPACE_OK")
+            restored_path = build / "m7-restored.ppm"
+            rpc("screendump", {"filename":str(restored_path)})
+            assert initial_path.read_bytes() == restored_path.read_bytes(), "workspace 1 framebuffer changed"
+            key(["ctrl", "alt", "2"], named="WORKSPACE_OK")
+            second_restored = build / "m7-second-restored.ppm"
+            rpc("screendump", {"filename":str(second_restored)})
+            assert second_path.read_bytes() != second_restored.read_bytes(), "workspace 2 text lost"
+            key(["ctrl", "alt", "1"], named="WORKSPACE_OK")
+            print("PASS M7 real QEMU Ctrl+Alt+1/2, framebuffer restore and independent text")
+            for workspace_id in range(3, 10):
+                key(["ctrl", "alt", str(workspace_id)], named="WORKSPACE_OK")
+                key(["ctrl", "alt", "1"], named="WORKSPACE_OK")
+                restored_nine = build / f"m7-return-{workspace_id}.ppm"
+                rpc("screendump", {"filename":str(restored_nine)})
+                assert initial_path.read_bytes() == restored_nine.read_bytes(), (
+                    f"workspace {workspace_id} corrupted workspace 1")
+            print("PASS M7 all nine workspace chords and exact workspace 1 restoration")
             key(["backspace"])
             key(["ctrl","a"])
             key(["alt","b"])
