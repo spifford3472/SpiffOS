@@ -173,9 +173,10 @@ build/memory-map.o: src/kernel/memory-map.c src/kernel/memory-map.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/memory-boot.o: src/kernel/memory-service.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/memory-map.h src/kernel/frame-allocator.h src/kernel/page-access.h src/kernel/kernel-heap.h include/limine.h Makefile
+# Keep the translation unit explicit: headers are dependencies, not compiler input.
+build/memory-boot.o: src/kernel/memory-boot.c src/kernel/memory-service.h src/kernel/memory-boot.h src/kernel/memory-map.h src/kernel/frame-allocator.h src/kernel/page-access.h src/kernel/kernel-heap.h include/limine.h Makefile
 	mkdir -p build
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c src/kernel/memory-boot.c -o $@
 
 build/memory-map-test: src/kernel/memory-service.c src/kernel/memory-service.h src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h tests/memory-map-test.c src/kernel/memory-map.c src/kernel/memory-map.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/page-access.c src/kernel/page-access.h src/kernel/kernel-heap.c src/kernel/kernel-heap.h include/limine.h Makefile
 	mkdir -p build
@@ -185,7 +186,7 @@ build/memory-map-test: src/kernel/memory-service.c src/kernel/memory-service.h s
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
+test-memory: test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 
@@ -251,3 +252,7 @@ test-memory-service: build/memory-service-test
 build/memory-service.o: src/kernel/memory-service.c src/kernel/memory-service.h src/kernel/kernel-heap.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: test-build-rules
+test-build-rules:
+	python3 scripts/test-build-rules.py
