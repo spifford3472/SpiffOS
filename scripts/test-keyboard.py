@@ -210,6 +210,44 @@ def run_keyboard_test(socket_path, serial, build):
             key(["ret"], "\n")
             wait_until(lambda: submitted()[-1:] == [b"BCBB"],
                        "preserved following line submitted after reflow")
+            # Verify every US punctuation glyph and keypad byte in a fresh row,
+            # retaining previous reflow content in independent full-frame checks.
+            punctuation = ""
+            for code, character in [('minus', '-'), ('equal', '='), ('bracket_left', '['), ('bracket_right', ']'), ('semicolon', ';'), ('apostrophe', "'"), ('grave_accent', '`'), ('backslash', '\\'), ('comma', ','), ('dot', '.'), ('slash', '/')]:
+                key([code], character)
+                punctuation += character
+            for code, character in [('1', '!'), ('2', '@'), ('3', '#'), ('4', '$'), ('5', '%'), ('6', '^'), ('7', '&'), ('8', '*'), ('9', '('), ('0', ')'), ('minus', '_'), ('equal', '+'), ('bracket_left', '{'), ('bracket_right', '}'), ('semicolon', ':'), ('apostrophe', '"'), ('grave_accent', '~'), ('backslash', '|'), ('comma', '<'), ('dot', '>'), ('slash', '?')]:
+                key(["shift", code], character)
+                punctuation += character
+            keypad = "0123456789.+-*/"
+            codes = ["kp_0","kp_1","kp_2","kp_3","kp_4","kp_5","kp_6","kp_7","kp_8","kp_9",
+                     "kp_decimal","kp_add","kp_subtract","kp_multiply","kp_divide"]
+            for code, character in zip(codes, keypad):
+                key([code], character)
+            text = punctuation + keypad
+            row = rows - 4
+            previous = [(rows-6, "A" * 79 + "X"), (rows-5, "BCBB")]
+            path = build / "keyboard-symbols.ppm"
+            rpc("screendump", {"filename":str(path)})
+            verify_screen(path, text, row, False, (row,len(text),"overwrite"), previous)
+            key(["left"], named="LEFT")
+            key(["left"], named="LEFT")
+            offset = len(text) - 2
+            key(["delete"], named="DELETE")
+            text = text[:offset] + text[offset+1:]
+            path = build / "keyboard-delete.ppm"
+            rpc("screendump", {"filename":str(path)})
+            verify_screen(path, text, row, False, (row,offset,"overwrite"), previous)
+            key(["num_lock"])
+            key(["kp_4"], named="LEFT")
+            offset -= 1
+            key(["kp_decimal"], named="DELETE")
+            text = text[:offset] + text[offset+1:]
+            key(["shift","kp_1"], "1")
+            text = text[:offset] + "1" + text[offset+1:]
+            key(["num_lock"])
+            key(["kp_enter"], "\n")
+            wait_until(lambda: submitted()[-1:] == [text.encode()], "punctuation/keypad/Delete submission")
             assert b"SPIFFOS_KEYBOARD_BYTE_OK" in serial.read_bytes().splitlines()
             (build / "keyboard-serial.log").write_bytes(serial.read_bytes())
             print(f"PASS real QEMU screen editor: {len(expected)} text bytes, "

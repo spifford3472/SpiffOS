@@ -12,9 +12,8 @@
  * Full text encoding and keyboard layouts remain outside this checkpoint. */
 static bool supported_printable(unsigned char character)
 {
-    return (character >= 'A' && character <= 'Z') ||
-        (character >= '0' && character <= '9') || character == ' ' ||
-        character == '.' || character == ':' || character == '?';
+    return character >= 32 && character <= 126 &&
+        !(character >= 'a' && character <= 'z');
 }
 
 /* Count physical rows occupied by stored bytes. Empty lines own one row so
@@ -364,29 +363,35 @@ static enum screen_editor_result type_character(
         SCREEN_EDITOR_ACCEPTED : SCREEN_EDITOR_ERROR;
 }
 
-/* Backspace edits only within the selected logical line. Blank positions past
- * its end merely move left; offset zero never merges with a previous line. */
-static enum screen_editor_result backspace(struct screen_editor *editor)
+/* Erase before or at the cursor within one logical line. Backspace moves left;
+ * Delete keeps its counted offset. Neither merges separate logical records.
+ * Blank/end Delete is a no-op. Existing row shrink preserves following lines. */
+static enum screen_editor_result erase_character(struct screen_editor *editor, bool before)
 {
     if (editor->cursor_line < 0) {
+        if (!before) return SCREEN_EDITOR_IGNORED;
         move_cursor(editor, SCREEN_EDITOR_LEFT);
         return SCREEN_EDITOR_ACCEPTED;
     }
     struct screen_editor_line *line = &editor->lines[editor->cursor_line];
     if (editor->cursor_offset > line->text.length) {
+        if (!before) return SCREEN_EDITOR_IGNORED;
         --editor->cursor_offset;
         editor->capacity_full = false;
         return position_from_offset(editor) ?
             SCREEN_EDITOR_ACCEPTED : SCREEN_EDITOR_ERROR;
     }
-    if (editor->cursor_offset == 0) {
+    if ((before && editor->cursor_offset == 0) ||
+        (!before && editor->cursor_offset >= line->text.length)) {
         return SCREEN_EDITOR_IGNORED;
     }
     uint64_t old_span = line_span(editor, editor->cursor_line);
-    if (logical_line_delete_before(&line->text, &editor->cursor_offset) !=
+    size_t erase_offset = editor->cursor_offset + (before ? 0 : 1);
+    if (logical_line_delete_before(&line->text, &erase_offset) !=
         LOGICAL_LINE_OK) {
         return SCREEN_EDITOR_ERROR;
     }
+    editor->cursor_offset = erase_offset;
     uint64_t new_span = line_span(editor, editor->cursor_line);
     if (new_span < old_span &&
         !remove_rows(editor, line->start_row + (int64_t)new_span,
@@ -535,7 +540,9 @@ enum screen_editor_result screen_editor_accept(struct screen_editor *editor,
     if (action == SCREEN_EDITOR_CHARACTER) {
         result = type_character(editor, character);
     } else if (action == SCREEN_EDITOR_BACKSPACE) {
-        result = backspace(editor);
+        result = erase_character(editor, true);
+    } else if (action == SCREEN_EDITOR_DELETE) {
+        result = erase_character(editor, false);
     } else if (action == SCREEN_EDITOR_ENTER) {
         result = submit_line(editor);
     } else if (action == SCREEN_EDITOR_TOGGLE_INSERT) {

@@ -363,3 +363,8 @@ A workspace reset is checked against another workspace's live client payload.
 State/backing are revalidated after console and editor initialization. Capacity
 growth, workspace UI, process isolation and concurrent allocation remain open.
 See operations/m6-boot-retention-20261108.md for actual evidence/deployment limits.
+
+## Keyboard completeness — owner report 2026-11-09
+Implement US punctuation, forward Delete and numeric keypad input while retaining
+uppercase text and existing cursor/reflow semantics. See ADR-keyboard-completeness.md.
+Prepared for review; no new merge or physical deployment authority inferred.
