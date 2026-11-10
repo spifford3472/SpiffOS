@@ -372,3 +372,5 @@ Prepared for review; no new merge or physical deployment authority inferred.
 ## M7 workspace switching — owner authorization 2026-11-10
 
 The owner authorized implementation, testing, merge and deployment of Ctrl+Alt+1..9 independent text workspaces, subject to passing validation. Design and constraints: [M7 ADR](ADR-m7-text-workspace-switching.md). This does not approve BASIC execution or physical disk installation.
+
+- M7 host keyboard mitigation (2026-11-10): accept F1..F9 as alternative workspace selectors because interactive Forge Ctrl+Alt+digits are intercepted before reaching the guest; preserve Ctrl+Alt+digits for compatible hosts. See ADR-m7-text-workspace-switching.md.

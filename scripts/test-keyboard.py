@@ -147,6 +147,16 @@ def run_keyboard_test(socket_path, serial, build):
                 rpc("screendump", {"filename":str(restored_nine)})
                 assert initial_path.read_bytes() == restored_nine.read_bytes(), (
                     f"workspace {workspace_id} corrupted workspace 1")
+            # Exercise the fallback keys without any modifiers, exactly as
+            # a user presses them in a normal GTK/QEMU window.
+            for workspace_id in range(2, 10):
+                key([f"f{workspace_id}"], named="WORKSPACE_OK")
+                key(["f1"], named="WORKSPACE_OK")
+                fallback_path = build / f"m7-fkey-return-{workspace_id}.ppm"
+                rpc("screendump", {"filename":str(fallback_path)})
+                assert initial_path.read_bytes() == fallback_path.read_bytes(), (
+                    f"F{workspace_id} corrupted workspace 1")
+            print("PASS M7 F1..F9 fallback and exact workspace 1 restoration")
             print("PASS M7 all nine workspace chords and exact workspace 1 restoration")
             key(["backspace"])
             key(["ctrl","a"])

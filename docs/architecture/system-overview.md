@@ -209,3 +209,5 @@ records/reflow. See decisions/ADR-keyboard-completeness.md for limits.
 ## M7 diagnostic text workspaces
 
 The owner-authorized M7 checkpoint is specified in [ADR-m7-text-workspace-switching](../decisions/ADR-m7-text-workspace-switching.md). Nine editor text workspaces are diagnostic precursors to the future ring-3 BASIC workspace manager; this does not imply a process scheduler or BASIC implementation.
+
+M7 keyboard: F1..F9 are alternate workspace selectors alongside Ctrl+Alt+top-row 1..9. Host desktop interception of the Ctrl+Alt chord was observed in the Forge interactive session.

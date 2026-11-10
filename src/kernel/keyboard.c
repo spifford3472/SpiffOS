@@ -93,6 +93,16 @@ bool keyboard_decode_event(struct keyboard_decoder *decoder, uint8_t byte,
         }
         return false;
     }
+    /* Plain F1..F9 are host-friendly workspace selectors. Set-1 scancodes
+     * 0x3b..0x43 are consecutive; do not interpret break codes or E0 keys.
+     * Desktop environments may reserve Ctrl+Alt+digits before QEMU receives
+     * them, so this path deliberately needs no modifiers. */
+    if (!released && !extended &&
+        (decoder->modifiers & CHORD_MASK) == 0 &&
+        code >= 0x3b && code <= 0x43) {
+        return emit_event(event, KEYBOARD_EVENT_WORKSPACE,
+                          (unsigned char)(code - 0x3a));
+    }
     /* Ctrl+Alt+top-row digit is a workspace event, not printable text.
      * Require both modifier families; do not treat keypad digits as shortcuts. */
     if (!released && !extended &&

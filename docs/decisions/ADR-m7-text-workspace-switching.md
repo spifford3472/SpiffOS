@@ -30,3 +30,14 @@ Dynamic editor allocations from the one-page M4 heap are impossible without exte
 4. Clean build from scratch, Makefile dependency validation and owner checkout preservation.
 
 No BASIC execution, process scheduler, workspace overview, physical-disk installation or unrelated infrastructure changes in M7.
+
+## Host-reserved shortcut regression (2026-11-10)
+The owner reported black host screens and digit `1` appearing in workspace 1.
+The real interactive Forge serial log recorded `KEY:31` but no
+`EVENT:WORKSPACE_OK`: the Ctrl+Alt chord was not delivered to the guest.
+The previous QMP synthetic keyboard test did not cover host desktop shortcut
+interception. Retain the approved Ctrl+Alt+1..9 guest mapping, and additionally
+accept plain F1..F9 as host-friendly equivalents. These are currently diagnostic
+workspaces, so reserving F1..F9 has no application compatibility impact.
+Verify both scan-code paths in hosted tests and send F1..F9 via real QMP;
+request owner confirmation in a real GTK window before calling this fixed.
