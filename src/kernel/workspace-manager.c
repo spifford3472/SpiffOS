@@ -48,7 +48,7 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     logical_line_submit_fn submit, void *submit_context)
 {
     if (manager == NULL || boot_console == NULL || !boot_console->initialized ||
-        submit == NULL || !snapshot_supported(boot_console->framebuffer))
+        submit == NULL || boot_console->framebuffer == NULL)
         return false;
     manager->framebuffer = boot_console->framebuffer;
     manager->consoles[0] = *boot_console;

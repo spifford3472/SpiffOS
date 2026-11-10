@@ -57,6 +57,12 @@ int main(void)
     struct workspace_manager *manager = calloc(1, sizeof *manager);
     assert(manager != NULL);
     assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    /* Unsupported larger modes must retain the original editor rather than
+     * turning an otherwise bootable display into KEYBOARD_UNAVAILABLE. */
+    fb.width = WORKSPACE_MAX_WIDTH + 1;
+    assert(!workspace_manager_switch(manager, 2));
+    assert(workspace_manager_active(manager) != NULL);
+    fb.width = WIDTH;
     assert(screen_editor_accept(workspace_manager_active(manager), SCREEN_EDITOR_CHARACTER, 'A') == SCREEN_EDITOR_ACCEPTED);
     assert(screen_editor_accept(workspace_manager_active(manager), SCREEN_EDITOR_TOGGLE_INSERT, 0) == SCREEN_EDITOR_ACCEPTED);
     uint64_t first = checksum(pixels, WIDTH * HEIGHT);
