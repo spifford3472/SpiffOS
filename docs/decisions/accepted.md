@@ -12,7 +12,7 @@ Date: 2026-10-20. Status: documentation draft for owner review; entries below re
 | A-007 | IPC | One kernel Message Manager; direct single-consumer process inboxes plus named fan-out subscriptions for future events (ADR-007) |
 | A-008 | Events | Polling and event-driven handlers share messaging; callbacks run at safe interpreter points without unbounded recursion |
 | A-009 | Workspaces | Nine independent BASIC virtual workspaces; tasks continue in background |
-| A-010 | Keyboard | Ctrl+Alt+1–9 workspace; Ctrl+Alt+0 overview; Ctrl+Alt+Delete privileged supervisor |
+| A-010 (partially superseded by M8) | Keyboard | F1–F9 workspace; F10 system screen; F12 workspace indicator. Ctrl+Alt+Delete remains a reserved privileged supervisor chord. |
 | A-011 | Display | Foreground workspace alone controls physical display; background virtual buffers retained |
 | A-012 | Audio | Foreground workspace audible; background playback continues muted |
 | A-013 | Supervisor | Reserved-resource task control, suspend/resume/kill/shutdown/restart; not dependent on responsive BASIC |
@@ -374,3 +374,5 @@ Prepared for review; no new merge or physical deployment authority inferred.
 The owner authorized implementation, testing, merge and deployment of Ctrl+Alt+1..9 independent text workspaces, subject to passing validation. Design and constraints: [M7 ADR](ADR-m7-text-workspace-switching.md). This does not approve BASIC execution or physical disk installation.
 
 - M7 host keyboard mitigation (2026-11-10): accept F1..F9 as alternative workspace selectors because interactive Forge Ctrl+Alt+digits are intercepted before reaching the guest; preserve Ctrl+Alt+digits for compatible hosts. See ADR-m7-text-workspace-switching.md.
+
+- M8 function-key direction (2026-11-10): F1..F9 exclusively select user workspaces, F10 opens a dedicated system screen, F12 temporarily shows a centered workspace ID; supersedes A-010 Ctrl+Alt workspace shortcuts and Ctrl+Alt+0 overview. See ADR-m8-function-keys-and-workspace-indicator.md.

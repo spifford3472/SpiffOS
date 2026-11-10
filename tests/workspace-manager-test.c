@@ -57,6 +57,23 @@ int main(void)
     struct workspace_manager *manager = calloc(1, sizeof *manager);
     assert(manager != NULL);
     assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    /* Verify F12 paints the center and restores every pixel without touching
+     * the editor, and F10 is read-only and preserves workspace state. */
+    uint64_t indicator_before = checksum(pixels, WIDTH * HEIGHT);
+    assert(workspace_manager_identify(manager));
+    assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
+    workspace_manager_fade_indicator(manager, 1);
+    assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
+    workspace_manager_fade_indicator(manager, 2);
+    assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
+    workspace_manager_hide_indicator(manager);
+    assert(checksum(pixels, WIDTH * HEIGHT) == indicator_before);
+    assert(workspace_manager_system(manager));
+    assert(manager->system_visible);
+    assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
+    assert(workspace_manager_switch(manager, 1));
+    assert(!manager->system_visible);
+    assert(checksum(pixels, WIDTH * HEIGHT) == indicator_before);
     /* Unsupported larger modes must retain the original editor rather than
      * turning an otherwise bootable display into KEYBOARD_UNAVAILABLE. */
     fb.width = WORKSPACE_MAX_WIDTH + 1;

@@ -97,7 +97,7 @@ def run_keyboard_test(socket_path, serial, build):
             def events():
                 """Return named editor make events; break codes must add nothing."""
                 return [line for line in serial.read_bytes().splitlines()
-                        if line.startswith(b"EVENT:")]
+                        if line.startswith(b"EVENT:") and line != b"EVENT:INDICATOR_HIDDEN"]
 
             def submitted():
                 """Return complete diagnostic logical-line submissions in order."""
@@ -125,24 +125,24 @@ def run_keyboard_test(socket_path, serial, build):
             # images, editor state, and existing boot workspace unchanged.
             initial_path = build / "m7-initial.ppm"
             rpc("screendump", {"filename":str(initial_path)})
-            key(["ctrl", "alt", "2"], named="WORKSPACE_OK")
+            key(["f2"], named="WORKSPACE_OK")
             second_path = build / "m7-second.ppm"
             rpc("screendump", {"filename":str(second_path)})
             assert initial_path.read_bytes() != second_path.read_bytes()
             key(["z"], "Z")
-            key(["ctrl", "alt", "1"], named="WORKSPACE_OK")
+            key(["f1"], named="WORKSPACE_OK")
             restored_path = build / "m7-restored.ppm"
             rpc("screendump", {"filename":str(restored_path)})
             assert initial_path.read_bytes() == restored_path.read_bytes(), "workspace 1 framebuffer changed"
-            key(["ctrl", "alt", "2"], named="WORKSPACE_OK")
+            key(["f2"], named="WORKSPACE_OK")
             second_restored = build / "m7-second-restored.ppm"
             rpc("screendump", {"filename":str(second_restored)})
             assert second_path.read_bytes() != second_restored.read_bytes(), "workspace 2 text lost"
-            key(["ctrl", "alt", "1"], named="WORKSPACE_OK")
-            print("PASS M7 real QEMU Ctrl+Alt+1/2, framebuffer restore and independent text")
+            key(["f1"], named="WORKSPACE_OK")
+            print("PASS M8 real QEMU F1/F2, framebuffer restore and independent text")
             for workspace_id in range(3, 10):
-                key(["ctrl", "alt", str(workspace_id)], named="WORKSPACE_OK")
-                key(["ctrl", "alt", "1"], named="WORKSPACE_OK")
+                key([f"f{workspace_id}"], named="WORKSPACE_OK")
+                key(["f1"], named="WORKSPACE_OK")
                 restored_nine = build / f"m7-return-{workspace_id}.ppm"
                 rpc("screendump", {"filename":str(restored_nine)})
                 assert initial_path.read_bytes() == restored_nine.read_bytes(), (
@@ -157,7 +157,29 @@ def run_keyboard_test(socket_path, serial, build):
                 assert initial_path.read_bytes() == fallback_path.read_bytes(), (
                     f"F{workspace_id} corrupted workspace 1")
             print("PASS M7 F1..F9 fallback and exact workspace 1 restoration")
-            print("PASS M7 all nine workspace chords and exact workspace 1 restoration")
+            print("PASS M8 all nine F-key workspace selectors and exact workspace 1 restoration")
+            # F10 must show a dedicated system screen, then restore workspace 1.
+            key(["f10"], named="SYSTEM_OK")
+            system_path = build / "m8-system.ppm"
+            rpc("screendump", {"filename":str(system_path)})
+            assert system_path.read_bytes() != initial_path.read_bytes()
+            key(["f1"], named="WORKSPACE_OK")
+            system_return = build / "m8-system-return.ppm"
+            rpc("screendump", {"filename":str(system_return)})
+            assert system_return.read_bytes() == initial_path.read_bytes()
+            # F12 draws a large temporary digit and restores exact pixels
+            # without any further keyboard input after approximately 1 second.
+            key(["f12"], named="INDICATOR_OK")
+            indicator_path = build / "m8-indicator.ppm"
+            rpc("screendump", {"filename":str(indicator_path)})
+            # QMP screendump can exceed the one-second display lifetime under
+            # TCG; hosted tests verify transient pixels synchronously.
+            wait_until(lambda: b"EVENT:INDICATOR_HIDDEN" in serial.read_bytes(),
+                       "F12 automatic dismissal", seconds=4)
+            dismissed_path = build / "m8-indicator-dismissed.ppm"
+            rpc("screendump", {"filename":str(dismissed_path)})
+            assert dismissed_path.read_bytes() == initial_path.read_bytes()
+            print("PASS M8 F10 system screen and F12 non-destructive timed overlay")
             key(["backspace"])
             key(["ctrl","a"])
             key(["alt","b"])

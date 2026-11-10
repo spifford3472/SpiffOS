@@ -19,6 +19,8 @@ struct workspace_manager {
     bool ready[WORKSPACE_COUNT];
     bool snapshot_ready[WORKSPACE_COUNT];
     size_t active_id;
+    bool system_visible;
+    bool indicator_visible;
     const struct limine_framebuffer *framebuffer;
     logical_line_submit_fn submit;
     void *submit_context;
@@ -29,6 +31,13 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     logical_line_submit_fn submit, void *submit_context);
 /* Switch to 1..9, preserving all visible pixels and editor state.
  * On unsupported framebuffer dimensions or bad ID, leaves active view intact. */
+/* Toggle read-only system view, preserving current user pixels and editor. */
+bool workspace_manager_system(struct workspace_manager *manager);
+/* Draw a large centered ID, then restore its exact pixels on hide. */
+bool workspace_manager_identify(struct workspace_manager *manager);
+void workspace_manager_hide_indicator(struct workspace_manager *manager);
+/* Blend transient indicator toward saved pixels: step 1 or 2. */
+void workspace_manager_fade_indicator(struct workspace_manager *manager, unsigned int step);
 bool workspace_manager_switch(struct workspace_manager *manager, size_t id);
 /* Return current editor borrowed until manager teardown. */
 struct screen_editor *workspace_manager_active(struct workspace_manager *manager);
