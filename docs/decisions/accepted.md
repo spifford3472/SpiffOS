@@ -376,3 +376,6 @@ The owner authorized implementation, testing, merge and deployment of Ctrl+Alt+1
 - M7 host keyboard mitigation (2026-11-10): accept F1..F9 as alternative workspace selectors because interactive Forge Ctrl+Alt+digits are intercepted before reaching the guest; preserve Ctrl+Alt+digits for compatible hosts. See ADR-m7-text-workspace-switching.md.
 
 - M8 function-key direction (2026-11-10): F1..F9 exclusively select user workspaces, F10 opens a dedicated system screen, F12 temporarily shows a centered workspace ID; supersedes A-010 Ctrl+Alt workspace shortcuts and Ctrl+Alt+0 overview. See ADR-m8-function-keys-and-workspace-indicator.md.
+
+## M9 incremental kernel scope — owner authorization 2026-11-11
+The owner authorized implementation, tests, review, merge and safe Forge QEMU ISO deployment under the M9 prompt. ADR-m9-kernel-foundation.md records the staged implementation boundaries and explicitly preserves prior stable interfaces. Approval does not settle final syscall, timer or driver ABIs, or permit physical media changes.
