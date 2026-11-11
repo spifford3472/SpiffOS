@@ -11,11 +11,12 @@
 #include "framebuffer.h"
 #include "console-font.h"
 
-/* Each workspace owns exactly one snapshot; raw pixels preserve the original
- * boot logo, scrollback view and XOR cursor shape without reverse rendering.
- * This bounded static storage is not the one-page M4 heap. */
-static uint32_t workspace_pixels[WORKSPACE_COUNT]
-    [WORKSPACE_MAX_HEIGHT][WORKSPACE_MAX_WIDTH];
+/* Borrow per-page HHDM snapshots, not a 35MiB contiguous boot-time BSS.
+ * Page backing is obtained atomically before any pixel mutation. */
+enum { SNAPSHOT_PIXELS_PER_PAGE = 1024,
+       SNAPSHOT_PAGE_COUNT = WORKSPACE_MAX_HEIGHT * WORKSPACE_MAX_WIDTH /
+                             SNAPSHOT_PIXELS_PER_PAGE };
+static uint32_t *workspace_pages[WORKSPACE_COUNT][SNAPSHOT_PAGE_COUNT];
 
 /* Save only the indicator's center rectangle, never editor backing storage.
  * At 8x8 font pixels scaled 16x, its 128x128 region is bounded. */
@@ -34,18 +35,32 @@ static bool snapshot_supported(const struct limine_framebuffer *fb)
 
 /* Copy only visible 32-bit words, excluding pitch padding. Both endpoints are
  * owned by this manager; framebuffer memory is volatile and loader-mapped. */
-static void snapshot_transfer(const struct limine_framebuffer *fb,
+static bool snapshot_transfer(const struct limine_framebuffer *fb,
                               size_t index, bool capture)
 {
+    if (!snapshot_supported(fb) || index >= WORKSPACE_COUNT) return false;
+    size_t last = ((size_t)fb->height - 1) * WORKSPACE_MAX_WIDTH +
+                  (size_t)fb->width;
+    size_t pages = (last + SNAPSHOT_PIXELS_PER_PAGE - 1) /
+                   SNAPSHOT_PIXELS_PER_PAGE;
+    if (pages == 0 || pages > SNAPSHOT_PAGE_COUNT ||
+        !memory_boot_snapshot_prepare(index + 1, pages,
+                                      workspace_pages[index])) return false;
     volatile uint8_t *base = fb->address;
     for (size_t y = 0; y < fb->height; ++y) {
         volatile uint32_t *physical =
             (volatile uint32_t *)(base + y * fb->pitch);
+        size_t offset = y * WORKSPACE_MAX_WIDTH;
         for (size_t x = 0; x < fb->width; ++x) {
-            if (capture) workspace_pixels[index][y][x] = physical[x];
-            else physical[x] = workspace_pixels[index][y][x];
+            size_t pixel = offset + x;
+            uint32_t *backing =
+                &workspace_pages[index][pixel / SNAPSHOT_PIXELS_PER_PAGE]
+                                      [pixel % SNAPSHOT_PIXELS_PER_PAGE];
+            if (capture) *backing = physical[x];
+            else physical[x] = *backing;
         }
     }
+    return true;
 }
 
 /* Establish workspace 1 using the already initialized console and pixels.
@@ -161,7 +176,7 @@ bool workspace_manager_system(struct workspace_manager *manager)
     workspace_manager_hide_indicator(manager);
     if (manager->system_visible) return true;
     size_t index = manager->active_id - 1;
-    snapshot_transfer(manager->framebuffer, index, true);
+    if (!snapshot_transfer(manager->framebuffer, index, true)) return false;
     manager->snapshot_ready[index] = true;
     struct text_console system_console = {0};
     const struct limine_framebuffer *fb = manager->framebuffer;
@@ -191,13 +206,14 @@ bool workspace_manager_switch(struct workspace_manager *manager, size_t id)
         return false;
     workspace_manager_hide_indicator(manager);
     if (manager->system_visible) {
-        snapshot_transfer(manager->framebuffer, manager->active_id - 1, false);
+        if (!snapshot_transfer(manager->framebuffer, manager->active_id - 1, false))
+            return false;
         manager->system_visible = false;
     }
     if (id == manager->active_id) return true;
     size_t previous = manager->active_id - 1;
     size_t target = id - 1;
-    snapshot_transfer(manager->framebuffer, previous, true);
+    if (!snapshot_transfer(manager->framebuffer, previous, true)) return false;
     manager->snapshot_ready[previous] = true;
     bool newly_initialized = !manager->ready[target];
     if (newly_initialized) {
@@ -209,7 +225,8 @@ bool workspace_manager_switch(struct workspace_manager *manager, size_t id)
         }
         manager->ready[target] = true;
     } else if (manager->snapshot_ready[target]) {
-        snapshot_transfer(manager->framebuffer, target, false);
+        if (!snapshot_transfer(manager->framebuffer, target, false))
+            return false;
     } else {
         snapshot_transfer(manager->framebuffer, previous, false);
         return false;

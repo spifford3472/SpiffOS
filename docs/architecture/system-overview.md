@@ -213,3 +213,13 @@ The owner-authorized M7 checkpoint is specified in [ADR-m7-text-workspace-switch
 M7 keyboard: F1..F9 are alternate workspace selectors alongside Ctrl+Alt+top-row 1..9. Host desktop interception of the Ctrl+Alt chord was observed in the Forge interactive session.
 
 M8 implemented: F1..F9 exclusive workspace keys, F10 read-only system screen, F12 timed 128x128 non-destructive workspace indicator with two fade stages and exact restoration (ADR-m8-function-keys-and-workspace-indicator.md). Uses boot-only PIT channel-2 mode-2 polling; no general timer driver yet.
+
+## M9 low-memory boot repair (2026-11-11)
+The nine diagnostic workspace snapshots now borrow ordinary M2/M3-owned 4KiB
+pages after kernel entry rather than occupying about 35 MiB of boot ELF BSS.
+Full backing is prepared before screen capture; failure cannot change the
+active workspace or visible pixels. Owner token slots are uint8_t (values
+0..12) with unchanged 16 GiB candidate frame tracking capacity, reducing
+loader-time metadata by half. This is an internal implementation, not ring-3
+paging or a stable user ABI. See ADR-m9-128m-boot-memory.md and
+operations/m9-boot-memory-repair-20261111.md.

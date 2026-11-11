@@ -9,7 +9,7 @@
 #include "frame-allocator.h"
 
 struct guarded_slots {
-    uint16_t before[4], slots[32], after[4];
+    uint8_t before[4], slots[32], after[4];
 };
 
 /* Verify live/free counts independently of the allocator's check function. */
@@ -35,7 +35,7 @@ static void test_exhaustion(void)
     struct guarded_slots memory;
     memset(&memory, 0xa5, sizeof memory);
     struct frame_allocator allocator = {0}, before;
-    uint16_t saved[32];
+    uint8_t saved[32];
     memcpy(&before, &allocator, sizeof before);
     memcpy(saved, memory.slots, sizeof saved);
     assert(frame_allocator_initialize(&allocator, regions, 5, memory.slots,
@@ -121,17 +121,17 @@ static void test_exhaustion(void)
                                      32, 2) == FRAME_INVALID);
     assert(memcmp(&before, &allocator, sizeof before) == 0);
     for (unsigned int index = 12; index < 32; ++index) {
-        assert(memory.slots[index] == 0xa5a5);
+        assert(memory.slots[index] == 0xa5);
     }
     for (unsigned int index = 0; index < 4; ++index) {
-        assert(memory.before[index] == 0xa5a5 && memory.after[index] == 0xa5a5);
+        assert(memory.before[index] == 0xa5 && memory.after[index] == 0xa5);
     }
 }
 
 /* Cover all group owners, no-reserve mode, all-reserve mode and upper addresses. */
 static void test_groups_and_edges(void)
 {
-    uint16_t slots[32];
+    uint8_t slots[32];
     struct memory_region region = {4096, 20 * 4096, 0};
     struct frame_allocator allocator = {0};
     assert(frame_allocator_initialize(&allocator, &region, 1, slots, 32, 3) ==
@@ -145,7 +145,7 @@ static void test_groups_and_edges(void)
     }
     struct frame_allocator reserved = {0};
     struct memory_region reserved_region = region;
-    uint16_t reserved_slots[32];
+    uint8_t reserved_slots[32];
     assert(frame_allocator_initialize(&reserved, &reserved_region, 1,
                                      reserved_slots, 32, 20) == FRAME_OK);
     uint64_t address = 123;
@@ -158,7 +158,7 @@ static void test_groups_and_edges(void)
     totals(&reserved);
 
     struct memory_region high_region = {UINT64_MAX - 8191, 4096, 0};
-    uint16_t high_slots[32];
+    uint8_t high_slots[32];
     struct frame_allocator high = {0};
     assert(frame_allocator_initialize(&high, &high_region, 1,
                                      high_slots, 32, 0) == FRAME_OK);

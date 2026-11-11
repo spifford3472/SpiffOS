@@ -24,9 +24,11 @@ _Static_assert(MEMORY_REGION_USABLE == LIMINE_MEMMAP_USABLE,
 static struct memory_region snapshot[MEMORY_MAP_MAX_ENTRIES];
 static size_t snapshot_count;
 enum { BOOT_FRAME_CAPACITY = 4 * 1024 * 1024, BOOT_RESERVE_FRAMES = 64 };
-/* Two bytes per candidate frame, up to 16GiB; Limine excludes this kernel BSS
- * from USABLE memory. The table does not live inside any candidate frame. */
-static uint16_t frame_owners[BOOT_FRAME_CAPACITY];
+/* One byte per candidate frame retains the original 16GiB diagnostic
+ * capacity while halving preboot metadata BSS. Every current owner token
+ * fits in a byte; failure remains explicit if a future map exceeds capacity.
+ * Reference: ADR-m9-128m-boot-memory.md. */
+static uint8_t frame_owners[BOOT_FRAME_CAPACITY];
 static struct frame_allocator boot_allocator;
 /* True only after the complete M2 probe restored its pools and emitted its
  * success marker. M3 must remain unavailable when M2 capacity was unsupported. */
@@ -758,4 +760,75 @@ bool memory_boot_reset_workspace(size_t workspace_id)
 {
     return retained_started &&
         memory_service_reset_workspace(&retained_service, workspace_id) == MEMORY_SERVICE_OK;
+}
+
+
+/* Snapshot pages are ordinary M2-owned frames, not bootloader ELF storage.
+ * Each is validated by M3 before a pointer can be published. Storage is
+ * private to one workspace, persistent until shutdown, and unavailable to IRQs.
+ * The reserved 64-page supervisor pool is never consumed. */
+enum { SNAPSHOT_WORKSPACES = 9, SNAPSHOT_PAGES = 1000 };
+static uint64_t snapshot_phys[SNAPSHOT_WORKSPACES][SNAPSHOT_PAGES];
+static uint32_t *snapshot_virt[SNAPSHOT_WORKSPACES][SNAPSHOT_PAGES];
+static size_t snapshot_page_counts[SNAPSHOT_WORKSPACES];
+/* Any rollback failure invalidates the allocator for further snapshots;
+ * attempting another allocation could reuse live untracked physical pages. */
+static bool snapshot_rollback_failed;
+
+/* All-or-nothing page reservation for workspace_id (1..9). out_pages belongs
+ * to the caller and is untouched on failure. Incomplete allocations are
+ * released with their exact owner. Boot CPU only; no interrupts, locks or I/O. */
+bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
+                                  uint32_t **out_pages)
+{
+    if (snapshot_rollback_failed || !retained_started ||
+        !boot_allocator_available || workspace_id < 1 || workspace_id > SNAPSHOT_WORKSPACES ||
+        pages == 0 || pages > SNAPSHOT_PAGES || out_pages == NULL ||
+        retained_policy.allocator != &boot_allocator) return false;
+    size_t slot = workspace_id - 1;
+    enum frame_owner owner = (enum frame_owner)(FRAME_OWNER_FIRST_WORKSPACE + slot);
+    if (snapshot_page_counts[slot] != 0) {
+        if (snapshot_page_counts[slot] != pages) return false;
+        for (size_t i = 0; i < pages; ++i)
+            if (snapshot_virt[slot][i] == NULL) return false;
+        for (size_t i = 0; i < pages; ++i)
+            out_pages[i] = snapshot_virt[slot][i];
+        return true;
+    }
+    size_t completed = 0;
+    for (; completed < pages; ++completed) {
+        uint64_t physical = UINT64_MAX;
+        enum page_access_result acquired =
+            page_access_allocate_zero(&boot_allocator, &retained_policy, owner,
+                                      kernel_page_zero, NULL, &physical);
+        if (acquired != PAGE_ACCESS_OK) {
+            if (acquired == PAGE_ACCESS_ROLLBACK_FAILED)
+                snapshot_rollback_failed = true;
+            break;
+        }
+        uint64_t mapped = 0;
+        if (page_access_resolve(&retained_policy, owner, physical, &mapped) !=
+              PAGE_ACCESS_OK) {
+            if (frame_release(&boot_allocator, owner, physical) != FRAME_OK)
+                snapshot_rollback_failed = true;
+            break;
+        }
+        snapshot_phys[slot][completed] = physical;
+        snapshot_virt[slot][completed] = (uint32_t *)(uintptr_t)mapped;
+    }
+    if (completed < pages) {
+        while (completed > 0) {
+            --completed;
+            if (frame_release(&boot_allocator, owner,
+                              snapshot_phys[slot][completed]) != FRAME_OK)
+                snapshot_rollback_failed = true;
+            snapshot_phys[slot][completed] = 0;
+            snapshot_virt[slot][completed] = NULL;
+        }
+        return false;
+    }
+    snapshot_page_counts[slot] = pages;
+    for (size_t i = 0; i < pages; ++i)
+        out_pages[i] = snapshot_virt[slot][i];
+    return true;
 }

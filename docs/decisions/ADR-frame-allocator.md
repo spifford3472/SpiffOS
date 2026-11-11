@@ -76,3 +76,7 @@ No tests are claimed by this design record. Operations records supply actual
 commands/results, Qwen small jobs/Codex fallback provenance and rollback.
 M1 PR18 merged as 81d457b; use an isolated build of that commit for rollback.
 Preserve the running owner emulator and its checkout/index/drafts.
+
+
+## M9-34 internal memory optimization (2026-11-11)
+The previously accepted two-byte owner slot is superseded **in representation only** by uint8_t. All current states 0..12 fit in one byte, preserving every existing ownership and supervisor-reserve semantic. The fixed slot count (4194304) and maximum modeled 16 GiB candidate memory remain unchanged. This halves preboot metadata BSS and enables 128 MiB boot in combination with postboot snapshot pages. See ADR-m9-128m-boot-memory.md and new hosted regression coverage.

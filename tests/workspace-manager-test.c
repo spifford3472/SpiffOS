@@ -10,6 +10,25 @@
 #include "workspace-manager.h"
 #include "boot-logo.h"
 
+/* Hosted page-backed snapshot provider with injectable allocation failure. */
+static uint32_t *test_snapshot_memory[9];
+static size_t test_snapshot_pages[9];
+static bool deny_snapshot;
+bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
+                                  uint32_t **out_pages)
+{
+    if (deny_snapshot || workspace_id < 1 || workspace_id > 9 ||
+        pages == 0 || pages > 1000 || out_pages == NULL) return false;
+    size_t i = workspace_id - 1;
+    if (test_snapshot_memory[i] == NULL) {
+        test_snapshot_memory[i] = calloc(pages * 1024, sizeof(uint32_t));
+        if (test_snapshot_memory[i] == NULL) return false;
+        test_snapshot_pages[i] = pages;
+    } else if (test_snapshot_pages[i] != pages) return false;
+    for (size_t p = 0; p < pages; ++p)
+        out_pages[p] = test_snapshot_memory[i] + 1024*p;
+    return true;
+}
 static size_t selected = 1;
 static size_t resets[9];
 static bool deny_switch;
@@ -68,6 +87,10 @@ int main(void)
     assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
     workspace_manager_hide_indicator(manager);
     assert(checksum(pixels, WIDTH * HEIGHT) == indicator_before);
+    deny_snapshot = true;
+    assert(!workspace_manager_system(manager));
+    assert(checksum(pixels, WIDTH * HEIGHT) == indicator_before);
+    deny_snapshot = false;
     assert(workspace_manager_system(manager));
     assert(manager->system_visible);
     assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
@@ -116,6 +139,7 @@ int main(void)
     assert(resets[1] == 2);
     assert(workspace_manager_switch(manager, 1));
     assert(checksum(pixels, WIDTH * HEIGHT) == first);
+    for (size_t i = 0; i < 9; ++i) free(test_snapshot_memory[i]);
     free(manager);
     free(pixels);
     return 0;

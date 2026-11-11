@@ -50,7 +50,7 @@ enum frame_result frame_allocate(struct frame_allocator *allocator,
         if (allocator->owned[owner] >= allocator->total_frames) {
             return FRAME_INVALID;
         }
-        allocator->owners[index] = (uint16_t)owner;
+        allocator->owners[index] = (uint8_t)owner;
         ++allocator->owned[owner];
         --*free_count;
         *address = selected;

@@ -1,5 +1,5 @@
 /* Purpose: internal M2 physical-frame ownership accounting, not a user ABI.
- * Dependencies: stable borrowed M1 regions and caller-owned uint16_t slots.
+ * Dependencies: stable borrowed M1 regions and caller-owned uint8_t slots.
  * Invariants: one CPU, interrupts disabled, no frame contents/mappings accessed.
  * Reference: docs/decisions/ADR-frame-allocator.md. */
 #ifndef SPIFFOS_FRAME_ALLOCATOR_H
@@ -19,6 +19,11 @@ enum frame_owner {
     FRAME_OWNER_COUNT = 13
 };
 
+/* The owner-slot representation is intentionally compact; fail the build
+ * rather than truncate a future owner ID and break ownership isolation. */
+_Static_assert(FRAME_OWNER_COUNT <= UINT8_MAX,
+               "frame owner codes must fit in one byte");
+
 enum frame_result {
     FRAME_OK,
     FRAME_INVALID,
@@ -34,7 +39,7 @@ enum frame_result {
 struct frame_allocator {
     const struct memory_region *regions;
     size_t region_count;
-    uint16_t *owners;
+    uint8_t *owners;
     size_t slot_capacity;
     uint64_t total_frames, reserve_frames;
     uint64_t ordinary_free, reserve_free;
@@ -44,12 +49,12 @@ struct frame_allocator {
 
 /* Initialize a ZEROED, unused caller-owned descriptor. regions and slots must
  * remain valid/exclusively owned throughout its lifetime; input/output storage
- * must not alias. slot_capacity is in uint16_t elements, not bytes. Require
+ * must not alias. slot_capacity is in uint8_t elements, not bytes. Require
  * storage for ALL candidate frames and reserve <= total. Failure leaves
  * descriptor/slots unchanged. Reinitialization of an active descriptor rejects.
  * Success zeros used slots and records borrowed pointers. No heap/frame writes. */
 enum frame_result frame_allocator_initialize(struct frame_allocator *allocator,
-    const struct memory_region *regions, size_t count, uint16_t *slots,
+    const struct memory_region *regions, size_t count, uint8_t *slots,
     size_t slot_capacity, uint64_t reserve_frames);
 
 /* Allocate exactly one frame and store its physical address on success only.

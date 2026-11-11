@@ -160,7 +160,7 @@ static void test_page_policy_adapter(void)
 {
     struct memory_region region = {0x1000, MEMORY_PAGE_BYTES,
                                    MEMORY_REGION_USABLE};
-    uint16_t slot;
+    uint8_t slot;
     struct frame_allocator allocator = {0};
     assert(frame_allocator_initialize(&allocator, &region, 1, &slot, 1, 0) ==
            FRAME_OK);
