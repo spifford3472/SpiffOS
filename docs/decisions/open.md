@@ -222,3 +222,5 @@ O-006 is partially scoped for diagnostic text workspace switching; future applic
 
 ## M9 follow-up decisions — 2026-11-11
 Final interrupt controller/IRQ activation sequence, timer source portability, ring-3 syscall ABI, driver ABI stabilization and scheduling policy remain OPEN. M9 may provide internal testable scaffolding but must not silently lock these public interfaces.
+
+- M9-34: Consider dynamically allocated owner metadata beyond the preserved 16 GiB diagnostic capacity; any future expanded owner enum must fit the current 8-bit slot representation or adopt a versioned wider scheme.

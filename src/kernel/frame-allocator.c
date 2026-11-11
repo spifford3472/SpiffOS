@@ -35,7 +35,7 @@ static bool region_frames(const struct memory_region *region,
  * All state is borrowed/exclusive and nonaliasing; the descriptor begins zeroed.
  * No physical-frame writes or heap allocation; failure preserves prior bytes. */
 enum frame_result frame_allocator_initialize(struct frame_allocator *allocator,
-    const struct memory_region *regions, size_t count, uint16_t *slots,
+    const struct memory_region *regions, size_t count, uint8_t *slots,
     size_t slot_capacity, uint64_t reserve_frames)
 {
     if (allocator == NULL || slots == NULL || allocator->initialized) {
@@ -143,11 +143,11 @@ enum frame_result frame_release(struct frame_allocator *allocator,
     if (!address_ordinal(allocator, address, &ordinal)) {
         return FRAME_BAD_ADDRESS;
     }
-    uint16_t stored_owner = allocator->owners[ordinal];
+    uint8_t stored_owner = allocator->owners[ordinal];
     if (stored_owner == FRAME_OWNER_FREE) {
         return FRAME_DOUBLE_FREE;
     }
-    if (stored_owner != (uint16_t)owner) {
+    if (stored_owner != (uint8_t)owner) {
         return FRAME_WRONG_OWNER;
     }
     bool reserved = ordinal < allocator->reserve_frames;
@@ -182,7 +182,7 @@ bool frame_allocator_check(const struct frame_allocator *allocator)
     uint64_t live[FRAME_OWNER_COUNT] = {0};
     uint64_t ordinary_free = 0, reserve_free = 0;
     for (uint64_t index = 0; index < allocator->total_frames; ++index) {
-        uint16_t owner = allocator->owners[index];
+        uint8_t owner = allocator->owners[index];
         bool reserved = index < allocator->reserve_frames;
         if (owner == FRAME_OWNER_FREE) {
             if (reserved) ++reserve_free;

@@ -71,4 +71,8 @@ bool memory_boot_service_editor_check(bool (*writer)(const char *));
 bool memory_boot_select_workspace(size_t workspace_id);
 /* Reset only one retained workspace root/owner; preserves session and others. */
 bool memory_boot_reset_workspace(size_t workspace_id);
+/* Reserve checked ordinary physical frames for an exact snapshot; output
+ * pointers are borrowed until shutdown. No partial publication or IRQ use. */
+bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
+                                  uint32_t **out_pages);
 #endif

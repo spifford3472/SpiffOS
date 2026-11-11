@@ -64,7 +64,7 @@ static void assert_guards(const struct guarded_arena *storage, uint8_t pattern)
  * always requests the ordinary pool. The returned physical address is numeric
  * only; the test backend alone maps it to guarded host RAM. */
 static void prepare_owned_backing(struct guarded_arena *storage,
-    struct frame_allocator *allocator, uint16_t *owner_slots,
+    struct frame_allocator *allocator, uint8_t *owner_slots,
     uint64_t *physical_address)
 {
     static const struct memory_region regions[] = {
@@ -107,7 +107,7 @@ static void test_owned_page_initialization_and_allocation(void)
 {
     struct guarded_arena storage;
     struct frame_allocator allocator;
-    uint16_t owner_slots[3];
+    uint8_t owner_slots[3];
     uint64_t physical_address;
     prepare_owned_backing(&storage, &allocator, owner_slots, &physical_address);
 
@@ -442,7 +442,7 @@ static void test_owner_scoped_lifetimes(void)
 {
     struct guarded_arena storage;
     struct frame_allocator allocator;
-    uint16_t owner_slots[3];
+    uint8_t owner_slots[3];
     uint64_t physical_address;
     prepare_owned_backing(&storage, &allocator, owner_slots, &physical_address);
 
@@ -475,7 +475,7 @@ static void test_owner_scoped_lifetimes(void)
     memset(workspace1_second, 0x22, 16);
 
     struct frame_allocator saved_allocator;
-    uint16_t saved_owner_slots[3];
+    uint8_t saved_owner_slots[3];
     memcpy(&saved_allocator, &allocator, sizeof allocator);
     memcpy(saved_owner_slots, owner_slots, sizeof owner_slots);
 

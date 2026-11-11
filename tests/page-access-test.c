@@ -51,7 +51,7 @@ static bool guarded_zero(void *opaque, uint64_t mapped_address,
 }
 
 struct corrupt_backend_context {
-    uint16_t *allocated_slot;
+    uint8_t *allocated_slot;
     size_t calls;
 };
 
@@ -90,7 +90,7 @@ static void assert_guards_equal(const struct guarded_page *memory,
  * The returned descriptor borrows every input, so all storage is supplied by
  * the caller and remains live for the complete test. */
 static void initialize_fixture(struct frame_allocator *allocator,
-    struct memory_region regions[3], uint16_t slots[8],
+    struct memory_region regions[3], uint8_t slots[8],
     uint64_t *kernel_page, uint64_t *session_page)
 {
     regions[0] = (struct memory_region){0x1080, 0x3f80, MEMORY_REGION_USABLE};
@@ -112,7 +112,7 @@ static void initialize_fixture(struct frame_allocator *allocator,
 static void test_membership_ownership_and_atomicity(void)
 {
     struct memory_region regions[3];
-    uint16_t slots[8];
+    uint8_t slots[8];
     struct frame_allocator allocator;
     uint64_t kernel_page, session_page;
     initialize_fixture(&allocator, regions, slots, &kernel_page, &session_page);
@@ -122,7 +122,7 @@ static void test_membership_ownership_and_atomicity(void)
         .virtual_address_bits = PAGE_ACCESS_X86_64_4_LEVEL_BITS
     };
     struct frame_allocator saved_allocator = allocator;
-    uint16_t saved_slots[8];
+    uint8_t saved_slots[8];
     memcpy(saved_slots, slots, sizeof slots);
     uint64_t output = UINT64_C(0x1122334455667788);
 
@@ -171,7 +171,7 @@ static void test_supervisor_reserve_ownership(void)
 {
     struct memory_region region = {0x4000, 2 * MEMORY_PAGE_BYTES,
                                    MEMORY_REGION_USABLE};
-    uint16_t slots[2];
+    uint8_t slots[2];
     struct frame_allocator allocator = {0};
     assert(frame_allocator_initialize(&allocator, &region, 1, slots, 2, 1) ==
            FRAME_OK);
@@ -202,7 +202,7 @@ static void test_arithmetic_and_canonicality(void)
     struct memory_region region = {
         UINT64_MAX - UINT64_C(8191), MEMORY_PAGE_BYTES, MEMORY_REGION_USABLE
     };
-    uint16_t slots[1];
+    uint8_t slots[1];
     struct frame_allocator allocator = {0};
     uint64_t physical_address;
     assert(frame_allocator_initialize(&allocator, &region, 1, slots, 1, 0) ==
@@ -235,7 +235,7 @@ static void test_arithmetic_and_canonicality(void)
     struct memory_region low_region = {0x2000, MEMORY_PAGE_BYTES,
                                        MEMORY_REGION_USABLE};
     struct frame_allocator low_allocator = {0};
-    uint16_t low_slots[1];
+    uint8_t low_slots[1];
     assert(frame_allocator_initialize(&low_allocator, &low_region, 1,
                                       low_slots, 1, 0) == FRAME_OK);
     assert(frame_allocate(&low_allocator, FRAME_OWNER_KERNEL, false,
@@ -290,7 +290,7 @@ static void test_arithmetic_and_canonicality(void)
 static void test_injected_zero_backend(void)
 {
     struct memory_region regions[3];
-    uint16_t slots[8];
+    uint8_t slots[8];
     struct frame_allocator allocator;
     uint64_t kernel_page, session_page;
     initialize_fixture(&allocator, regions, slots, &kernel_page, &session_page);
@@ -338,7 +338,7 @@ static void test_injected_zero_backend(void)
 static void test_allocate_zero_and_rollback(void)
 {
     struct memory_region regions[3];
-    uint16_t slots[8];
+    uint8_t slots[8];
     struct frame_allocator allocator;
     uint64_t kernel_page, session_page;
     initialize_fixture(&allocator, regions, slots, &kernel_page, &session_page);
@@ -415,7 +415,7 @@ static void test_allocate_zero_and_rollback(void)
 static void test_failure_path_matrix(void)
 {
     struct memory_region regions[3];
-    uint16_t slots[8];
+    uint8_t slots[8];
     struct frame_allocator allocator;
     uint64_t kernel_page, session_page;
     initialize_fixture(&allocator, regions, slots, &kernel_page, &session_page);
@@ -432,7 +432,7 @@ static void test_failure_path_matrix(void)
         .memory = &memory
     };
     struct frame_allocator saved_allocator = allocator;
-    uint16_t saved_slots[8];
+    uint8_t saved_slots[8];
     memcpy(saved_slots, slots, sizeof slots);
 
     assert(page_access_resolve(&policy, FRAME_OWNER_KERNEL, kernel_page,
@@ -510,7 +510,7 @@ static void test_failure_path_matrix(void)
     assert(frame_release(&allocator, FRAME_OWNER_SESSION, remaining[0]) ==
            FRAME_OK);
     struct frame_allocator before_corruption = allocator;
-    uint16_t slots_before_corruption[8];
+    uint8_t slots_before_corruption[8];
     memcpy(slots_before_corruption, slots, sizeof slots);
     struct corrupt_backend_context corrupt = {
         .allocated_slot = &slots[2]

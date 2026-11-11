@@ -163,7 +163,7 @@ enum page_access_result page_access_resolve(
     if (!page_access_find_ordinal(allocator, physical_address, &ordinal)) {
         return PAGE_ACCESS_BAD_PHYSICAL_ADDRESS;
     }
-    if (allocator->owners[ordinal] != (uint16_t)owner) {
+    if (allocator->owners[ordinal] != (uint8_t)owner) {
         return PAGE_ACCESS_WRONG_OWNER;
     }
     if (physical_address > UINT64_MAX - policy->direct_map_offset) {

@@ -379,3 +379,6 @@ The owner authorized implementation, testing, merge and deployment of Ctrl+Alt+1
 
 ## M9 incremental kernel scope — owner authorization 2026-11-11
 The owner authorized implementation, tests, review, merge and safe Forge QEMU ISO deployment under the M9 prompt. ADR-m9-kernel-foundation.md records the staged implementation boundaries and explicitly preserves prior stable interfaces. Approval does not settle final syscall, timer or driver ABIs, or permit physical media changes.
+
+## M9 issue #34 staged boot-memory remediation — 2026-11-11
+The owner authorized continuing issue #34 through implementation, testing and safe local deployment after confirming M8 behavior. ADR-m9-128m-boot-memory.md records the internal lazy workspace-paging choice, the safety invariants and compact 8-bit frame-owner metadata preserving the prior 16 GiB candidate-frame cap. The long-term dynamic memory and driver ABIs remain open.
