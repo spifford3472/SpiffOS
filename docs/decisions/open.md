@@ -219,3 +219,6 @@ O-006 is partially scoped for diagnostic text workspace switching; future applic
 - M8 follow-up: replace boot-only PIT channel-0 sampling with a general monotonic timer driver before physical-hardware portability; QEMU diagnostic timing uses the existing firmware PIT setup without reprogramming interrupts.
 
 - M8.1: owner reported F12 too short; verify PIT mode 3 tick semantics and enforce measured QEMU overlay duration, plus physical hardware follow-up.
+
+## M9 follow-up decisions — 2026-11-11
+Final interrupt controller/IRQ activation sequence, timer source portability, ring-3 syscall ABI, driver ABI stabilization and scheduling policy remain OPEN. M9 may provide internal testable scaffolding but must not silently lock these public interfaces.
