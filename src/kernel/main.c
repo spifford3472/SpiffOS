@@ -213,16 +213,29 @@ static bool keyboard_submit_diagnostic(
     return serial_write("\r\n");
 }
 
-/* PIT channel 0 is left in firmware's periodic mode. Latch/read the
- * 16-bit down-counter without reprogramming the interrupt source. At least
- * one poll per 54.9 ms is required to observe each wrap; the loop normally
- * polls continuously, and never sleeps while the overlay is visible.
- * This is a boot-diagnostic timer, not a general monotonic clock service. */
+/* Use PIT channel 2 as a private read-only-in-loop elapsed-time source.
+ * Unlike firmware channel 0, its mode is explicitly set to mode 2, with a
+ * 65536-tick reload and a count that decrements by ONE per 1.193 MHz tick.
+ * Channel 2 has no interrupt output. Preserve the speaker port's prior bits
+ * and keep the speaker output disconnected while the overlay is active. */
+static uint8_t indicator_speaker_saved;
+static void indicator_clock_start(void)
+{
+    indicator_speaker_saved = port_read(0x61);
+    port_write(0x61, (uint8_t)((indicator_speaker_saved | 1u) & ~2u));
+    port_write(0x43, 0xb4); /* Channel 2, low/high, mode 2, binary. */
+    port_write(0x42, 0);
+    port_write(0x42, 0);
+}
+static void indicator_clock_stop(void)
+{
+    port_write(0x61, indicator_speaker_saved);
+}
 static uint16_t pit_read_counter(void)
 {
-    port_write(0x43, 0x00);
-    uint16_t low = port_read(0x40);
-    uint16_t high = port_read(0x40);
+    port_write(0x43, 0x80); /* Latch channel 2 only. */
+    uint16_t low = port_read(0x42);
+    uint16_t high = port_read(0x42);
     return (uint16_t)(low | (high << 8));
 }
 
@@ -255,15 +268,16 @@ static void keyboard_run(struct text_console *console)
             uint16_t current = pit_read_counter();
             elapsed_pit += (uint16_t)(previous_pit - current);
             previous_pit = current;
-            if (elapsed_pit >= 1014205u && indicator_fade_step < 2) {
+            if (elapsed_pit >= 1133523u && indicator_fade_step < 2) {
                 workspace_manager_fade_indicator(&boot_workspaces, 2);
                 indicator_fade_step = 2;
-            } else if (elapsed_pit >= 775568u && indicator_fade_step < 1) {
+            } else if (elapsed_pit >= 1014205u && indicator_fade_step < 1) {
                 workspace_manager_fade_indicator(&boot_workspaces, 1);
                 indicator_fade_step = 1;
             }
             if (elapsed_pit >= 1193182u) {
                 workspace_manager_hide_indicator(&boot_workspaces);
+                indicator_clock_stop();
                 indicator_timed = false;
                 (void)serial_write("EVENT:INDICATOR_HIDDEN\r\n");
             }
@@ -282,7 +296,10 @@ static void keyboard_run(struct text_console *console)
             if (keyboard_decode_event(&decoder, byte, &event)) {
                 if (event.type == KEYBOARD_EVENT_IDENTIFY) {
                     workspace_manager_hide_indicator(&boot_workspaces);
+                    if (indicator_timed) indicator_clock_stop();
+                    indicator_timed = false;
                     if (workspace_manager_identify(&boot_workspaces)) {
+                        indicator_clock_start();
                         previous_pit = pit_read_counter();
                         elapsed_pit = 0;
                         indicator_fade_step = 0;
@@ -293,6 +310,7 @@ static void keyboard_run(struct text_console *console)
                 }
                 if (indicator_timed) {
                     workspace_manager_hide_indicator(&boot_workspaces);
+                    indicator_clock_stop();
                     indicator_timed = false;
                 }
                 if (event.type == KEYBOARD_EVENT_SYSTEM) {

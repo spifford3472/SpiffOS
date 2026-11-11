@@ -169,13 +169,20 @@ def run_keyboard_test(socket_path, serial, build):
             assert system_return.read_bytes() == initial_path.read_bytes()
             # F12 draws a large temporary digit and restores exact pixels
             # without any further keyboard input after approximately 1 second.
+            indicator_started = time.monotonic()
             key(["f12"], named="INDICATOR_OK")
+            assert b"EVENT:INDICATOR_HIDDEN" not in serial.read_bytes(), (
+                "F12 disappeared before the key injection returned")
             indicator_path = build / "m8-indicator.ppm"
             rpc("screendump", {"filename":str(indicator_path)})
             # QMP screendump can exceed the one-second display lifetime under
             # TCG; hosted tests verify transient pixels synchronously.
             wait_until(lambda: b"EVENT:INDICATOR_HIDDEN" in serial.read_bytes(),
                        "F12 automatic dismissal", seconds=4)
+            elapsed = time.monotonic() - indicator_started
+            assert 0.75 <= elapsed <= 2.2, (
+                f"F12 overlay lifetime out of range: {elapsed:.3f}s")
+            print(f"PASS M8 measured F12 lifetime {elapsed:.3f}s")
             dismissed_path = build / "m8-indicator-dismissed.ppm"
             rpc("screendump", {"filename":str(dismissed_path)})
             assert dismissed_path.read_bytes() == initial_path.read_bytes()
