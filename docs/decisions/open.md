@@ -224,3 +224,9 @@ O-006 is partially scoped for diagnostic text workspace switching; future applic
 Final interrupt controller/IRQ activation sequence, timer source portability, ring-3 syscall ABI, driver ABI stabilization and scheduling policy remain OPEN. M9 may provide internal testable scaffolding but must not silently lock these public interfaces.
 
 - M9-34: Consider dynamically allocated owner metadata beyond the preserved 16 GiB diagnostic capacity; any future expanded owner enum must fit the current 8-bit slot representation or adopt a versioned wider scheme.
+
+## M9-2 exception follow-ups — 2026-11-11
+- A guarded, dedicated IST/TSS fault stack and double-fault containment remain
+  open. The initial IDT uses the Limine-provided kernel stack.
+- Do not enable STI, configure the IRQ controller, assign user exception policy
+  or freeze an interrupt ABI until separate design and QEMU tests.

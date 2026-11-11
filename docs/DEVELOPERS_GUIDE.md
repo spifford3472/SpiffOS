@@ -405,3 +405,19 @@ erases before it and moves left. Both use the logical-line storage and the same
 row-shrink/redraw path, preserving following records when wrapping changes.
 At the end of a line Delete is harmless. Tests inject both extended Delete and
 keypad Delete and compare complete framebuffer pixels for symbols/deletion.
+
+## M9-2: the CPU exception table
+An IDT entry is sixteen bytes in x86-64: the handler's 64-bit virtual address
+is split into offset_low (16 bits), offset_mid (16 bits), and offset_high
+(32 bits). The entry also contains the current ring-0 code-segment selector,
+interrupt-stack-table index and gate flags. A packed ten-byte IDTR contains
+the table's byte length minus one and its address. LIDT changes only the
+boot CPU's exception lookup; it does not itself enable external IRQs.
+
+A CPU fault can push an error code (for example #PF) or no error code
+(for example #UD). The assembly entry normalizes both shapes to vector,error
+and aligns the stack before calling the C fail-stop reporter. Because the
+reporter never returns, there is no IRETQ path in this checkpoint. All
+hardware IRQ entries remain not-present; STI must remain forbidden until
+controller masking, acknowledgments and safe stacks have separate coverage.
+See docs/decisions/ADR-m9-exception-idt.md.
