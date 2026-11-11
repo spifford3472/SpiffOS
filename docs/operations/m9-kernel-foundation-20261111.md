@@ -25,3 +25,6 @@ The new internal test maps every explicit numeric code and string plus invalid e
 - Direct 128 MiB QEMU retry with `--timeout 60`: FAIL, firmware boot lines printed but no kernel readiness marker. Root cause unresolved. This header-only module is not linked into the kernel, so no causality is attributed without further tests.
 
 **Do not merge or deploy** until the failed QEMU regression is investigated, reproduced against the unchanged baseline at the same 128 MiB configuration, and full acceptance gates pass.
+
+## Unmodified baseline A/B control (same 128 MiB configuration)
+A separate detached worktree at d1e37dc, without M9 header, tests or Makefile changes, successfully rebuilt its ISO. Its `python3 scripts/qemu.py test --wait-keyboard-ready --screenshot --memory-mib 128 --timeout 60` also FAILED with no kernel-ready marker after OVMF printed "starting Boot0001". This reproduces the failure on unchanged main and rules out the unlinked M9 header as the immediate cause. The underlying 128 MiB boot failure remains undiagnosed. Keep merge blocked until repaired and full tests pass.
