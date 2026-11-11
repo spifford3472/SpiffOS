@@ -223,3 +223,10 @@ active workspace or visible pixels. Owner token slots are uint8_t (values
 loader-time metadata by half. This is an internal implementation, not ring-3
 paging or a stable user ABI. See ADR-m9-128m-boot-memory.md and
 operations/m9-boot-memory-repair-20261111.md.
+
+## M9-2 interrupt foundations (scope, 2026-11-11)
+The first x86-64 interrupt layer is a static exception-only IDT loaded after
+serial initialization. Fatal CPU faults report a bounded serial diagnostic
+and halt; hardware IRQs and timer preemption remain disabled. The existing
+PS/2 polling and PIT-channel-2 F12 timing remain unchanged. See
+ADR-m9-exception-idt.md for risk limits and validation.

@@ -382,3 +382,10 @@ The owner authorized implementation, tests, review, merge and safe Forge QEMU IS
 
 ## M9 issue #34 staged boot-memory remediation — 2026-11-11
 The owner authorized continuing issue #34 through implementation, testing and safe local deployment after confirming M8 behavior. ADR-m9-128m-boot-memory.md records the internal lazy workspace-paging choice, the safety invariants and compact 8-bit frame-owner metadata preserving the prior 16 GiB candidate-frame cap. The long-term dynamic memory and driver ABIs remain open.
+
+## M9-2 staged x86-64 exception-only IDT — 2026-11-11
+The owner authorized the next M9 checkpoint after confirming post-boot snapshot
+workspace operation. Implement a static exception-only IDT, preserve IRQ-off
+polling and PIT F12, and require direct QEMU fault-injection proof before merge.
+ADR-m9-exception-idt.md records the internal scope; no IRQ controller or
+task/scheduling ABI is approved.

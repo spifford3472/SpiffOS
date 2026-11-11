@@ -17,6 +17,7 @@
 #include "screen-editor.h"
 #include "memory-boot.h"
 #include "workspace-manager.h"
+#include "x86-idt.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -384,6 +385,26 @@ static void keyboard_run(struct text_console *console)
 }
 #endif
 
+/* Fatal CPU exception reporter. The assembly entry gives the normalized
+ * exception vector and error code. No allocation, recursion, or callback to
+ * screen/driver state is allowed. The UART has already been initialized.
+ * Output is bounded (the existing serial writer has a fixed poll limit) and
+ * failure simply halts; the handler cannot return to a potentially corrupted
+ * instruction stream. Boot CPU only, interrupts disabled. */
+__attribute__((noreturn))
+void x86_exception_panic(uint64_t vector, uint64_t error)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char line[] = "SPIFFOS_EXCEPTION:00,0000000000000000\r\n";
+    line[18] = hex[(vector >> 4) & 15u];
+    line[19] = hex[vector & 15u];
+    for (unsigned int n = 0; n < 16; ++n)
+        line[21 + n] = hex[(error >> ((15 - n) * 4)) & 15u];
+    (void)serial_write(line);
+    (void)serial_write("SPIFFOS_EXCEPTION_HALT\r\n");
+    halt_forever();
+}
+
 /* ELF entry called using Limine's x86-64 C-compatible stack and mappings.
  * No arguments or return; owns no allocated resources. Single startup CPU.
  * Unsupported protocol or failed UART output halts without a success claim. */
@@ -391,6 +412,19 @@ __attribute__((noreturn))
 void kmain(void)
 {
     serial_initialize();
+    /* The exception-only IDT has no external IRQ gates. Keep IF cleared and
+     * preserve PS/2 polling and PIT2 overlay timing. */
+    __asm__ volatile ("cli" : : : "memory");
+    if (!x86_idt_initialize()) {
+        (void)serial_write("SPIFFOS_IDT_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_IDT_READY\r\n");
+#ifdef SPIFFOS_EXCEPTION_TEST
+    /* TEST-ONLY invalid opcode, never linked in a production ISO. */
+    (void)serial_write("SPIFFOS_EXCEPTION_TEST_TRIGGER\r\n");
+    __asm__ volatile ("ud2");
+#endif
     if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision)) {
         (void)serial_write("SPIFFOS_BOOT_ERROR: unsupported Limine revision\r\n");
         halt_forever();

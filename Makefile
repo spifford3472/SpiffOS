@@ -11,7 +11,7 @@ KERNEL := build/spiffos-kernel.elf
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -19,9 +19,32 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# M9-2: freestanding CPU gate builder and fixed exception-only assembly stubs.
+build/x86-idt.o: src/kernel/x86-idt.c src/kernel/x86-idt.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/x86-exceptions.o: src/kernel/x86-exceptions.S Makefile
+	mkdir -p build
+	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone -c $< -o $@
+
+# Run fault injection ONLY in a copied isolated tree; this never modifies the
+# owner/developer's normal ISO or enabling state of hardware IRQs.
+.PHONY: test-idt-fault
+test-idt-fault:
+	python3 scripts/test-exception-fault.py
+
+.PHONY: test-idt-memory
+build/x86-idt-test: tests/x86-idt-test.c src/kernel/x86-idt.c src/kernel/x86-idt.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/x86-idt-test.c src/kernel/x86-idt.c -o $@
+
+test-idt-memory: build/x86-idt-test
+	./build/x86-idt-test
+
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-exceptions.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-exceptions.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -196,7 +219,7 @@ build/memory-map-test: src/kernel/memory-service.c src/kernel/memory-service.h s
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
+test-memory: test-idt-memory test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 
