@@ -16,3 +16,12 @@ No interrupt or exception handler, generalized timer, serial driver registry, ta
 
 ## Validation and rollback
 The new internal test maps every explicit numeric code and string plus invalid enum fallback. Build with `make test-kernel-result`, run `make test-memory` and `make test` on the verified source before merge. Revert the first M9 PR if necessary; no on-disk format or running kernel state migration is introduced.
+
+## Actual first-checkpoint validation
+- `make test` on unmodified current main: PASS, including actual QEMU boot and `SPIFFOS_BOOT_OK`.
+- `make test-kernel-result` on M9 branch: PASS under ASan/UBSan.
+- `git diff --check`: PASS.
+- `make test-memory` on M9 branch: FAIL in 128 MiB QEMU test, no `SPIFFOS_KEYBOARD_READY` serial marker within 30 seconds.
+- Direct 128 MiB QEMU retry with `--timeout 60`: FAIL, firmware boot lines printed but no kernel readiness marker. Root cause unresolved. This header-only module is not linked into the kernel, so no causality is attributed without further tests.
+
+**Do not merge or deploy** until the failed QEMU regression is investigated, reproduced against the unchanged baseline at the same 128 MiB configuration, and full acceptance gates pass.
