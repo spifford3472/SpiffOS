@@ -217,3 +217,5 @@ O-006 is partially scoped for diagnostic text workspace switching; future applic
 - Verify F1..F9 workspace selection in the owner's interactive GTK/QEMU window; QMP synthetic events alone cannot validate desktop shortcut interception.
 
 - M8 follow-up: replace boot-only PIT channel-0 sampling with a general monotonic timer driver before physical-hardware portability; QEMU diagnostic timing uses the existing firmware PIT setup without reprogramming interrupts.
+
+- M8.1: owner reported F12 too short; verify PIT mode 3 tick semantics and enforce measured QEMU overlay duration, plus physical hardware follow-up.

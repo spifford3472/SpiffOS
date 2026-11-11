@@ -212,4 +212,4 @@ The owner-authorized M7 checkpoint is specified in [ADR-m7-text-workspace-switch
 
 M7 keyboard: F1..F9 are alternate workspace selectors alongside Ctrl+Alt+top-row 1..9. Host desktop interception of the Ctrl+Alt chord was observed in the Forge interactive session.
 
-M8 implemented: F1..F9 exclusive workspace keys, F10 read-only system screen, F12 timed 128x128 non-destructive workspace indicator with two fade stages and exact restoration (ADR-m8-function-keys-and-workspace-indicator.md). Uses boot-only PIT polling; no general timer driver yet.
+M8 implemented: F1..F9 exclusive workspace keys, F10 read-only system screen, F12 timed 128x128 non-destructive workspace indicator with two fade stages and exact restoration (ADR-m8-function-keys-and-workspace-indicator.md). Uses boot-only PIT channel-2 mode-2 polling; no general timer driver yet.
