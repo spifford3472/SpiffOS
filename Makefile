@@ -169,6 +169,15 @@ test-keyboard: test-keyboard-memory iso
 	python3 scripts/qemu.py test --keyboard
 
 
+# M9: no-heap status vocabulary is tested before memory and QEMU gates.
+.PHONY: test-kernel-result
+build/kernel-result-test: tests/kernel-result-test.c src/kernel/kernel-result.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/kernel-result-test.c -o $@
+
+test-kernel-result: build/kernel-result-test
+	./build/kernel-result-test
+
 # Read-only memory-map inventory: no physical frames are allocated or touched.
 build/memory-map.o: src/kernel/memory-map.c src/kernel/memory-map.h Makefile
 	mkdir -p build
@@ -187,7 +196,7 @@ build/memory-map-test: src/kernel/memory-service.c src/kernel/memory-service.h s
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
+test-memory: test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 
