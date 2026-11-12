@@ -11,7 +11,7 @@ KERNEL := build/spiffos-kernel.elf
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/x86-pic.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/x86-pic.h src/kernel/kernel-timer.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -23,6 +23,18 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 build/x86-idt.o: src/kernel/x86-idt.c src/kernel/x86-idt.h src/kernel/x86-tss.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
+
+build/kernel-timer.o: src/kernel/kernel-timer.c src/kernel/kernel-timer.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-timer.c -o $@
+
+.PHONY: test-timer-memory
+test-timer-memory: build/kernel-timer-test
+	./build/kernel-timer-test
+
+build/kernel-timer-test: tests/kernel-timer-test.c src/kernel/kernel-timer.c src/kernel/kernel-timer.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/kernel-timer-test.c src/kernel/kernel-timer.c -o $@
 
 build/x86-pic.o: src/kernel/x86-pic.c src/kernel/x86-pic.h Makefile
 	mkdir -p build
@@ -68,8 +80,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -244,7 +256,7 @@ build/memory-map-test: src/kernel/memory-service.c src/kernel/memory-service.h s
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-pic-memory test-idt-memory test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
+test-memory: test-timer-memory test-pic-memory test-idt-memory test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 

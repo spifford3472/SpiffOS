@@ -429,3 +429,7 @@ An x86-64 Task State Segment (TSS) still matters in long mode: the processor rea
 ## Legacy PIC port and mask basics (M9-3B)
 
 The x86-compatible pair of 8259 interrupt controllers has master ports 0x20/0x21 and slave ports 0xA0/0xA1. Initialization control words (ICWs) assign new vector offsets; PIC data ports subsequently contain eight mask bits each, with **one meaning masked**. Master IRQ2 connects the slave controller. An end-of-interrupt (EOI) must be issued slave-first then master for legitimate slave IRQs; a phantom IRQ7 requires no EOI, while phantom slave IRQ15 requires only master EOI after checking the ISR. Hosted tests use injected IO callbacks instead of privileged IN/OUT instructions.
+
+## Monotonic time without a wall clock (M9-3C)
+
+A monotonic timer measures intervals, not calendar dates. The kernel timer begins unavailable even though its state is initialized, and becomes readable after the first validated interrupt increments its count. The counter saturates at the maximum 64-bit value rather than rolling backward. Millisecond conversion divides first to avoid overflow in `ticks * 1000`; caller-visible output remains untouched on invalid inputs. An IRQ-updated tick must be loaded atomically because normal code can be interrupted between instructions.

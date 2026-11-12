@@ -397,3 +397,7 @@ The M9-3 phase authorizes a boot-CPU TSS, IST and double-fault emergency stack w
 ## M9-3B controller checkpoint (2026-11-11)
 
 Owner authorization for M9-3 includes choosing the simplest safe interrupt-controller foundation. QEMU uses a fully masked dual 8259 PIC remapped to vectors 32–47; IF remains zero. APIC and physical hardware topology remain deferred. See [ADR-m9-3-pic-foundation](ADR-m9-3-pic-foundation.md).
+
+## M9-3C monotonic internal timer (2026-11-11)
+
+M9-3 Phase C establishes an internal saturating 64-bit tick service with explicit uninitialized/unavailable state, 10 ms intended resolution and no wall-clock dependence. PIT0 IRQ0 becomes its source only after Phase D validation; PIT2 F12 is unchanged. See [ADR-m9-3-monotonic-clock](ADR-m9-3-monotonic-clock.md).

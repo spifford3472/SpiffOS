@@ -238,3 +238,7 @@ Guard-page mappings for the emergency stack, SMP/per-CPU TSS lifecycle, generic 
 ## M9-3B portability follow-up
 
 ACPI MADT, APIC selection, PIC absence detection, IRQ routing on physical hardware, and SMP interrupt-controller ownership remain open. No hardware IRQ is enabled in Phase B.
+
+## M9-3C timer follow-up
+
+Clock source beyond QEMU PIT0, physical calibration, sleep/deadlines, hardware timer migration, and wall-clock date remain open. The monotonic core has no active source before Phase D.
