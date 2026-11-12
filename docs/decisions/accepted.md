@@ -404,3 +404,6 @@ M9-3 Phase C establishes an internal saturating 64-bit tick service with explici
 
 ## M9-3D approved APIC-first direction (2026-11-11)
 The owner explicitly selected ACPI/MADT-based LAPIC + IOAPIC discovery and routing for first controlled PIT0 IRQ0 delivery, with legacy PIC fallback. Draft PIC IRQ0 delivery failed in q35; it is superseded as the primary route, not merged. See [ADR-m9-3-apic-routing](ADR-m9-3-apic-routing.md). The approval is subject to read-only discovery, staged MMIO/IRQ tests, and no physical hardware changes.
+
+## M9-3D4 owner approval — 2026-11-12
+The owner approved the dedicated kernel-owned, uncached, two-page APIC MMIO virtual mapping foundation in Issue #45, following completed M9-3D1/D2/D3. See [ADR-m9-3d4-mmio-mapping](ADR-m9-3d4-mmio-mapping.md). This is limited to tightly controlled page-table ownership, rollback and QEMU validation; it does not authorize unsafe direct physical dereferencing, arbitrary device MMIO or unverified interrupt enabling.
