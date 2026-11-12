@@ -1,8 +1,8 @@
 /* Purpose: define the fixed x86-64 IDT and IDTR wire layouts.
  * Dependencies: C11 fixed-width integers; no allocation or hardware IO.
  * Invariants: packed sizes are exact; only vectors 0..31 may be present in
- * M9-3A, with IST1 for vector 8 only. Do not enable interrupts until
- * IRQ gates are independently designed.
+ * M9-3D, with IST1 for vector 8 and controller gates 32..47.
+ * Keep IRQs masked until source and platform routing are verified.
  * Reference: docs/decisions/ADR-m9-exception-idt.md. */
 #ifndef X86_IDT_H
 #define X86_IDT_H
@@ -38,6 +38,8 @@ struct x86_idtr {
  * Number of exception gates (0-31)
  */
 #define IDT_EXCEPTION_COUNT 32
+#define IDT_PIC_IRQ_COUNT 16
+#define IDT_PIC_VECTOR_FIRST 32
 
 /**
  * Total number of IDT entries
@@ -73,6 +75,12 @@ bool x86_idt_make_gate(struct x86_idt_gate *out, uint64_t handler, uint16_t sele
  */
 bool x86_idt_construct(struct x86_idt_gate *entries, size_t count,
                        const uint64_t *handler_addresses, uint16_t selector);
+
+/* Add exactly 16 external PIC IRQ interrupt gates in vectors 32..47.
+ * Preflight validates every address; invalid input leaves entries unchanged.
+ * Requires a 256-entry table initialized by x86_idt_construct and IF=0. */
+bool x86_idt_add_pic_gates(struct x86_idt_gate *entries, size_t count,
+                           const uint64_t *irq_handlers, uint16_t selector);
 
 /* Install the 32 exception gates using current ring-0 CS and LIDT. True means
  * ready, false keeps old IDTR. Boot CPU only with CPU interrupts disabled. */
