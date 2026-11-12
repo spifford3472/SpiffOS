@@ -20,3 +20,6 @@ Blind HHDM MMIO dereferencing and fixed QEMU APIC constants are rejected. Firmwa
 
 ## Approval and history
 2026-11-12 owner said "lets do your recommended next step, you can merge and deploy when you complete the step" after recommendation to do M9-3D5 read-only APIC hardware validation. This authorizes safe code and QEMU-only staging subject to all regression/negative gates, not uncontrolled hardware modification.
+
+## Implementation and acceptance evidence — 2026-11-12
+The owner-authorized read-only gate was implemented in a separate Forge QEMU source tree and verified at 128/256/512 MiB. PAT index3 UC and enabled MTRR checks passed; the HHDM alias query proved both local APIC and I/O APIC physical pages absent from the known direct map. The validated private M9-3D4 mappings supported LAPIC ID and IOAPIC ID/version reads, and the GSI fit actual IOAPIC redirection capacity. All memory, framebuffer, F1–F12 and #UD/#DF regressions passed, as did a simulated cache-gate rejection that skipped all hardware register reads. No controller redirection, mask, EOI, PIT or STI changes. See `docs/operations/m9-3d5-readonly-apic-20261112.md`. This does not authorize broad hardware portability or the active M9-3D6 IRQ route.

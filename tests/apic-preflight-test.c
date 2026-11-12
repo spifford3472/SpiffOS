@@ -12,7 +12,7 @@ int main(void)
     struct acpi_apic_topology t = {
         .lapic_physical=UINT64_C(0xfee00000),
         .ioapic_physical=0xfec00000u,
-        .enabled_lapics=1, .irq0_gsi=2, .ioapic_gsi_base=0
+        .enabled_lapics=1, .boot_lapic_id=0, .irq0_gsi=2, .ioapic_gsi_base=0
     };
     struct apic_cpu_snapshot cpu = {
         .cpuid_leaf1_edx=(1u<<9),
@@ -43,6 +43,9 @@ int main(void)
     assert(!apic_cpu_topology_preflight(&t,&cpu));
     t.enabled_lapics=1;
     t.ioapic_gsi_base=3;
+    assert(!apic_cpu_topology_preflight(&t,&cpu));
+    t.ioapic_gsi_base=0;
+    cpu.cpuid_apic_id=7;
     assert(!apic_cpu_topology_preflight(&t,&cpu));
     return 0;
 }

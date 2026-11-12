@@ -17,6 +17,7 @@ struct acpi_apic_topology {
     uint16_t irq0_flags;
     uint8_t ioapic_id;
     uint8_t enabled_lapics;
+    uint8_t boot_lapic_id; /* only one enabled xAPIC supported in D5 */
 };
 
 /* Check a firmware byte span (including checksum itself). Reject empty,

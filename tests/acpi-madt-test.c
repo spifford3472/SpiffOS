@@ -64,6 +64,7 @@ int main(void)
     assert(out.lapic_physical == 0xfee00000u);
     assert(out.ioapic_physical == 0xfec00000u);
     assert(out.ioapic_id == 3 && out.enabled_lapics == 1);
+    assert(out.boot_lapic_id == 1);
     assert(out.ioapic_gsi_base == 0 && out.irq0_gsi == 2);
     assert(!acpi_madt_parse(NULL,n,&out));
     assert(!acpi_madt_parse(t,n,NULL));

@@ -36,4 +36,16 @@ struct x86_page_translation {
 bool x86_page_walk_read_only(const struct x86_page_walker *walker,
                               uint64_t virtual_address,
                               struct x86_page_translation *out);
+
+/* M9-3D5 diagnostic tri-state query (read-only, no MMIO). The result tells
+ * truly absent PTEs from missing/invalid page-table mapping authority.
+ * ABSENT requires at least one safely mapped table with a nonpresent entry;
+ * UNKNOWN must never be mistaken for an absent cache alias. */
+enum x86_page_probe_status {
+    X86_PAGE_PROBE_UNKNOWN=0,
+    X86_PAGE_PROBE_ABSENT=1,
+    X86_PAGE_PROBE_PRESENT=2
+};
+enum x86_page_probe_status x86_page_probe_read_only(
+    const struct x86_page_walker *walker, uint64_t virtual_address);
 #endif

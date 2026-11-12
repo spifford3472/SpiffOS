@@ -37,13 +37,26 @@ int main(void)
     unsigned pd=(unsigned)((virt>>21)&511u);
     unsigned pt=(unsigned)((virt>>12)&511u);
     assert(!x86_page_walk_read_only(&w,virt,&t));
+    assert(x86_page_probe_read_only(&w,virt)==X86_PAGE_PROBE_ABSENT);
     put(0,pml4,0x2003);
     put(1,pdpt,0x3003);
     put(2,pd,0x4003);
     put(3,pt,0x7003);
     assert(x86_page_walk_read_only(&w,virt,&t));
     assert(t.physical==0x7234u && t.page_size==4096);
+    assert(x86_page_probe_read_only(&w,virt)==X86_PAGE_PROBE_PRESENT);
+    /* A present mapping through a user-accessible ancestor remains a real
+     * alias even though supervisor-only page authorization rejects it. */
+    put(0,pml4,0x2007);
+    assert(x86_page_probe_read_only(&w,virt)==X86_PAGE_PROBE_PRESENT);
+    assert(!x86_page_walk_read_only(&w,virt,&t));
+    put(0,pml4,0x2003);
     assert(t.supervisor_only && t.writable);
+    assert(x86_page_probe_read_only(NULL,virt)==X86_PAGE_PROBE_UNKNOWN);
+    uint64_t saved_cr3=w.cr3_physical;
+    w.cr3_physical=0x9000;
+    assert(x86_page_probe_read_only(&w,virt)==X86_PAGE_PROBE_UNKNOWN);
+    w.cr3_physical=saved_cr3;
     put(3,pt,0x7007); /* leaf user bit invalidates MMIO use */
     assert(!x86_page_walk_read_only(&w,virt,&t));
     put(3,pt,0x7003);
