@@ -238,3 +238,7 @@ The Phase A candidate initializes a static boot-CPU TSS through a private GDT th
 ## M9-3B interrupt-controller baseline
 
 The boot CPU remaps the QEMU-compatible dual 8259 PIC to vectors 32–47 with every IRQ masked and IF=0. CPU exception vectors 0–31 are unchanged. No IRQ handlers or interrupt timer are enabled until later validated checkpoints. This is an internal boot foundation, not an approved universal interrupt-controller ABI.
+
+## M9-3C monotonic clock foundation
+
+A static 64-bit saturating tick counter is initialized with an intended 100 Hz rate but returns unavailable until a real IRQ0 tick arrives. Hosted arithmetic tests verify conversion and overflow. PIT channel 2 F12 overlay is unchanged; Phase D controls the first actual IRQ enable. See ADR-m9-3-monotonic-clock.md.

@@ -19,6 +19,7 @@
 #include "workspace-manager.h"
 #include "x86-idt.h"
 #include "x86-pic.h"
+#include "kernel-timer.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -428,6 +429,18 @@ void kmain(void)
         halt_forever();
     }
     (void)serial_write("SPIFFOS_PIC_MASKED\r\n");
+    /* A timer state is initialized before hardware IRQs exist. It must remain
+     * unavailable until Phase D confirms the first controller tick. */
+    if (!kernel_timer_initialize_boot(100u)) {
+        (void)serial_write("SPIFFOS_TIMER_ERROR\r\n");
+        halt_forever();
+    }
+    uint64_t early_timer_ms = 0;
+    if (kernel_timer_boot_now_ms(&early_timer_ms)) {
+        (void)serial_write("SPIFFOS_TIMER_EARLY_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_TIMER_WAITING\r\n");
 #ifdef SPIFFOS_DOUBLE_FAULT_TEST
     /* Test-only: poison RSP then execute invalid opcode. The failure to
      * push the #UD frame triggers a genuine #DF, using IST1 from the TSS.
