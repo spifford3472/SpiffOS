@@ -436,3 +436,7 @@ A monotonic timer measures intervals, not calendar dates. The kernel timer begin
 
 ## APIC and ACPI discovery contract (M9-3D)
 ACPI tables are firmware-owned byte sequences. Validate signature, table length, checksum and every variable-length record before reading fields. The MADT describes LAPIC, IOAPIC and source overrides, but table addresses are physical and must not be dereferenced until mapped and validated. LAPIC and IOAPIC registers are MMIO, not legacy PIC I/O ports; their cache attributes and interrupt routing must be initialized before enabling IF. An I/O APIC global system interrupt (GSI) can differ from an ISA IRQ number because of an override. See ADR-m9-3-apic-routing.md.
+
+## Local APIC CPU preflight
+
+The CPUID **leaf 1 EDX bit 9** reports the presence of local APIC hardware (not ECX). Register IA32_APIC_BASE MSR 0x1B contains enable (bit 11), x2APIC mode (bit 10), BSP flag (bit 8), and the physical APIC base address in bits 12–51. Confirm the base agrees with a validated ACPI MADT LAPIC address before considering mappings. This does not imply the page is mapped or safe for MMIO.
