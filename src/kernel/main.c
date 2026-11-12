@@ -22,6 +22,7 @@
 #include "kernel-timer.h"
 #include "acpi-discovery.h"
 #include "apic-preflight.h"
+#include "x86-page-walk.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -280,6 +281,74 @@ static const uint8_t *acpi_map_read_only(void *context, uint64_t physical,
             return (const uint8_t *)(uintptr_t)(physical + state->offset);
     }
     return NULL;
+}
+
+/* Borrow only complete, RAM-backed page-table frames from the validated
+ * Limine map. This does not map MMIO or authorize a controller write.
+ * Supports bootloader-owned or ordinary RAM table pages; rejects unknown
+ * firmware and device address ranges. The mapper never changes ownership. */
+static const uint8_t *boot_table_map(void *context, uint64_t physical_page)
+{
+    const struct acpi_map_context *state=context;
+    if (state==NULL || state->map==NULL || state->map->entries==NULL ||
+        state->map->entry_count>128 ||
+        (physical_page&4095u)!=0 ||
+        physical_page>UINT64_MAX-4096 ||
+        state->offset>UINT64_MAX-physical_page ||
+        state->offset+physical_page>UINT64_MAX-4096)
+        return NULL;
+    for(uint64_t i=0;i<state->map->entry_count;++i) {
+        const struct limine_memmap_entry *region=state->map->entries[i];
+        if(region==NULL || region->length>UINT64_MAX-region->base)
+            continue;
+        if ((region->type==LIMINE_MEMMAP_USABLE ||
+             region->type==LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE ||
+             region->type==LIMINE_MEMMAP_RESERVED_MAPPED) &&
+            physical_page>=region->base &&
+            physical_page+4096<=region->base+region->length)
+            return (const uint8_t *)(uintptr_t)(physical_page+state->offset);
+    }
+    return NULL;
+}
+
+/* Inspect but never modify the current boot CPU translation tables. Only
+ * confirm whether the firmware-reported MMIO locations are already mapped.
+ * An address match is NOT permission to access device registers: PAT/MTRR
+ * cache attributes still require proof before any APIC initialization. */
+static bool apic_boot_pages_present(const struct acpi_apic_topology *topology)
+{
+    if(topology==NULL || hhdm_request.response==NULL ||
+       paging_mode_request.response==NULL || memory_request.response==NULL)
+       return false;
+    uint8_t levels;
+    if(paging_mode_request.response->mode==LIMINE_PAGING_MODE_X86_64_4LVL)
+        levels=4;
+    else if(paging_mode_request.response->mode==LIMINE_PAGING_MODE_X86_64_5LVL)
+        levels=5;
+    else return false;
+    uint64_t cr3;
+    __asm__ volatile ("movq %%cr3, %0" : "=r"(cr3));
+    const struct acpi_map_context ctx={
+        .map=memory_request.response,
+        .offset=hhdm_request.response->offset
+    };
+    const struct x86_page_walker walker={
+        .map_table=boot_table_map,
+        .context=(void *)(uintptr_t)&ctx,
+        .cr3_physical=cr3,
+        .paging_levels=levels
+    };
+    const uint64_t physical[2]={topology->lapic_physical,
+                                topology->ioapic_physical};
+    for(size_t i=0;i<2;++i) {
+        if(physical[i]>UINT64_MAX-ctx.offset) return false;
+        struct x86_page_translation translation;
+        if(!x86_page_walk_read_only(&walker,
+                physical[i]+ctx.offset,&translation) ||
+           translation.physical!=physical[i] ||
+           !translation.supervisor_only) return false;
+    }
+    return true;
 }
 
 /* Bounded read-only probe; a failed table lookup is reported but never
@@ -544,7 +613,12 @@ void kmain(void)
         struct apic_cpu_snapshot cpu_apic;
         if (apic_cpu_read_snapshot(&cpu_apic) &&
             apic_cpu_topology_preflight(&boot_apic, &cpu_apic))
-            (void)serial_write("SPIFFOS_APIC_CPU_MATCH\r\n");
+            {
+                (void)serial_write("SPIFFOS_APIC_CPU_MATCH\r\n");
+                (void)serial_write(apic_boot_pages_present(&boot_apic) ?
+                    "SPIFFOS_APIC_PAGES_PRESENT_UNVERIFIED_CACHE\r\n" :
+                    "SPIFFOS_APIC_MAPPING_UNVERIFIED\r\n");
+            }
         else
             (void)serial_write("SPIFFOS_APIC_CPU_UNAVAILABLE\r\n");
     } else {

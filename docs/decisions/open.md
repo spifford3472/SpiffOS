@@ -245,3 +245,7 @@ Clock source beyond QEMU PIT0, physical calibration, sleep/deadlines, hardware t
 
 ## APIC routing prerequisites (2026-11-11)
 ACPI table lifetime, validated physical-memory translations, UC MMIO mappings, CPU LAPIC ID matching, non-QEMU GSI overrides, multiple IOAPICs and failure policy require explicit tests before STI. No assumption of fixed APIC address or route is accepted. See ADR-m9-3-apic-routing.md.
+
+## M9-3D3 MMIO mapping (2026-11-11)
+
+The read-only QEMU CR3 probe could not establish a verified virtual mapping for both ACPI-discovered APIC device pages. This is an availability result (it can also mean an intermediate table was not accessible through the restricted mapper), **not proof the devices are absent**. Requires a separate dedicated kernel MMIO virtual-address reservation, bounded page-table ownership/mutation and rollback, UC/PAT/MTRR cache policy, and host + QEMU negative tests before LAPIC/IOAPIC device access or STI. See ADR-m9-3-apic-routing.md.

@@ -34,3 +34,7 @@ Memory-map-backed APIC MMIO cache attributes, APIC MSR state and x2APIC, SMP/per
 ## APIC CPU preflight checkpoint (2026-11-11)
 
 Before MMIO, read CPUID leaf 1 EDX bit9 for xAPIC capability and standard IA32_APIC_BASE MSR 0x1B only on supported CPUs. Check xAPIC global enable (MSR bit11), x2APIC mode disabled (bit10), BSP ownership (bit8) and the physical LAPIC base against the fully validated MADT value. No APIC MMIO reads or writes, mappings, or interrupts are enabled; a mismatch is reported and fails closed. Hosted tests inject synthetic CPU snapshots. Do not confuse MSR physical base with an already mapped virtual address.
+
+## MMIO page-mapping discovery gate (2026-11-11)
+
+A read-only x86 CR3 page-table walker with an ownership-bounded HHDM table-frame mapper was added for exploratory QEMU validation. It does not allocate page-table frames, adjust PTEs or read MMIO registers. The 128-MiB QEMU guest reported `SPIFFOS_APIC_MAPPING_UNVERIFIED`: both LAPIC and I/O APIC mappings could not be positively established under the current strict mapper. This **does not prove** the pages are unmapped, since failure to map an intermediate page table also yields unavailable; never infer a working device route. No STI or APIC controller access is authorized at this gate. Before any active IRQ work, design controlled kernel-owned virtual MMIO reservations, UC/PAT memory type, a transactional mapper and rollback; validate isolated host and real-guest tests.
