@@ -249,3 +249,6 @@ ACPI table lifetime, validated physical-memory translations, UC MMIO mappings, C
 ## M9-3D3 MMIO mapping (2026-11-11)
 
 The read-only QEMU CR3 probe could not establish a verified virtual mapping for both ACPI-discovered APIC device pages. This is an availability result (it can also mean an intermediate table was not accessible through the restricted mapper), **not proof the devices are absent**. Requires a separate dedicated kernel MMIO virtual-address reservation, bounded page-table ownership/mutation and rollback, UC/PAT/MTRR cache policy, and host + QEMU negative tests before LAPIC/IOAPIC device access or STI. See ADR-m9-3-apic-routing.md.
+
+## M9-3D4 mapping implementation gates — 2026-11-12
+Owner approved a dedicated two-page APIC MMIO aperture; page-table root/ancestor physical ownership, safe 4/5-level virtual reservation, verified effective UC cache type (IA32_PAT/MTRR), NX and fault-safe rollback still require real validation. These are test gates, **not** permission to access MMIO prematurely. Hardware IRQ0 remains blocked pending successful mapped LAPIC/IOAPIC tests. See ADR-m9-3d4-mmio-mapping.md.

@@ -249,3 +249,6 @@ The owner selected ACPI RSDP/XSDT/MADT discovery of LAPIC and IOAPIC topology be
 ## APIC MMIO readiness gate (read-only, 2026-11-11)
 
 The Phase D3 exploratory page-table walker verifies only whether the existing CR3 translation and caller-validated RAM page-table pointers can prove a mapping from HHDM+ACPI controller physical addresses. QEMU reported mapping **unverified**. No new page mapping, APIC MMIO access, device interrupt, or scheduler was added; M9-3C remains the last IRQ-disabled operational behavior.
+
+## M9-3D4 approved kernel MMIO mapping foundation — 2026-11-12
+The next internal kernel service reserves two supervisor-only, read/write, NX, verified-UC virtual pages for the discovered LAPIC and IOAPIC physical windows. It must use existing M2/M3 ownership for page-table RAM, validate every active level before attaching an entry, and transactionally roll back any failed allocation/link. Existing HHDM and loader mappings must remain untouched. All tests remain QEMU-only and IF=0 until separate IRQ routing is validated. See ADR-m9-3d4-mmio-mapping.md.
