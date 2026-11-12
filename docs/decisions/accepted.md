@@ -410,3 +410,6 @@ The owner approved the dedicated kernel-owned, uncached, two-page APIC MMIO virt
 
 ## M9-3D5 owner authorization — 2026-11-12
 Owner approved read-only APIC register and cache/alias validation and authorized merge/safe Forge QEMU deployment **only after** regression gates; no IRQ0 routing, controller configuration, physical laptop changes or STI. The IOAPIC version read requires a bounded write to its register-index selector (not redirection or mask configuration); this must be reported transparently and cannot be treated as a read with zero MMIO writes. See [ADR-m9-3d5-apic-readonly](ADR-m9-3d5-apic-readonly.md).
+
+## M9-3D6 owner approval — 2026-11-12
+Owner authorized implementation, validation-gated merge and safe QEMU-only deployment of controlled boot-CPU APIC IRQ0 and PIT0 ~100-Hz monotonic ticks under [ADR-m9-3d6-irq0-delivery](ADR-m9-3d6-irq0-delivery.md) and Issue #51. Combined user interactive acceptance of M9-3D5 (#48) and M9-3D6 (#51) is permitted after all automated regression and QEMU hardware tests pass. Physical installation, new public timer/IRQ ABI, keyboard IRQ and unsupported ACPI routes remain unapproved.

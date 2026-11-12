@@ -261,3 +261,6 @@ After private LAPIC/IOAPIC 4KiB UC/NX mappings have passed M9-3D4, M9-3D5 separa
 
 ## M9-3D5 read-only APIC hardware proof — 2026-11-12
 A read-only x86 PTE alias walker, MTRR/PAT policy check and bounded LAPIC/IOAPIC identity/version probe now run after the isolated M9-3D4 mapping proof. In QEMU 128/256/512 MiB, both known HHDM aliases are absent, cache gate is safe, MADT/CPUID/device identities match and IRQ0's GSI fits the IOAPIC hardware range. The IOAPIC version read uses a selector-latch write and restores it; interrupt configuration is unmodified. All IRQs remain disabled. See ADR-m9-3d5-apic-readonly.md.
+
+## M9-3D6 authorized IRQ0 integration
+The first controlled timer interrupt is an internal QEMU-only boot-CPU path: MADT and xAPIC/memory-type proof (M9-3D5), one IOAPIC GSI route for PIT0 to vector 0x30, LAPIC EOI, and kernel_timer 100Hz monotonic ticks. Exceptions and IST1 remain distinct, PIC completely masked and polled keyboard/COM1 plus PIT channel2 F12 preserved. The IF enable is a release-critical test gate, not a generic IRQ ABI. See ADR-m9-3d6-irq0-delivery.md.
