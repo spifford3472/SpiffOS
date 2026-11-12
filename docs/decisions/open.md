@@ -255,3 +255,6 @@ Owner approved a dedicated two-page APIC MMIO aperture; page-table root/ancestor
 
 ## M9-3D5 next gate — APIC register access (2026-11-12)
 M9-3D4's private PTEs validate in QEMU with no MMIO reads. Before any LAPIC ID or IOAPIC version read, verify memory-type alias hazards and effective MTRR/PAT UC behavior; then use a bounded read-only hardware-probe adapter and negative tests. APIC controller writes, IRQ0 redirection/EOI, scheduler and STI remain blocked until separate validation. See ADR-m9-3d4-mmio-mapping.md and operations/m9-3d4-mmio-mapping-20261112.md.
+
+## M9-3D5 read-only register proof and M9-3D6 IRQ0 — 2026-11-12
+APIC register identity and I/O APIC version/GSI routing extent must be confirmed from M9-3D4's validated kernel-private mapping, with a conservative effective cache/alias gate. IOREGSEL selection is a narrowly bounded hardware write only for a register read; it must not touch configuration. Hardware IRQ0 routing, LAPIC EOI, PIT0 unmask and STI remain OPEN and unapproved as operational until their own tests. See ADR-m9-3d5-apic-readonly.md.

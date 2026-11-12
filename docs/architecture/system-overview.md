@@ -255,3 +255,6 @@ The next internal kernel service reserves two supervisor-only, read/write, NX, v
 
 ## M9-3D4 mapping implementation verified in QEMU — 2026-11-12
 The earlier M9-3D3 `APIC_MAPPING_UNVERIFIED` observation applies only to the original HHDM/CR3 probe and is superseded as a *mapping capability* limitation by the new, isolated M9-3D4 kernel aperture. The boot CPU now owns 3–4 additional ordinary kernel page-table frames, attaches exactly two supervisor RW/NX/UC-index-3 mappings, and re-walks the active CR3. Tests pass at 128/256/512 MiB, and a forced second-allocation failure rolls back without modifying the root. No LAPIC/IOAPIC register access, IRQ delivery or scheduler was introduced. See ADR-m9-3d4-mmio-mapping.md.
+
+## Approved M9-3D5 read-only APIC probe — 2026-11-12
+After private LAPIC/IOAPIC 4KiB UC/NX mappings have passed M9-3D4, M9-3D5 separately verifies effective MMIO memory type, alias safety, MADT APIC identities, LAPIC boot-CPU ID and IOAPIC ID/version/GSI range. Any uncertainty fails closed and retains masked PIC and IF=0. Only I/O APIC read register selection is permitted as a bounded index-latch write; interrupt controller redirection, LAPIC EOI, PIT IRQ0 and STI remain unchanged. See ADR-m9-3d5-apic-readonly.md.

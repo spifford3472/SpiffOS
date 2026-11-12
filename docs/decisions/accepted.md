@@ -407,3 +407,6 @@ The owner explicitly selected ACPI/MADT-based LAPIC + IOAPIC discovery and routi
 
 ## M9-3D4 owner approval — 2026-11-12
 The owner approved the dedicated kernel-owned, uncached, two-page APIC MMIO virtual mapping foundation in Issue #45, following completed M9-3D1/D2/D3. See [ADR-m9-3d4-mmio-mapping](ADR-m9-3d4-mmio-mapping.md). This is limited to tightly controlled page-table ownership, rollback and QEMU validation; it does not authorize unsafe direct physical dereferencing, arbitrary device MMIO or unverified interrupt enabling.
+
+## M9-3D5 owner authorization — 2026-11-12
+Owner approved read-only APIC register and cache/alias validation and authorized merge/safe Forge QEMU deployment **only after** regression gates; no IRQ0 routing, controller configuration, physical laptop changes or STI. The IOAPIC version read requires a bounded write to its register-index selector (not redirection or mask configuration); this must be reported transparently and cannot be treated as a read with zero MMIO writes. See [ADR-m9-3d5-apic-readonly](ADR-m9-3d5-apic-readonly.md).
