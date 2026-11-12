@@ -420,6 +420,14 @@ void kmain(void)
         halt_forever();
     }
     (void)serial_write("SPIFFOS_IDT_READY\r\n");
+#ifdef SPIFFOS_DOUBLE_FAULT_TEST
+    /* Test-only: poison RSP then execute invalid opcode. The failure to
+     * push the #UD frame triggers a genuine #DF, using IST1 from the TSS.
+     * Never include this branch in a production kernel image. */
+    (void)serial_write("SPIFFOS_DOUBLE_FAULT_TEST_TRIGGER\r\n");
+    __asm__ volatile ("xorq %%rsp, %%rsp\n\tud2" : : : "memory");
+    halt_forever();
+#endif
 #ifdef SPIFFOS_EXCEPTION_TEST
     /* TEST-ONLY invalid opcode, never linked in a production ISO. */
     (void)serial_write("SPIFFOS_EXCEPTION_TEST_TRIGGER\r\n");

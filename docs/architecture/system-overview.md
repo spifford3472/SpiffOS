@@ -230,3 +230,7 @@ serial initialization. Fatal CPU faults report a bounded serial diagnostic
 and halt; hardware IRQs and timer preemption remain disabled. The existing
 PS/2 polling and PIT-channel-2 F12 timing remain unchanged. See
 ADR-m9-exception-idt.md for risk limits and validation.
+
+## M9-3A bootstrap fault isolation (2026-11-11)
+
+The Phase A candidate initializes a static boot-CPU TSS through a private GDT that retains the loader descriptor layout; exception vector 8 uses a dedicated IST1 emergency stack. It does not yet provide guard pages, per-CPU isolation, IRQ delivery or scheduling. See [ADR-m9-3-exception-stacks](../decisions/ADR-m9-3-exception-stacks.md). Verification results and release state are recorded independently.

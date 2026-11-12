@@ -20,9 +20,13 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # M9-2: freestanding CPU gate builder and fixed exception-only assembly stubs.
-build/x86-idt.o: src/kernel/x86-idt.c src/kernel/x86-idt.h Makefile
+build/x86-idt.o: src/kernel/x86-idt.c src/kernel/x86-idt.h src/kernel/x86-tss.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
+
+build/x86-tss.o: src/kernel/x86-tss.c src/kernel/x86-tss.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/x86-tss.c -o $@
 
 build/x86-exceptions.o: src/kernel/x86-exceptions.S Makefile
 	mkdir -p build
@@ -35,16 +39,25 @@ test-idt-fault:
 	python3 scripts/test-exception-fault.py
 
 .PHONY: test-idt-memory
-build/x86-idt-test: tests/x86-idt-test.c src/kernel/x86-idt.c src/kernel/x86-idt.h Makefile
+build/x86-idt-test: tests/x86-idt-test.c src/kernel/x86-idt.c src/kernel/x86-idt.h src/kernel/x86-tss.c src/kernel/x86-tss.h Makefile
 	mkdir -p build
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/x86-idt-test.c src/kernel/x86-idt.c -o $@
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/x86-idt-test.c src/kernel/x86-idt.c src/kernel/x86-tss.c -o $@
 
-test-idt-memory: build/x86-idt-test
+test-idt-memory: build/x86-idt-test build/x86-tss-test
 	./build/x86-idt-test
+	./build/x86-tss-test
+
+build/x86-tss-test: tests/x86-tss-test.c src/kernel/x86-tss.c src/kernel/x86-tss.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/x86-tss-test.c src/kernel/x86-tss.c -o $@
+
+.PHONY: test-double-fault
+test-double-fault:
+	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-exceptions.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-exceptions.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-tss.o build/x86-exceptions.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-idt.o build/x86-tss.o build/x86-exceptions.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
