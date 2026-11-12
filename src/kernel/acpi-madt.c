@@ -71,7 +71,10 @@ bool acpi_madt_parse(const uint8_t *table, size_t available,
         if (type == MADT_LOCAL_APIC) {
             if (entry_bytes != ENTRY_LAPIC_BYTES) return false;
             if ((read_u32(entry + 4) & 1u) != 0) {
-                if (parsed.enabled_lapics == UINT8_MAX) return false;
+                /* Single boot CPU only in M9-3D5: reject SMP topology
+                 * rather than pick a potentially incorrect APIC ID. */
+                if (parsed.enabled_lapics != 0) return false;
+                parsed.boot_lapic_id = entry[3];
                 ++parsed.enabled_lapics;
             }
         } else if (type == MADT_IOAPIC) {

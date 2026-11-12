@@ -24,6 +24,8 @@
 #include "apic-preflight.h"
 #include "x86-page-walk.h"
 #include "mmio-page-policy.h"
+#include "apic-memory-type.h"
+#include "apic-readonly.h"
 #include "x86-mmio-map.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
@@ -524,6 +526,143 @@ static bool mmio_boot_map_apic(const struct acpi_apic_topology *topology,
     return true;
 }
 
+/* Count mapping-authority failures during read-only HHDM alias walks;
+ * each probe remains independent and never accesses APIC registers. */
+static bool apic_alias_mapping_denied;
+static const uint8_t *apic_alias_checked_table(void *context,uint64_t page)
+{
+    const uint8_t *table=boot_table_map(context,page);
+    if(table==NULL) apic_alias_mapping_denied=true;
+    return table;
+}
+
+/* Read-only CPU cache state and **proven absent** known HHDM aliases.
+ * x86 UC PAT index 3 is checked again by pure apic_memory_type_safe().
+ * This does not read APIC device registers or change MTRRs/any tables. */
+static bool apic_boot_cache_gate(const struct acpi_apic_topology *topology,
+                                  const struct mmio_page_cpu_policy *policy)
+{
+    if(topology==NULL || policy==NULL ||
+       memory_request.response==NULL || hhdm_request.response==NULL ||
+       paging_mode_request.response==NULL) return false;
+    uint32_t a=1,b,c,d;
+    __asm__ volatile ("cpuid" : "+a"(a),"=b"(b),"=c"(c),"=d"(d));
+    if((d&(1u<<12))==0) return false; /* MTRR MSRs unsupported */
+    uint32_t lo,hi;
+    __asm__ volatile ("rdmsr" : "=a"(lo),"=d"(hi) : "c"(UINT32_C(0xfe)));
+    uint64_t cap=((uint64_t)hi<<32)|lo;
+    __asm__ volatile ("rdmsr" : "=a"(lo),"=d"(hi) : "c"(UINT32_C(0x2ff)));
+    uint64_t default_type=((uint64_t)hi<<32)|lo;
+    uint8_t levels;
+    if(paging_mode_request.response->mode==LIMINE_PAGING_MODE_X86_64_4LVL)
+        levels=4;
+    else if(paging_mode_request.response->mode==LIMINE_PAGING_MODE_X86_64_5LVL)
+        levels=5;
+    else return false;
+    uint64_t cr3;
+    __asm__ volatile ("movq %%cr3,%0":"=r"(cr3));
+    struct acpi_map_context ctx={
+        .map=memory_request.response,.offset=hhdm_request.response->offset
+    };
+    struct x86_page_walker walker={
+        .map_table=apic_alias_checked_table,.context=&ctx,
+        .cr3_physical=cr3,.paging_levels=levels
+    };
+    if(topology->lapic_physical>UINT64_MAX-ctx.offset ||
+       topology->ioapic_physical>UINT64_MAX-ctx.offset)
+        return false;
+    apic_alias_mapping_denied=false;
+    struct apic_memory_type_evidence evidence={
+        .mtrr_cpuid_supported=true,
+        .ia32_mtrrcap=cap,
+        .ia32_mtrr_def_type=default_type,
+        .ia32_pat=policy->ia32_pat_msr,
+        .lapic_hhdm=x86_page_probe_read_only(&walker,
+             topology->lapic_physical+ctx.offset),
+        .ioapic_hhdm=x86_page_probe_read_only(&walker,
+             topology->ioapic_physical+ctx.offset)
+    };
+    (void)serial_write(apic_alias_mapping_denied ?
+         "SPIFFOS_ALIAS_TABLE_MAPPING_DENIED\r\n" :
+         "SPIFFOS_ALIAS_TABLE_MAPPING_ACCESSIBLE\r\n");
+    (void)serial_write(evidence.lapic_hhdm==X86_PAGE_PROBE_ABSENT ?
+          "SPIFFOS_ALIAS_LAPIC_ABSENT\r\n" :
+          evidence.lapic_hhdm==X86_PAGE_PROBE_PRESENT ?
+          "SPIFFOS_ALIAS_LAPIC_PRESENT\r\n" :
+          "SPIFFOS_ALIAS_LAPIC_UNKNOWN\r\n");
+    (void)serial_write(evidence.ioapic_hhdm==X86_PAGE_PROBE_ABSENT ?
+          "SPIFFOS_ALIAS_IOAPIC_ABSENT\r\n" :
+          evidence.ioapic_hhdm==X86_PAGE_PROBE_PRESENT ?
+          "SPIFFOS_ALIAS_IOAPIC_PRESENT\r\n" :
+          "SPIFFOS_ALIAS_IOAPIC_UNKNOWN\r\n");
+    (void)serial_write((default_type&UINT64_C(0x800))!=0 ?
+          "SPIFFOS_MTRR_ENABLED\r\n" :
+          "SPIFFOS_MTRR_DISABLED\r\n");
+    if(evidence.lapic_hhdm==X86_PAGE_PROBE_ABSENT &&
+       evidence.ioapic_hhdm==X86_PAGE_PROBE_ABSENT)
+        (void)serial_write("SPIFFOS_APIC_HHDM_ALIASES_ABSENT\r\n");
+    else
+        (void)serial_write("SPIFFOS_APIC_HHDM_ALIASES_UNVERIFIED\r\n");
+#ifdef SPIFFOS_APIC_READONLY_BLOCK_TEST
+    /* Dedicated negative guest: simulate unverified cache policy. This
+     * branch is compiled only in a disposable test ISO and MUST forbid all
+     * APIC register reads while retaining normal console/keyboard boot. */
+    return false;
+#else
+    return apic_memory_type_safe(&evidence);
+#endif
+}
+
+/* Read only the local APIC ID at offset 0x20 from the private verified
+ * UC mapping. Access is permitted ONLY after cache/alias proof; this adapter
+ * owns no mapping and never changes any LAPIC register, mask or EOI. */
+static bool apic_hw_lapic_id_read(void *context,uint32_t *value)
+{
+    (void)context;
+    if(value==NULL) return false;
+    const volatile uint32_t *base=(const volatile uint32_t *)
+                                   (uintptr_t)MMIO_APIC_LAPIC_VIRTUAL;
+    *value=base[0x20u/sizeof(uint32_t)];
+    return true;
+}
+
+/* IOAPIC register reads are indirect. Read the previous 8-bit selector,
+ * select only ID(0) or VERSION(1), read IOWIN(0x10), then restore selector.
+ * The two IOREGSEL MMIO writes alter ONLY the index latch, never masks,
+ * redirection, EOI, interrupt delivery or any configured device state.
+ * One boot CPU, IF=0; no concurrent IOAPIC client is yet supported. */
+static bool apic_hw_ioapic_index_read(void *context,uint8_t index,
+                                      uint32_t *value)
+{
+    (void)context;
+    if(value==NULL || index>1) return false;
+    volatile uint32_t *base=(volatile uint32_t *)
+                             (uintptr_t)MMIO_APIC_IOAPIC_VIRTUAL;
+    uint32_t original=base[0] & UINT32_C(0xff);
+    base[0]=index;
+    __asm__ volatile ("" : : : "memory");
+    uint32_t result=base[0x10u/sizeof(uint32_t)];
+    __asm__ volatile ("" : : : "memory");
+    base[0]=original;
+    *value=result;
+    return true;
+}
+
+/* Inspect bounded identity/version register values after all memory mapping,
+ * MADT, CPU and cache/alias checks. This never enables an interrupt source. */
+static bool apic_boot_readonly_probe(const struct acpi_apic_topology *topology)
+{
+    struct apic_cpu_snapshot cpu;
+    if(topology==NULL || !apic_cpu_read_snapshot(&cpu) ||
+       !apic_cpu_topology_preflight(topology,&cpu)) return false;
+    const struct apic_readonly_backend backend={
+        apic_hw_lapic_id_read,apic_hw_ioapic_index_read,NULL
+    };
+    struct apic_readonly_result result;
+    return apic_readonly_validate(topology,cpu.cpuid_apic_id,
+                                  &backend,&result);
+}
+
 /* Bounded read-only probe; a failed table lookup is reported but never
  * enables external interrupts or changes a kernel device's configuration.
  * Only ACPI table bytes in Limine-owned mappings may be inspected here. */
@@ -800,10 +939,25 @@ void kmain(void)
                 (void)serial_write(mmio_root_ok ?
                     "SPIFFOS_MMIO_ROOT_READY\r\n" :
                     "SPIFFOS_MMIO_ROOT_UNVERIFIED\r\n");
-                if(mmio_cpu_ok && mmio_root_ok)
-                    (void)serial_write(mmio_boot_map_apic(&boot_apic,&mmio_policy) ?
+                bool mmio_mapped=false;
+                if(mmio_cpu_ok && mmio_root_ok) {
+                    mmio_mapped=mmio_boot_map_apic(&boot_apic,&mmio_policy);
+                    (void)serial_write(mmio_mapped ?
                         "SPIFFOS_MMIO_MAPPED_OK\r\n" :
                         "SPIFFOS_MMIO_MAPPING_UNAVAILABLE\r\n");
+                    if(mmio_mapped) {
+                        bool cache_safe=apic_boot_cache_gate(&boot_apic,&mmio_policy);
+                        (void)serial_write(cache_safe ?
+                            "SPIFFOS_APIC_CACHE_SAFE\r\n" :
+                            "SPIFFOS_APIC_CACHE_UNVERIFIED\r\n");
+                        if(cache_safe)
+                            (void)serial_write(apic_boot_readonly_probe(&boot_apic) ?
+                                "SPIFFOS_APIC_REGISTERS_OK\r\n" :
+                                "SPIFFOS_APIC_REGISTERS_UNAVAILABLE\r\n");
+                        else
+                            (void)serial_write("SPIFFOS_APIC_REGISTERS_SKIPPED\r\n");
+                    }
+                }
                 (void)serial_write(apic_boot_pages_present(&boot_apic) ?
                     "SPIFFOS_APIC_HHDM_PAGES_UNVERIFIED_CACHE\r\n" :
                     "SPIFFOS_APIC_HHDM_MAPPING_UNVERIFIED\r\n");

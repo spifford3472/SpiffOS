@@ -258,3 +258,6 @@ The earlier M9-3D3 `APIC_MAPPING_UNVERIFIED` observation applies only to the ori
 
 ## Approved M9-3D5 read-only APIC probe — 2026-11-12
 After private LAPIC/IOAPIC 4KiB UC/NX mappings have passed M9-3D4, M9-3D5 separately verifies effective MMIO memory type, alias safety, MADT APIC identities, LAPIC boot-CPU ID and IOAPIC ID/version/GSI range. Any uncertainty fails closed and retains masked PIC and IF=0. Only I/O APIC read register selection is permitted as a bounded index-latch write; interrupt controller redirection, LAPIC EOI, PIT IRQ0 and STI remain unchanged. See ADR-m9-3d5-apic-readonly.md.
+
+## M9-3D5 read-only APIC hardware proof — 2026-11-12
+A read-only x86 PTE alias walker, MTRR/PAT policy check and bounded LAPIC/IOAPIC identity/version probe now run after the isolated M9-3D4 mapping proof. In QEMU 128/256/512 MiB, both known HHDM aliases are absent, cache gate is safe, MADT/CPUID/device identities match and IRQ0's GSI fits the IOAPIC hardware range. The IOAPIC version read uses a selector-latch write and restores it; interrupt configuration is unmodified. All IRQs remain disabled. See ADR-m9-3d5-apic-readonly.md.

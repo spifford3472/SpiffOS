@@ -24,7 +24,8 @@ bool apic_cpu_topology_preflight(const struct acpi_apic_topology *t,
         (t->lapic_physical & 4095u) != 0 ||
         (t->ioapic_physical & 4095u) != 0 ||
         t->lapic_physical == 0 || t->ioapic_physical == 0 ||
-        t->enabled_lapics == 0 ||
+        t->enabled_lapics != 1 ||
+        cpu->cpuid_apic_id != t->boot_lapic_id ||
         t->irq0_gsi < t->ioapic_gsi_base)
         return false;
     /* APICBASE[51:12] gives the physical MMIO base in xAPIC mode.

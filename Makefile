@@ -11,7 +11,7 @@ KERNEL := build/spiffos-kernel.elf
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/x86-pic.h src/kernel/acpi-discovery.h src/kernel/apic-preflight.h src/kernel/x86-page-walk.h src/kernel/mmio-page-policy.h src/kernel/x86-mmio-map.h src/kernel/kernel-timer.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/x86-pic.h src/kernel/acpi-discovery.h src/kernel/apic-preflight.h src/kernel/x86-page-walk.h src/kernel/mmio-page-policy.h src/kernel/x86-mmio-map.h src/kernel/apic-memory-type.h src/kernel/apic-readonly.h src/kernel/kernel-timer.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -23,6 +23,42 @@ build/framebuffer.o: src/kernel/framebuffer.c src/kernel/framebuffer.h include/l
 build/x86-idt.o: src/kernel/x86-idt.c src/kernel/x86-idt.h src/kernel/x86-tss.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
+
+build/apic-readonly.o: src/kernel/apic-readonly.c src/kernel/apic-readonly.h src/kernel/acpi-madt.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/apic-readonly.c -o $@
+
+# Require identity/cache/alias proof in real QEMU at all three memory sizes.
+.PHONY: test-apic-readonly-positive test-apic-readonly-all
+test-apic-readonly-positive: iso
+	python3 scripts/test-apic-readonly-positive.py
+
+test-apic-readonly-all: test-apic-readonly test-apic-memory-type test-apic-readonly-positive test-apic-readonly-negative
+
+# Negative read-only hardware gate runs only in disposable QEMU source.
+.PHONY: test-apic-readonly-negative
+test-apic-readonly-negative:
+	python3 scripts/test-apic-readonly-negative.py
+
+.PHONY: test-apic-readonly
+test-apic-readonly: build/apic-readonly-test
+	./build/apic-readonly-test
+
+build/apic-readonly-test: tests/apic-readonly-test.c src/kernel/apic-readonly.c src/kernel/apic-readonly.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/apic-readonly-test.c src/kernel/apic-readonly.c -o $@
+
+build/apic-memory-type.o: src/kernel/apic-memory-type.c src/kernel/apic-memory-type.h src/kernel/x86-page-walk.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/apic-memory-type.c -o $@
+
+.PHONY: test-apic-memory-type
+test-apic-memory-type: build/apic-memory-type-test
+	./build/apic-memory-type-test
+
+build/apic-memory-type-test: tests/apic-memory-type-test.c src/kernel/apic-memory-type.c src/kernel/apic-memory-type.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc/kernel tests/apic-memory-type-test.c src/kernel/apic-memory-type.c -o $@
 
 build/x86-mmio-map.o: src/kernel/x86-mmio-map.c src/kernel/x86-mmio-map.h src/kernel/mmio-page-policy.h Makefile
 	mkdir -p build
@@ -164,8 +200,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-exceptions.o -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -340,7 +376,7 @@ build/memory-map-test: src/kernel/memory-service.c src/kernel/memory-service.h s
 test-memory-map: build/memory-map-test
 	./build/memory-map-test
 
-test-memory: test-x86-mmio-map test-mmio-page-policy test-page-walk test-apic-preflight test-acpi-discovery test-acpi-madt test-timer-memory test-pic-memory test-idt-memory test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
+test-memory: test-apic-readonly test-apic-memory-type test-x86-mmio-map test-mmio-page-policy test-page-walk test-apic-preflight test-acpi-discovery test-acpi-madt test-timer-memory test-pic-memory test-idt-memory test-kernel-result test-build-rules test-memory-service test-memory-map test-frame-allocator test-page-access test-kernel-heap iso
 	python3 scripts/test-memory.py
 
 

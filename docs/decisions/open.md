@@ -258,3 +258,6 @@ M9-3D4's private PTEs validate in QEMU with no MMIO reads. Before any LAPIC ID o
 
 ## M9-3D5 read-only register proof and M9-3D6 IRQ0 — 2026-11-12
 APIC register identity and I/O APIC version/GSI routing extent must be confirmed from M9-3D4's validated kernel-private mapping, with a conservative effective cache/alias gate. IOREGSEL selection is a narrowly bounded hardware write only for a register read; it must not touch configuration. Hardware IRQ0 routing, LAPIC EOI, PIT0 unmask and STI remain OPEN and unapproved as operational until their own tests. See ADR-m9-3d5-apic-readonly.md.
+
+## M9-3D6 controlled IRQ0 readiness (2026-11-12)
+With QEMU read-only register identities, IOAPIC version and MADT IRQ0 GSI validated under M9-3D5, active redirection configuration, LAPIC LVT/EOI, 100Hz PIT0 delivery, live tick/negative-storm tests, fallback and physical portability still remain OPEN. Preserve PIC masked, IF=0, keyboard polling and F12 PIT2 until separately validated. See ADR-m9-3d5-apic-readonly.md.

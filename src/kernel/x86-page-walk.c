@@ -74,3 +74,37 @@ bool x86_page_walk_read_only(const struct x86_page_walker *w,
     }
     return false;
 }
+
+/* Distinguish an **unmapped** virtual alias from an unreadable intermediate
+ * page table. A supervisor-present leaf may be 4KiB/2MiB/1GiB; this query
+ * does not authorize its cache type. An invalid, inaccessible or malformed
+ * tree is UNKNOWN (fail closed). No ownership, allocation or register I/O. */
+enum x86_page_probe_status x86_page_probe_read_only(
+    const struct x86_page_walker *w,uint64_t address)
+{
+    if(w==0 || w->map_table==0 ||
+       (w->paging_levels!=4 && w->paging_levels!=5) ||
+       !canonical(address,w->paging_levels) ||
+       (w->cr3_physical & ~FRAME_MASK)!=0 ||
+       (w->cr3_physical & FRAME_MASK)==0)
+        return X86_PAGE_PROBE_UNKNOWN;
+    uint64_t table=w->cr3_physical & FRAME_MASK;
+    for(unsigned level=w->paging_levels;level>=1;--level) {
+        const uint8_t *mapped=w->map_table(w->context,table);
+        if(mapped==0) return X86_PAGE_PROBE_UNKNOWN;
+        unsigned shift=12u+9u*(level-1);
+        uint64_t entry=entry64(mapped+((address>>shift)&511u)*ENTRY_BYTES);
+        if((entry&BIT_PRESENT)==0) return X86_PAGE_PROBE_ABSENT;
+        /* Alias detection must count *any* present mapping, even one
+         * user-accessible through a parent; rejecting U/S here would hide
+         * an unsafe alias as an uninspectable table. */
+        if((entry&BIT_HUGE)!=0) {
+            if(level==2||level==3) return X86_PAGE_PROBE_PRESENT;
+            if(level!=1) return X86_PAGE_PROBE_UNKNOWN;
+        }
+        if(level==1) return X86_PAGE_PROBE_PRESENT;
+        table=entry&FRAME_MASK;
+        if(table==0) return X86_PAGE_PROBE_UNKNOWN;
+    }
+    return X86_PAGE_PROBE_UNKNOWN;
+}
