@@ -9,6 +9,7 @@
 
 /* Link-only stub table; hosted tests never call x86_idt_initialize or LIDT. */
 const uintptr_t x86_exception_stub_table[IDT_EXCEPTION_COUNT] = {0};
+const uintptr_t x86_irq_stub_table[IDT_PIC_IRQ_COUNT] = {0};
 
 /* Check both zero-on-invalid and all 32 explicit valid entries. No ownership
  * transfer, allocation, kernel instructions or concurrency occurs. */
@@ -45,6 +46,24 @@ int main(void)
     for (size_t i = IDT_EXCEPTION_COUNT; i < IDT_TOTAL_COUNT; ++i) {
         const struct x86_idt_gate zero = {0};
         assert(memcmp(&entries[i], &zero, sizeof zero) == 0);
+    }
+    uint64_t irq_handlers[IDT_PIC_IRQ_COUNT];
+    for (size_t irq = 0; irq < IDT_PIC_IRQ_COUNT; ++irq)
+        irq_handlers[irq] = addr + 4096 + irq * 32u;
+    struct x86_idt_gate previous = entries[32];
+    irq_handlers[4] = 0;
+    assert(!x86_idt_add_pic_gates(entries, IDT_TOTAL_COUNT, irq_handlers, 0x28));
+    assert(memcmp(&entries[32], &previous, sizeof previous) == 0);
+    irq_handlers[4] = addr + 4096 + 4u * 32u;
+    assert(x86_idt_add_pic_gates(entries, IDT_TOTAL_COUNT, irq_handlers, 0x28));
+    for (size_t irq = 0; irq < IDT_PIC_IRQ_COUNT; ++irq) {
+        assert(entries[32 + irq].flags == 0x8e);
+        assert(entries[32 + irq].ist == 0);
+        assert(entries[32 + irq].selector == 0x28);
+    }
+    for (size_t vector = 48; vector < IDT_TOTAL_COUNT; ++vector) {
+        const struct x86_idt_gate zero = {0};
+        assert(memcmp(&entries[vector], &zero, sizeof zero) == 0);
     }
     return 0;
 }

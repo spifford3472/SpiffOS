@@ -20,6 +20,7 @@
 #include "x86-idt.h"
 #include "x86-pic.h"
 #include "kernel-timer.h"
+#include "x86-irq.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -261,12 +262,43 @@ static void keyboard_run(struct text_console *console)
     }
     if (!memory_boot_service_editor_check(serial_write)) halt_forever();
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
+#ifndef SPIFFOS_IRQ0_MASKED_TEST
+    /* All IRQ gates already exist and every source except PIT0 stays masked.
+     * Configure PIT channel 0, unmask IRQ0 while IF=0, then enable delivery.
+     * The F12 overlay continues to use its separate PIT channel 2. */
+    if (!x86_irq_activate_pit0()) {
+        (void)serial_write("SPIFFOS_IRQ0_ERROR\r\n");
+        halt_forever();
+    }
+    __asm__ volatile ("sti" : : : "memory");
+    (void)serial_write("SPIFFOS_IRQ0_UNMASKED\r\n");
+#else
+    /* Test-only missing-timer case: retain IRQ0 masked and IF=0. */
+    (void)serial_write("SPIFFOS_IRQ0_MASKED_TEST\r\n");
+#endif
     bool first = true;
     bool indicator_timed = false;
     uint16_t previous_pit = 0;
     uint32_t elapsed_pit = 0;
     unsigned int indicator_fade_step = 0;
+    bool irq_report_100 = false;
+    bool irq_report_200 = false;
     for (;;) {
+        /* Report bounded one-time evidence from ordinary kernel context,
+         * never from the interrupt handler or from wall-clock inference. */
+        if (!irq_report_200) {
+            uint64_t irq_elapsed_ms;
+            if (kernel_timer_boot_now_ms(&irq_elapsed_ms)) {
+                if (irq_elapsed_ms >= 1000 && !irq_report_100) {
+                    (void)serial_write("SPIFFOS_IRQ0_TICKS_100\r\n");
+                    irq_report_100 = true;
+                }
+                if (irq_elapsed_ms >= 2000 && !irq_report_200) {
+                    (void)serial_write("SPIFFOS_IRQ0_TICKS_200\r\n");
+                    irq_report_200 = true;
+                }
+            }
+        }
         if (indicator_timed) {
             uint16_t current = pit_read_counter();
             elapsed_pit += (uint16_t)(previous_pit - current);

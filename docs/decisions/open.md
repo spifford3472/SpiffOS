@@ -242,3 +242,11 @@ ACPI MADT, APIC selection, PIC absence detection, IRQ routing on physical hardwa
 ## M9-3C timer follow-up
 
 Clock source beyond QEMU PIT0, physical calibration, sleep/deadlines, hardware timer migration, and wall-clock date remain open. The monotonic core has no active source before Phase D.
+
+## M9-3D IRQ follow-up
+
+Physical laptop APIC routing, alternate hardware timers, IRQ1 keyboard conversion, IRQ-driven COM1, SMP and real user-mode interrupt policy remain OPEN. The sole active QEMU source is PIT0 IRQ0; do not infer physical compatibility.
+
+### M9-3D STOP: QEMU PIC-to-LAPIC routing (2026-11-11)
+
+Hardware PIT0 generates pulses and PIC IRQ0 is pending/unmasked, but q35 LAPIC LVT0/ExtINT is masked. No IRQ0 reaches CPU. Choose between an explicitly validated virtual-wire PIC/LAPIC bridge and ACPI/MADT-discovered LAPIC+IOAPIC interrupt routing before continuing Phase D. This is a material architectural/safety decision. Phase E is blocked by D. See ADR-m9-3-irq0-delivery.md and operations/m9-3d-irq0-blocked-20261111.md.

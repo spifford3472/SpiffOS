@@ -433,3 +433,7 @@ The x86-compatible pair of 8259 interrupt controllers has master ports 0x20/0x21
 ## Monotonic time without a wall clock (M9-3C)
 
 A monotonic timer measures intervals, not calendar dates. The kernel timer begins unavailable even though its state is initialized, and becomes readable after the first validated interrupt increments its count. The counter saturates at the maximum 64-bit value rather than rolling backward. Millisecond conversion divides first to avoid overflow in `ticks * 1000`; caller-visible output remains untouched on invalid inputs. An IRQ-updated tick must be loaded atomically because normal code can be interrupted between instructions.
+
+## IRQ entry and preservation (M9-3D)
+
+A hardware interrupt can occur between any two kernel instructions. The IRQ trampoline therefore saves *all* general-purpose registers, not just those normally caller-saved under the System V ABI. The CPU automatically stacks RIP/CS/RFLAGS, and IRETQ restores them; the IRQ code removes its own injected IRQ index before IRETQ. Before calling ordinary C, it aligns RSP to a 16-byte boundary and restores the saved original RSP afterward. Kernel code must stay compiled with no red zone and general registers only. Interrupt handlers must be bounded and avoid allocation, terminal output and waiting; send EOI to the PIC before return.

@@ -109,6 +109,40 @@ def select_absolute_pointer(socket_path, child, resume=False):
     print("POINTER: absolute mode selected; normal focus needs no input grab", flush=True)
 
 
+def verify_irq0_cadence(serial, child, deadline):
+    """Verify two independent 100-tick guest progress markers ~1s apart.
+
+    This observes actual running QEMU IRQ delivery, never compiler output.
+    A masked/no-PIC guest has no markers and fails by a bounded deadline.
+    This does not assert physical-hardware timer calibration.
+    """
+    first_at = None
+    one = b"SPIFFOS_IRQ0_TICKS_100"
+    two = b"SPIFFOS_IRQ0_TICKS_200"
+    while time.monotonic() < deadline:
+        markers = serial.read_bytes().splitlines()
+        if b"SPIFFOS_IRQ0_UNMASKED" not in markers:
+            # Negative build has the timer intentionally disabled.
+            if child.poll() is not None:
+                break
+        if first_at is None and one in markers:
+            first_at = time.monotonic()
+        if two in markers and first_at is not None:
+            measured = time.monotonic() - first_at
+            if (0.75 <= measured <= 1.25 and
+                    markers.count(one) == 1 and markers.count(two) == 1 and
+                    b"SPIFFOS_EXCEPTION_HALT" not in markers):
+                print(f"PASS IRQ0 QEMU 100-tick cadence: {measured:.3f}s", flush=True)
+                return True
+            print(f"FAIL IRQ0 guest cadence: {measured:.3f}s", flush=True)
+            return False
+        if child.poll() is not None:
+            break
+        time.sleep(0.02)
+    print("FAIL IRQ0 tick progress absent or timer unavailable", flush=True)
+    return False
+
+
 def main():
     """Return 0 only for a captured full marker line in test mode; always reap QEMU."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -116,6 +150,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=20.0, help="test deadline in seconds")
     parser.add_argument("--screenshot", action="store_true", help="test framebuffer marker and capture build/framebuffer.ppm")
     parser.add_argument("--keyboard", action="store_true", help="inject and verify real keyboard events")
+    parser.add_argument("--irq-timer", action="store_true",
+                        help="require two real IRQ0 100-tick markers at ~1s cadence")
     parser.add_argument("--wait-keyboard-ready", action="store_true",
                         help="require serial keyboard readiness without QMP input")
     parser.add_argument("--memory-mib", type=int, default=256,
@@ -125,6 +161,8 @@ def main():
         parser.error("memory-mib must be between 64 and 4096")
     if args.timeout <= 0:
         parser.error("timeout must be positive")
+    if args.irq_timer and (args.mode != "test" or args.keyboard or args.screenshot):
+        parser.error("--irq-timer requires standalone test mode")
     if args.keyboard and (args.mode != "test" or args.screenshot):
         parser.error("--keyboard requires test mode without --screenshot")
     if args.wait_keyboard_ready and args.mode != "test":
@@ -154,7 +192,7 @@ def main():
                    "-cdrom", str(build / "spiffos.iso"), "-boot", "d",
                    "-serial", "file:" + str(serial), "-monitor", "none"]
         qmp_socket = Path(directory) / "qmp.sock"
-        if args.screenshot or args.keyboard or args.mode == "run":
+        if args.screenshot or args.keyboard or args.irq_timer or args.mode == "run":
             command += ["-qmp", "unix:" + str(qmp_socket) + ",server=on,wait=off"]
         if args.mode in ["test", "debug"]:
             command += ["-display", "none"]
@@ -197,6 +235,8 @@ def main():
                                     b"SPIFFOS_KEYBOARD_READY" not in lines):
                                 time.sleep(0.01)
                                 continue
+                            if args.irq_timer and not verify_irq0_cadence(serial, child, deadline):
+                                break
                             if args.keyboard:
                                 import runpy
                                 runpy.run_path(str(ROOT / "scripts/test-keyboard.py"))["run_keyboard_test"](

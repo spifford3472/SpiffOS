@@ -242,3 +242,7 @@ The boot CPU remaps the QEMU-compatible dual 8259 PIC to vectors 32–47 with ev
 ## M9-3C monotonic clock foundation
 
 A static 64-bit saturating tick counter is initialized with an intended 100 Hz rate but returns unavailable until a real IRQ0 tick arrives. Hosted arithmetic tests verify conversion and overflow. PIT channel 2 F12 overlay is unchanged; Phase D controls the first actual IRQ enable. See ADR-m9-3-monotonic-clock.md.
+
+## M9-3D single controlled hardware interrupt
+
+A **draft, unmerged** Phase D candidate installs PIC IRQ gates 32–47 and attempts PIT0 IRQ0 at 100 Hz. Real QEMU q35 diagnostics show IRQ0 pending in the PIC but blocked by masked LAPIC ExtINT; therefore no hardware tick is delivered, and the candidate is **not operational**. The verified merged release remains M9-3C with all hardware IRQs disabled. No scheduling, F12 PIT2 or keyboard/serial polling behavior changes have been merged.

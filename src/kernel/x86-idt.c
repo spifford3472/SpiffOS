@@ -1,8 +1,9 @@
 /* Purpose: build and activate a static CPU-exception IDT for the boot CPU.
  * Dependencies: x86-idt.h, x86-64 long-mode instructions, static stub table.
  * Invariants: 32 exception gates, vector 8 uses a dedicated IST1 from the
- * boot-CPU TSS; all hardware IRQ gates absent, interrupts disabled
- * throughout, no dynamic allocation or CPU interrupt enable.
+ * boot-CPU TSS; PIC IRQ gates 32..47 installed but kept masked until
+ * validated startup; interrupts disabled during IDT setup, no dynamic
+ * allocation or CPU interrupt enable in the initializer.
  * References: ADR-m9-exception-idt.md and ADR-m9-kernel-foundation.md. */
 #include <stdbool.h>
 #include <stddef.h>
@@ -16,6 +17,7 @@ static struct x86_idt_gate exception_idt[IDT_TOTAL_COUNT];
 /* The assembly stubs include the CPU vector and a normalized error code.
  * Each address is borrowed from the linked immutable kernel text segment. */
 extern const uintptr_t x86_exception_stub_table[IDT_EXCEPTION_COUNT];
+extern const uintptr_t x86_irq_stub_table[IDT_PIC_IRQ_COUNT];
 
 /* Encode one ring-0 interrupt gate into caller-owned storage, validating its
  * pointer, nonzero handler and ring-0 CS. Invalid inputs leave out untouched.
@@ -61,6 +63,22 @@ bool x86_idt_construct(struct x86_idt_gate *entries, size_t count,
     return true;
 }
 
+/* Preflight every IRQ handler address before mutating the 16 controller
+ * gates. Leave vectors 48..255 absent, and CPU vector gates unchanged. */
+bool x86_idt_add_pic_gates(struct x86_idt_gate *entries, size_t count,
+                           const uint64_t *irq_handlers, uint16_t selector)
+{
+    if (entries == NULL || count != IDT_TOTAL_COUNT ||
+        irq_handlers == NULL || selector == 0 || (selector & 3u) != 0)
+        return false;
+    for (size_t irq = 0; irq < IDT_PIC_IRQ_COUNT; ++irq)
+        if (irq_handlers[irq] == 0) return false;
+    for (size_t irq = 0; irq < IDT_PIC_IRQ_COUNT; ++irq)
+        (void)x86_idt_make_gate(&entries[IDT_PIC_VECTOR_FIRST + irq],
+                                irq_handlers[irq], selector);
+    return true;
+}
+
 /* Install the static table on the boot CPU. Requires ring 0 and a valid
  * current CS from the active GDT, with CPU IF already cleared. This loads only
  * an IDTR; it does not modify the PIC/APIC, enable IRQs, or return an error.
@@ -78,6 +96,11 @@ bool x86_idt_initialize(void)
     /* Double faults always enter on the dedicated IST1 emergency stack.
      * The TR was loaded before this gate becomes visible to the CPU. */
     exception_idt[8].ist = 1;
+    uint64_t irq_addresses[IDT_PIC_IRQ_COUNT];
+    for (size_t irq = 0; irq < IDT_PIC_IRQ_COUNT; ++irq)
+        irq_addresses[irq] = (uint64_t)x86_irq_stub_table[irq];
+    if (!x86_idt_add_pic_gates(exception_idt, IDT_TOTAL_COUNT,
+                                irq_addresses, cs)) return false;
     struct x86_idtr descriptor = {
         .limit = (uint16_t)(sizeof exception_idt - 1),
         .base = (uint64_t)(uintptr_t)exception_idt
