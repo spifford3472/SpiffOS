@@ -242,3 +242,6 @@ ACPI MADT, APIC selection, PIC absence detection, IRQ routing on physical hardwa
 ## M9-3C timer follow-up
 
 Clock source beyond QEMU PIT0, physical calibration, sleep/deadlines, hardware timer migration, and wall-clock date remain open. The monotonic core has no active source before Phase D.
+
+## APIC routing prerequisites (2026-11-11)
+ACPI table lifetime, validated physical-memory translations, UC MMIO mappings, CPU LAPIC ID matching, non-QEMU GSI overrides, multiple IOAPICs and failure policy require explicit tests before STI. No assumption of fixed APIC address or route is accepted. See ADR-m9-3-apic-routing.md.

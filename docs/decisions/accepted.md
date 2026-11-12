@@ -401,3 +401,6 @@ Owner authorization for M9-3 includes choosing the simplest safe interrupt-contr
 ## M9-3C monotonic internal timer (2026-11-11)
 
 M9-3 Phase C establishes an internal saturating 64-bit tick service with explicit uninitialized/unavailable state, 10 ms intended resolution and no wall-clock dependence. PIT0 IRQ0 becomes its source only after Phase D validation; PIT2 F12 is unchanged. See [ADR-m9-3-monotonic-clock](ADR-m9-3-monotonic-clock.md).
+
+## M9-3D approved APIC-first direction (2026-11-11)
+The owner explicitly selected ACPI/MADT-based LAPIC + IOAPIC discovery and routing for first controlled PIT0 IRQ0 delivery, with legacy PIC fallback. Draft PIC IRQ0 delivery failed in q35; it is superseded as the primary route, not merged. See [ADR-m9-3-apic-routing](ADR-m9-3-apic-routing.md). The approval is subject to read-only discovery, staged MMIO/IRQ tests, and no physical hardware changes.

@@ -20,6 +20,7 @@
 #include "x86-idt.h"
 #include "x86-pic.h"
 #include "kernel-timer.h"
+#include "acpi-discovery.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -52,6 +53,14 @@ static volatile struct limine_memmap_request memory_request = {
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_hhdm_request hhdm_request = {
     .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0
+};
+
+/* Ask Limine for a mapped ACPI RSDP, never for arbitrary APIC MMIO.
+ * The firmware owns the table bytes for the duration of this boot phase. */
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST_ID,
     .revision = 0
 };
 
@@ -240,6 +249,57 @@ static uint16_t pit_read_counter(void)
     uint16_t low = port_read(0x42);
     uint16_t high = port_read(0x42);
     return (uint16_t)(low | (high << 8));
+}
+
+/* Map only complete ACPI reclaimable/NVS byte spans using Limine's known
+ * HHDM. This is read-only firmware discovery, NOT a generic MMIO mapper.
+ * Every arithmetic step rejects overflow. An unrecognized physical region
+ * cannot be treated as a valid virtual pointer. Boot CPU, IF=0. */
+struct acpi_map_context {
+    const struct limine_memmap_response *map;
+    uint64_t offset;
+};
+static const uint8_t *acpi_map_read_only(void *context, uint64_t physical,
+                                        size_t bytes)
+{
+    const struct acpi_map_context *state = context;
+    if (state == NULL || state->map == NULL || state->map->entries == NULL ||
+        bytes == 0 || bytes > UINT64_MAX - physical ||
+        state->offset > UINT64_MAX - physical ||
+        bytes > UINT64_MAX - (state->offset + physical))
+        return NULL;
+    const uint64_t end = physical + bytes;
+    for (uint64_t i = 0; i < state->map->entry_count; ++i) {
+        const struct limine_memmap_entry *region = state->map->entries[i];
+        if (region == NULL || region->length > UINT64_MAX - region->base)
+            continue;
+        if ((region->type == LIMINE_MEMMAP_ACPI_RECLAIMABLE ||
+             region->type == LIMINE_MEMMAP_ACPI_NVS) &&
+            physical >= region->base && end <= region->base + region->length)
+            return (const uint8_t *)(uintptr_t)(physical + state->offset);
+    }
+    return NULL;
+}
+
+/* Bounded read-only probe; a failed table lookup is reported but never
+ * enables external interrupts or changes a kernel device's configuration.
+ * Only ACPI table bytes in Limine-owned mappings may be inspected here. */
+static bool acpi_boot_discover(struct acpi_apic_topology *topology)
+{
+    if (topology == NULL || rsdp_request.response == NULL ||
+        rsdp_request.response->address == NULL ||
+        hhdm_request.response == NULL || memory_request.response == NULL)
+        return false;
+    uint64_t xsdt_address;
+    if (!acpi_rsdp_xsdt_physical(rsdp_request.response->address, 36,
+                                   &xsdt_address)) return false;
+    const struct acpi_map_context context = {
+        .map = memory_request.response,
+        .offset = hhdm_request.response->offset
+    };
+    const struct acpi_mapper mapper = {acpi_map_read_only,
+                                       (void *)(uintptr_t)&context};
+    return acpi_discover_madt(&mapper, xsdt_address, topology);
 }
 
 /* Run the diagnostic input loop. The decoder emits named navigation/mode
@@ -472,6 +532,13 @@ void kmain(void)
     }
     if (!memory_boot_service_start(hhdm_request.response, paging_mode_request.response, serial_write)) {
         halt_forever();
+    }
+    /* ACPI discovery is informational; no LAPIC or IOAPIC register access. */
+    struct acpi_apic_topology boot_apic = {0};
+    if (acpi_boot_discover(&boot_apic)) {
+        (void)serial_write("SPIFFOS_ACPI_MADT_OK\r\n");
+    } else {
+        (void)serial_write("SPIFFOS_ACPI_MADT_UNAVAILABLE\r\n");
     }
     /* The response and its pointer array are owned by the bootloader. Borrow
      * them while those mappings remain intact; never free or reclaim them here. */
