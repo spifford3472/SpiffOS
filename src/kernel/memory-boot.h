@@ -9,6 +9,7 @@
 #define SPIFFOS_MEMORY_BOOT_H
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 struct limine_memmap_response;
 struct limine_hhdm_response;
 struct limine_paging_mode_response;
@@ -71,6 +72,15 @@ bool memory_boot_service_editor_check(bool (*writer)(const char *));
 bool memory_boot_select_workspace(size_t workspace_id);
 /* Reset only one retained workspace root/owner; preserves session and others. */
 bool memory_boot_reset_workspace(size_t workspace_id);
+/* Acquire one zeroed, M3-verified ordinary KERNEL page exclusively as a
+ * page-table frame for the APIC MMIO aperture. The supervisor reserve is
+ * untouched. Returns both physical number and an owned writable HHDM pointer;
+ * no APIC MMIO itself. Failure preserves caller outputs; boot CPU, IF=0. */
+bool memory_boot_mmio_table_acquire(uint64_t *physical, uint64_t **mapped);
+/* Release only a tracked MMIO table frame after its page-table link was
+ * removed. Failure permanently poisons this allocator service; no retry. */
+bool memory_boot_mmio_table_release(uint64_t physical);
+
 /* Reserve checked ordinary physical frames for an exact snapshot; output
  * pointers are borrowed until shutdown. No partial publication or IRQ use. */
 bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,

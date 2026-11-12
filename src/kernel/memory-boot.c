@@ -625,6 +625,14 @@ static struct page_access_policy retained_policy;
 static uint64_t retained_physical;
 static uint64_t retained_free_before;
 static bool retained_started;
+/* These few additional ordinary KERNEL-owned frames hold private APIC page
+ * tables. Retained-service expectations account for them explicitly; never
+ * release the existing 4KiB heap frame or use the supervisor reserve. */
+enum { MMIO_TABLE_LIMIT=4 };
+static uint64_t mmio_table_owned[MMIO_TABLE_LIMIT];
+static size_t mmio_table_count;
+static bool mmio_table_poisoned;
+
 
 /* End every service borrow before returning backing on a fatal probe failure.
  * No success marker follows a failure; caller stops boot. Exclusive boot CPU. */
@@ -646,9 +654,9 @@ static bool retained_valid(void)
     uint64_t mapped;
     const struct memory_service_session *session = NULL;
     if (!retained_started || !frame_allocator_check(&boot_allocator) ||
-        boot_allocator.ordinary_free != retained_free_before - 1 ||
+        boot_allocator.ordinary_free != retained_free_before - 1 - mmio_table_count ||
         boot_allocator.reserve_free != BOOT_RESERVE_FRAMES ||
-        boot_allocator.owned[FRAME_OWNER_KERNEL] != 1 ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != 1 + mmio_table_count ||
         page_access_resolve(&retained_policy, FRAME_OWNER_KERNEL,
             retained_physical, &mapped) != PAGE_ACCESS_OK ||
         mapped != (uintptr_t)retained_service.heap.arena ||
@@ -762,6 +770,58 @@ bool memory_boot_reset_workspace(size_t workspace_id)
         memory_service_reset_workspace(&retained_service, workspace_id) == MEMORY_SERVICE_OK;
 }
 
+
+/* Acquire one permanent KERNEL-owned page-table frame through M2/M3.
+ * Zeroing and physical resolution occur before publication. A failed M3
+ * rollback poisons the service so no still-owned RAM is accidentally reused. */
+bool memory_boot_mmio_table_acquire(uint64_t *physical, uint64_t **mapped)
+{
+    if(physical==NULL || mapped==NULL || mmio_table_poisoned ||
+       !retained_started || !boot_allocator_available ||
+       mmio_table_count>=MMIO_TABLE_LIMIT ||
+       retained_policy.allocator!=&boot_allocator ||
+       !frame_allocator_check(&boot_allocator)) return false;
+    uint64_t acquired_phys=0;
+    enum page_access_result acquired=page_access_allocate_zero(
+        &boot_allocator,&retained_policy,FRAME_OWNER_KERNEL,
+        kernel_page_zero,NULL,&acquired_phys);
+    if(acquired!=PAGE_ACCESS_OK) {
+        if(acquired==PAGE_ACCESS_ROLLBACK_FAILED) mmio_table_poisoned=true;
+        return false;
+    }
+    uint64_t mapped_address=0;
+    if(page_access_resolve(&retained_policy,FRAME_OWNER_KERNEL,
+            acquired_phys,&mapped_address)!=PAGE_ACCESS_OK) {
+        if(frame_release(&boot_allocator,FRAME_OWNER_KERNEL,
+                         acquired_phys)!=FRAME_OK) mmio_table_poisoned=true;
+        return false;
+    }
+    mmio_table_owned[mmio_table_count]=acquired_phys;
+    ++mmio_table_count;
+    *physical=acquired_phys;
+    *mapped=(uint64_t *)(uintptr_t)mapped_address;
+    return true;
+}
+
+/* Release only a precise table page acquired above, after its parent link
+ * has been removed. Wrong/stale addresses are rejected without free. */
+bool memory_boot_mmio_table_release(uint64_t physical)
+{
+    if(mmio_table_poisoned || physical==0 || !retained_started ||
+       !frame_allocator_check(&boot_allocator)) return false;
+    for(size_t i=0;i<mmio_table_count;++i) {
+        if(mmio_table_owned[i]!=physical) continue;
+        if(frame_release(&boot_allocator,FRAME_OWNER_KERNEL,physical)!=FRAME_OK) {
+            mmio_table_poisoned=true;
+            return false;
+        }
+        --mmio_table_count;
+        mmio_table_owned[i]=mmio_table_owned[mmio_table_count];
+        mmio_table_owned[mmio_table_count]=0;
+        return true;
+    }
+    return false;
+}
 
 /* Snapshot pages are ordinary M2-owned frames, not bootloader ELF storage.
  * Each is validated by M3 before a pointer can be published. Storage is
