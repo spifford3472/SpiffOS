@@ -18,6 +18,7 @@
 #include "memory-boot.h"
 #include "workspace-manager.h"
 #include "x86-idt.h"
+#include "x86-pic.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -420,6 +421,13 @@ void kmain(void)
         halt_forever();
     }
     (void)serial_write("SPIFFOS_IDT_READY\r\n");
+    /* PIC remapping occurs only with IF=0. Every external IRQ stays masked;
+     * no PIC vector is present in the exception-only IDT yet. */
+    if (!x86_pic_initialize_hardware()) {
+        (void)serial_write("SPIFFOS_PIC_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_PIC_MASKED\r\n");
 #ifdef SPIFFOS_DOUBLE_FAULT_TEST
     /* Test-only: poison RSP then execute invalid opcode. The failure to
      * push the #UD frame triggers a genuine #DF, using IST1 from the TSS.

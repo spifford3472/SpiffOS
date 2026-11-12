@@ -393,3 +393,7 @@ task/scheduling ABI is approved.
 ## M9-3A owner-authorized kernel exception stack (2026-11-11)
 
 The M9-3 phase authorizes a boot-CPU TSS, IST and double-fault emergency stack with separate verification before interrupts are enabled. Internal implementation choice and limits are recorded in [ADR-m9-3-exception-stacks](ADR-m9-3-exception-stacks.md). This does not approve an external hardware interrupt ABI or physical deployment.
+
+## M9-3B controller checkpoint (2026-11-11)
+
+Owner authorization for M9-3 includes choosing the simplest safe interrupt-controller foundation. QEMU uses a fully masked dual 8259 PIC remapped to vectors 32–47; IF remains zero. APIC and physical hardware topology remain deferred. See [ADR-m9-3-pic-foundation](ADR-m9-3-pic-foundation.md).

@@ -234,3 +234,7 @@ Final interrupt controller/IRQ activation sequence, timer source portability, ri
 ## M9-3A exception-stack follow-up (2026-11-11)
 
 Guard-page mappings for the emergency stack, SMP/per-CPU TSS lifecycle, generic exception-stack handling, PIC/APIC selection and IRQ ABI remain open. Phase A only establishes a static boot-CPU double-fault IST; see [ADR-m9-3-exception-stacks](ADR-m9-3-exception-stacks.md).
+
+## M9-3B portability follow-up
+
+ACPI MADT, APIC selection, PIC absence detection, IRQ routing on physical hardware, and SMP interrupt-controller ownership remain open. No hardware IRQ is enabled in Phase B.
