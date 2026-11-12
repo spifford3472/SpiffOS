@@ -425,3 +425,7 @@ See docs/decisions/ADR-m9-exception-idt.md.
 ## Long-mode TSS and emergency exception stacks (M9-3A)
 
 An x86-64 Task State Segment (TSS) still matters in long mode: the processor reads its Interrupt Stack Table (IST) when an IDT gate specifies a nonzero IST index. The TSS must be described by a 16-byte available-system descriptor in the *active* GDT and loaded using LTR. The descriptor base is a kernel virtual address; the emergency stack pointer points just beyond its last byte because the CPU stack grows downward. Do not confuse dedicated static stack storage with a guard page; a guard page requires deliberate page-table mappings and negative tests.
+
+## Legacy PIC port and mask basics (M9-3B)
+
+The x86-compatible pair of 8259 interrupt controllers has master ports 0x20/0x21 and slave ports 0xA0/0xA1. Initialization control words (ICWs) assign new vector offsets; PIC data ports subsequently contain eight mask bits each, with **one meaning masked**. Master IRQ2 connects the slave controller. An end-of-interrupt (EOI) must be issued slave-first then master for legitimate slave IRQs; a phantom IRQ7 requires no EOI, while phantom slave IRQ15 requires only master EOI after checking the ISR. Hosted tests use injected IO callbacks instead of privileged IN/OUT instructions.

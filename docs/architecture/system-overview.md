@@ -234,3 +234,7 @@ ADR-m9-exception-idt.md for risk limits and validation.
 ## M9-3A bootstrap fault isolation (2026-11-11)
 
 The Phase A candidate initializes a static boot-CPU TSS through a private GDT that retains the loader descriptor layout; exception vector 8 uses a dedicated IST1 emergency stack. It does not yet provide guard pages, per-CPU isolation, IRQ delivery or scheduling. See [ADR-m9-3-exception-stacks](../decisions/ADR-m9-3-exception-stacks.md). Verification results and release state are recorded independently.
+
+## M9-3B interrupt-controller baseline
+
+The boot CPU remaps the QEMU-compatible dual 8259 PIC to vectors 32–47 with every IRQ masked and IF=0. CPU exception vectors 0–31 are unchanged. No IRQ handlers or interrupt timer are enabled until later validated checkpoints. This is an internal boot foundation, not an approved universal interrupt-controller ABI.
