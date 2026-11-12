@@ -23,6 +23,8 @@
 #include "acpi-discovery.h"
 #include "apic-preflight.h"
 #include "x86-page-walk.h"
+#include "mmio-page-policy.h"
+#include "x86-mmio-map.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -351,6 +353,177 @@ static bool apic_boot_pages_present(const struct acpi_apic_topology *topology)
     return true;
 }
 
+/* Read CPU NX/PAT capabilities before an APIC MMIO PTE may be constructed.
+ * CPUID feature bits gate the corresponding MSR reads. This is strictly
+ * read-only boot CPU work with IF=0, not permission to map device registers.
+ * A refused CPU feature leaves all firmware/controller mappings unchanged. */
+static bool mmio_boot_cpu_policy(const struct acpi_apic_topology *topology,
+                                 struct mmio_page_cpu_policy *out)
+{
+    if (out==NULL || topology==NULL) return false;
+    uint32_t a=1,b,c,d;
+    __asm__ volatile ("cpuid" : "+a"(a),"=b"(b),"=c"(c),"=d"(d));
+    /* CPUID leaf 1 EDX bit16: PAT MSR is supported. */
+    if((d & (1u<<16))==0) return false;
+    a=UINT32_C(0x80000000);
+    __asm__ volatile ("cpuid" : "+a"(a),"=b"(b),"=c"(c),"=d"(d));
+    if(a<UINT32_C(0x80000008)) return false;
+    a=UINT32_C(0x80000001);
+    __asm__ volatile ("cpuid" : "+a"(a),"=b"(b),"=c"(c),"=d"(d));
+    /* Extended CPUID EDX bit20: NX page-table bit is implemented. */
+    if((d&(1u<<20))==0) return false;
+    a=UINT32_C(0x80000008);
+    __asm__ volatile ("cpuid" : "+a"(a),"=b"(b),"=c"(c),"=d"(d));
+    uint8_t physical_bits=(uint8_t)(a&0xff);
+    uint32_t lo,hi;
+    __asm__ volatile ("rdmsr" : "=a"(lo),"=d"(hi) : "c"(UINT32_C(0x277)));
+    uint64_t pat=((uint64_t)hi<<32)|lo;
+    __asm__ volatile ("rdmsr" : "=a"(lo),"=d"(hi) : "c"(UINT32_C(0xc0000080)));
+    uint64_t efer=((uint64_t)hi<<32)|lo;
+    struct mmio_page_cpu_policy policy={
+        .ia32_pat_msr=pat,
+        .nx_supported=true,
+        .nxe_enabled=(efer&(UINT64_C(1)<<11))!=0,
+        .physical_address_bits=physical_bits
+    };
+    /* Prove both desired entries using the same pure policy as host tests. */
+    uint64_t lapic_leaf=0, ioapic_leaf=0;
+    if(mmio_page_plan_leaf(UINT64_C(0xffffc80000000000),
+                           topology->lapic_physical,0,&policy,&lapic_leaf)!=MMIO_PAGE_OK ||
+       mmio_page_plan_leaf(UINT64_C(0xffffc80000001000),
+                           topology->ioapic_physical,0,&policy,&ioapic_leaf)!=MMIO_PAGE_OK)
+        return false;
+    *out=policy;
+    return true;
+}
+
+/* Verify the borrowed live CR3 root is readable within an allowed RAM map,
+ * and the two reserved virtual slots do not already contain translations.
+ * A missing ancestor table is not a successful free-slot proof: check the
+ * PML4/PML5 root at the requested index before planning new tables. */
+static bool mmio_boot_root_ready(uint64_t **root_out, uint8_t *levels_out,
+                                 uint64_t *root_physical_out)
+{
+    if(root_out==NULL || levels_out==NULL || root_physical_out==NULL ||
+       memory_request.response==NULL || hhdm_request.response==NULL ||
+       paging_mode_request.response==NULL) return false;
+    const struct acpi_map_context state={
+        .map=memory_request.response,
+        .offset=hhdm_request.response->offset
+    };
+    uint64_t cr3;
+    __asm__ volatile ("movq %%cr3, %0" : "=r"(cr3));
+    if ((cr3&UINT64_C(0xfff))!=0) return false;
+    uint64_t root=cr3&UINT64_C(0x000ffffffffff000);
+    const uint8_t *table=boot_table_map((void *)(uintptr_t)&state,root);
+    if(table==NULL) return false;
+    uint64_t virt=UINT64_C(0xffffc80000000000);
+    unsigned shift=paging_mode_request.response->mode==LIMINE_PAGING_MODE_X86_64_5LVL ? 48u:39u;
+    if(shift==39u && paging_mode_request.response->mode!=LIMINE_PAGING_MODE_X86_64_4LVL)
+        return false;
+    size_t index=(size_t)((virt>>shift)&UINT64_C(511));
+    uint64_t existing=0;
+    for(size_t i=0;i<8;++i)
+        existing |= ((uint64_t)table[index*8+i])<<(8*i);
+    if(existing!=0) return false;
+    *root_out=(uint64_t *)(uintptr_t)table;
+    *levels_out=(uint8_t)(shift==48u ? 5u : 4u);
+    *root_physical_out=root;
+    return true;
+}
+
+/* Pass the existing M2/M3 exact-owner table service to the atomic
+ * page-table transaction. Never allocate physical MMIO pages as RAM.
+ * Only ordinary KERNEL-owned pages back new page tables; no reserve use. */
+static bool mmio_boot_acquire(void *unused, uint64_t *physical,
+                              uint64_t **mapped)
+{
+    (void)unused;
+#ifdef SPIFFOS_MMIO_FAULT_SECOND_ALLOCATION
+    /* Dedicated negative-test build: the first owned frame succeeds, the
+     * second fails before acquiring RAM. The transaction must release the
+     * first frame, preserve the root and boot with IF=0. Never in production. */
+    static unsigned attempts;
+    if(++attempts==2) return false;
+#endif
+    return memory_boot_mmio_table_acquire(physical,mapped);
+}
+
+/* Release only a previously tracked kernel table frame after unlinking. */
+static bool mmio_boot_release(void *unused,uint64_t physical)
+{
+    (void)unused;
+    return memory_boot_mmio_table_release(physical);
+}
+
+/* Discard a stale local TLB translation after changing one table entry.
+ * This does not synchronize other CPUs; this is a boot-CPU-only foundation. */
+static void mmio_boot_invlpg(void *unused,uint64_t virtual_address)
+{
+    (void)unused;
+    __asm__ volatile ("invlpg (%0)" : : "r"(virtual_address) : "memory");
+}
+
+static struct x86_mmio_mapping boot_mmio_mapping;
+
+/* Create two UC supervisor-only NX MMIO translations, but never access the
+ * controller registers in this checkpoint. Re-walk the running CR3 before
+ * publishing the readiness marker. If verification fails, clear the root
+ * link and return owned table pages or halt on a failed rollback. */
+static bool mmio_boot_map_apic(const struct acpi_apic_topology *topology,
+                               const struct mmio_page_cpu_policy *policy)
+{
+    uint64_t *root=NULL,root_physical=0;
+    uint8_t levels=0;
+    if(topology==NULL || policy==NULL ||
+       !mmio_boot_root_ready(&root,&levels,&root_physical)) return false;
+    const struct x86_mmio_map_backend backend={
+        mmio_boot_acquire,mmio_boot_release,mmio_boot_invlpg,NULL
+    };
+    if(!x86_mmio_map_create(&boot_mmio_mapping,levels,root,
+          topology->lapic_physical,topology->ioapic_physical,policy,&backend)) {
+        if(boot_mmio_mapping.poisoned) {
+            (void)serial_write("SPIFFOS_MMIO_ROLLBACK_FATAL\r\n");
+            halt_forever();
+        }
+        return false;
+    }
+    const struct acpi_map_context context={
+        .map=memory_request.response,.offset=hhdm_request.response->offset
+    };
+    const struct x86_page_walker walker={
+        .map_table=boot_table_map,
+        .context=(void *)(uintptr_t)&context,
+        .cr3_physical=root_physical,
+        .paging_levels=levels
+    };
+    const uint64_t addresses[2]={MMIO_APIC_LAPIC_VIRTUAL,
+                                  MMIO_APIC_IOAPIC_VIRTUAL};
+    const uint64_t targets[2]={topology->lapic_physical,
+                                topology->ioapic_physical};
+    bool verified=true;
+    for(size_t i=0;i<2;++i) {
+        struct x86_page_translation translation;
+        if(!x86_page_walk_read_only(&walker,addresses[i],&translation) ||
+           translation.physical!=targets[i] || translation.page_size!=4096 ||
+           !translation.supervisor_only || !translation.writable ||
+           (translation.leaf_entry&(UINT64_C(1)<<63))==0 ||
+           (translation.leaf_entry&UINT64_C(24))!=UINT64_C(24) ||
+           (translation.leaf_entry&UINT64_C(132))!=0) {
+            verified=false;
+            break;
+        }
+    }
+    if(!verified) {
+        if(!x86_mmio_map_destroy(&boot_mmio_mapping,&backend)) {
+            (void)serial_write("SPIFFOS_MMIO_ROLLBACK_FATAL\r\n");
+            halt_forever();
+        }
+        return false;
+    }
+    return true;
+}
+
 /* Bounded read-only probe; a failed table lookup is reported but never
  * enables external interrupts or changes a kernel device's configuration.
  * Only ACPI table bytes in Limine-owned mappings may be inspected here. */
@@ -615,9 +788,25 @@ void kmain(void)
             apic_cpu_topology_preflight(&boot_apic, &cpu_apic))
             {
                 (void)serial_write("SPIFFOS_APIC_CPU_MATCH\r\n");
+                struct mmio_page_cpu_policy mmio_policy;
+                bool mmio_cpu_ok=mmio_boot_cpu_policy(&boot_apic,&mmio_policy);
+                (void)serial_write(mmio_cpu_ok ?
+                    "SPIFFOS_MMIO_POLICY_OK\r\n" :
+                    "SPIFFOS_MMIO_POLICY_UNSUPPORTED\r\n");
+                uint64_t *root_table=NULL,root_physical=0;
+                uint8_t depth=0;
+                bool mmio_root_ok=mmio_boot_root_ready(&root_table,&depth,
+                                                        &root_physical);
+                (void)serial_write(mmio_root_ok ?
+                    "SPIFFOS_MMIO_ROOT_READY\r\n" :
+                    "SPIFFOS_MMIO_ROOT_UNVERIFIED\r\n");
+                if(mmio_cpu_ok && mmio_root_ok)
+                    (void)serial_write(mmio_boot_map_apic(&boot_apic,&mmio_policy) ?
+                        "SPIFFOS_MMIO_MAPPED_OK\r\n" :
+                        "SPIFFOS_MMIO_MAPPING_UNAVAILABLE\r\n");
                 (void)serial_write(apic_boot_pages_present(&boot_apic) ?
-                    "SPIFFOS_APIC_PAGES_PRESENT_UNVERIFIED_CACHE\r\n" :
-                    "SPIFFOS_APIC_MAPPING_UNVERIFIED\r\n");
+                    "SPIFFOS_APIC_HHDM_PAGES_UNVERIFIED_CACHE\r\n" :
+                    "SPIFFOS_APIC_HHDM_MAPPING_UNVERIFIED\r\n");
             }
         else
             (void)serial_write("SPIFFOS_APIC_CPU_UNAVAILABLE\r\n");

@@ -252,3 +252,6 @@ The read-only QEMU CR3 probe could not establish a verified virtual mapping for 
 
 ## M9-3D4 mapping implementation gates — 2026-11-12
 Owner approved a dedicated two-page APIC MMIO aperture; page-table root/ancestor physical ownership, safe 4/5-level virtual reservation, verified effective UC cache type (IA32_PAT/MTRR), NX and fault-safe rollback still require real validation. These are test gates, **not** permission to access MMIO prematurely. Hardware IRQ0 remains blocked pending successful mapped LAPIC/IOAPIC tests. See ADR-m9-3d4-mmio-mapping.md.
+
+## M9-3D5 next gate — APIC register access (2026-11-12)
+M9-3D4's private PTEs validate in QEMU with no MMIO reads. Before any LAPIC ID or IOAPIC version read, verify memory-type alias hazards and effective MTRR/PAT UC behavior; then use a bounded read-only hardware-probe adapter and negative tests. APIC controller writes, IRQ0 redirection/EOI, scheduler and STI remain blocked until separate validation. See ADR-m9-3d4-mmio-mapping.md and operations/m9-3d4-mmio-mapping-20261112.md.

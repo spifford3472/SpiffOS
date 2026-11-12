@@ -31,3 +31,6 @@ IRQ0 routing, LAPIC EOI, multiple IOAPICs, ACPI shutdown, scheduler, ring3, gene
 
 ## Approval history
 2026-11-12: owner responded "i approve" to the recommendation for the dedicated MMIO mapping architecture in Issue #45. This explicitly authorizes designing and implementing the safe mapping foundation subject to above gates; it does not authorize bypassing a failed gate.
+
+## Implementation evidence — 2026-11-12
+The owner-approved mapping foundation is implemented in a guarded, bounded boot-CPU path, using M2/M3-allocated ordinary kernel page-table frames and one root-entry commit. Hosted tests and real QEMU 128/256/512 MiB positive/negative tests pass; the exact private LAPIC/IOAPIC virtual mappings are re-walked and checked for RW, NX and UC-index-3 flags before `SPIFFOS_MMIO_MAPPED_OK` is emitted. No MMIO register was read and IF remains zero. See `docs/operations/m9-3d4-mmio-mapping-20261112.md` for test commands and rollback. The remaining independent acceptance gate is *actual* APIC MMIO register accessibility and memory-type alias/MTRR safety; do not confuse a successful page-table mapping with validated hardware interrupts.
