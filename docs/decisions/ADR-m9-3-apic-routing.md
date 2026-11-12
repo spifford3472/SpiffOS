@@ -30,3 +30,7 @@ Memory-map-backed APIC MMIO cache attributes, APIC MSR state and x2APIC, SMP/per
 
 ## Owner decision
 2026-11-11: owner answered “yes please proceed” to the recommendation for ACPI/MADT-first local APIC + I/O APIC interrupt routing, with PIC fallback. This authorizes design, isolated implementation/testing and validation-gated merge/deploy, not untested hardware modification.
+
+## APIC CPU preflight checkpoint (2026-11-11)
+
+Before MMIO, read CPUID leaf 1 EDX bit9 for xAPIC capability and standard IA32_APIC_BASE MSR 0x1B only on supported CPUs. Check xAPIC global enable (MSR bit11), x2APIC mode disabled (bit10), BSP ownership (bit8) and the physical LAPIC base against the fully validated MADT value. No APIC MMIO reads or writes, mappings, or interrupts are enabled; a mismatch is reported and fails closed. Hosted tests inject synthetic CPU snapshots. Do not confuse MSR physical base with an already mapped virtual address.

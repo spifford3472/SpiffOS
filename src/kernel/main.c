@@ -21,6 +21,7 @@
 #include "x86-pic.h"
 #include "kernel-timer.h"
 #include "acpi-discovery.h"
+#include "apic-preflight.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
  * Limine writes the base-revision array, hence volatile and writable storage. */
@@ -537,6 +538,15 @@ void kmain(void)
     struct acpi_apic_topology boot_apic = {0};
     if (acpi_boot_discover(&boot_apic)) {
         (void)serial_write("SPIFFOS_ACPI_MADT_OK\r\n");
+        /* Compare firmware's controller base with the boot CPU's APIC MSR.
+         * Reading these registers is not permission to touch MMIO, and all
+         * hardware interrupts remain masked while this probe runs. */
+        struct apic_cpu_snapshot cpu_apic;
+        if (apic_cpu_read_snapshot(&cpu_apic) &&
+            apic_cpu_topology_preflight(&boot_apic, &cpu_apic))
+            (void)serial_write("SPIFFOS_APIC_CPU_MATCH\r\n");
+        else
+            (void)serial_write("SPIFFOS_APIC_CPU_UNAVAILABLE\r\n");
     } else {
         (void)serial_write("SPIFFOS_ACPI_MADT_UNAVAILABLE\r\n");
     }
