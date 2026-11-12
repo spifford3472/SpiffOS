@@ -230,3 +230,7 @@ Final interrupt controller/IRQ activation sequence, timer source portability, ri
   open. The initial IDT uses the Limine-provided kernel stack.
 - Do not enable STI, configure the IRQ controller, assign user exception policy
   or freeze an interrupt ABI until separate design and QEMU tests.
+
+## M9-3A exception-stack follow-up (2026-11-11)
+
+Guard-page mappings for the emergency stack, SMP/per-CPU TSS lifecycle, generic exception-stack handling, PIC/APIC selection and IRQ ABI remain open. Phase A only establishes a static boot-CPU double-fault IST; see [ADR-m9-3-exception-stacks](ADR-m9-3-exception-stacks.md).

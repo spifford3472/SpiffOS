@@ -421,3 +421,7 @@ reporter never returns, there is no IRETQ path in this checkpoint. All
 hardware IRQ entries remain not-present; STI must remain forbidden until
 controller masking, acknowledgments and safe stacks have separate coverage.
 See docs/decisions/ADR-m9-exception-idt.md.
+
+## Long-mode TSS and emergency exception stacks (M9-3A)
+
+An x86-64 Task State Segment (TSS) still matters in long mode: the processor reads its Interrupt Stack Table (IST) when an IDT gate specifies a nonzero IST index. The TSS must be described by a 16-byte available-system descriptor in the *active* GDT and loaded using LTR. The descriptor base is a kernel virtual address; the emergency stack pointer points just beyond its last byte because the CPU stack grows downward. Do not confuse dedicated static stack storage with a guard page; a guard page requires deliberate page-table mappings and negative tests.

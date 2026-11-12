@@ -1,12 +1,14 @@
 /* Purpose: build and activate a static CPU-exception IDT for the boot CPU.
  * Dependencies: x86-idt.h, x86-64 long-mode instructions, static stub table.
- * Invariants: 32 exception gates, all hardware IRQ gates absent, interrupts
- * disabled throughout, no dynamic allocation or CPU interrupt enable.
+ * Invariants: 32 exception gates, vector 8 uses a dedicated IST1 from the
+ * boot-CPU TSS; all hardware IRQ gates absent, interrupts disabled
+ * throughout, no dynamic allocation or CPU interrupt enable.
  * References: ADR-m9-exception-idt.md and ADR-m9-kernel-foundation.md. */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "x86-idt.h"
+#include "x86-tss.h"
 
 enum { IDT_GATE_PRESENT_INTERRUPT = 0x8e };
 static struct x86_idt_gate exception_idt[IDT_TOTAL_COUNT];
@@ -70,8 +72,12 @@ bool x86_idt_initialize(void)
     uint64_t addresses[IDT_EXCEPTION_COUNT];
     for (size_t i = 0; i < IDT_EXCEPTION_COUNT; ++i)
         addresses[i] = (uint64_t)x86_exception_stub_table[i];
+    if (!x86_tss_initialize()) return false;
     if (!x86_idt_construct(exception_idt, IDT_TOTAL_COUNT, addresses, cs))
         return false;
+    /* Double faults always enter on the dedicated IST1 emergency stack.
+     * The TR was loaded before this gate becomes visible to the CPU. */
+    exception_idt[8].ist = 1;
     struct x86_idtr descriptor = {
         .limit = (uint16_t)(sizeof exception_idt - 1),
         .base = (uint64_t)(uintptr_t)exception_idt

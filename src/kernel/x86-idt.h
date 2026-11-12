@@ -1,7 +1,8 @@
 /* Purpose: define the fixed x86-64 IDT and IDTR wire layouts.
  * Dependencies: C11 fixed-width integers; no allocation or hardware IO.
  * Invariants: packed sizes are exact; only vectors 0..31 may be present in
- * M9-2. Do not enable interrupts until IRQ gates are independently designed.
+ * M9-3A, with IST1 for vector 8 only. Do not enable interrupts until
+ * IRQ gates are independently designed.
  * Reference: docs/decisions/ADR-m9-exception-idt.md. */
 #ifndef X86_IDT_H
 #define X86_IDT_H

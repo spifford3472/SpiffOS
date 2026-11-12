@@ -389,3 +389,7 @@ workspace operation. Implement a static exception-only IDT, preserve IRQ-off
 polling and PIT F12, and require direct QEMU fault-injection proof before merge.
 ADR-m9-exception-idt.md records the internal scope; no IRQ controller or
 task/scheduling ABI is approved.
+
+## M9-3A owner-authorized kernel exception stack (2026-11-11)
+
+The M9-3 phase authorizes a boot-CPU TSS, IST and double-fault emergency stack with separate verification before interrupts are enabled. Internal implementation choice and limits are recorded in [ADR-m9-3-exception-stacks](ADR-m9-3-exception-stacks.md). This does not approve an external hardware interrupt ABI or physical deployment.

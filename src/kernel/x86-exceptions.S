@@ -1,7 +1,8 @@
 /* Purpose: static x86-64 CPU-exception entry stubs for the M9-2 IDT.
  * Dependencies: x86 long-mode interrupt stack conventions and C panic hook.
  * Invariants: interrupts remain disabled; all exceptions are fatal; the
- * current Limine stack must remain usable. No IST or user-return ABI.
+ * vector 8 enters through IST1; other faults need a usable current stack.
+ * No user-return ABI.
  * Reference: ADR-m9-exception-idt.md. */
 
 .section .text
