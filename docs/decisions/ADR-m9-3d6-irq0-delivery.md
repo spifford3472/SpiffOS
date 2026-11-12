@@ -20,3 +20,6 @@ Hosted injected register-transport tests must prove exact read/write ordering, n
 
 ## Approval
 2026-11-12: owner explicitly authorized work, merge and deployment after resolving Issue #51, and agreed to combine interactive acceptance of #48 and #51. No separate manual test of #48 required before development; automated tests remain mandatory for both.
+
+## Implementation validation (2026-11-12)
+Real QEMU q35 at 128/256/512MiB delivered the mapped PIT0 GSI through LAPIC vector 0x30: independent host-wall measurements showed the 100-to-200 tick interval near one second at all three sizes. An isolated disabled-route guest retained IF=0, no timer availability and normal boot. Full memory, framebuffer, F1–F12, editor and CPU #UD/IST1 #DF regressions passed; exact evidence, model review and rollback are in `docs/operations/m9-3d6-apic-pit0-20261112.md`. The IRQ is a QEMU-tested boot-CPU internal facility, not an approved universal IRQ/driver ABI.

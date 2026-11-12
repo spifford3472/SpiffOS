@@ -78,7 +78,7 @@ bool kernel_timer_initialize_boot(uint32_t frequency_hz)
     return kernel_timer_init(&boot_timer, frequency_hz);
 }
 
-/* Phase D IRQ0 calls only this bounded function before sending PIC EOI. */
+/* M9-3D6 APIC IRQ0 invokes only this bounded function before LAPIC EOI. */
 bool kernel_timer_boot_tick(void)
 {
     return kernel_timer_note_tick(&boot_timer);

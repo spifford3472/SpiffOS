@@ -1,0 +1,59 @@
+/* Purpose: boot-CPU 0x30 external IRQ and 0xff spurious vector stubs.
+ * Dependencies: x86-64 interrupt stack convention and C IRQ0 callback.
+ * Invariants: preserve ALL interrupted GPRs, no floating point/SIMD,
+ * no nested IRQ or red-zone use, return with IRETQ; never PIC EOI.
+ * Reference: docs/decisions/ADR-m9-3d6-irq0-delivery.md. */
+.section .text
+.extern x86_irq0_handler
+
+.global x86_irq0_entry
+.type x86_irq0_entry,@function
+x86_irq0_entry:
+    /* Hardware interrupt gate clears IF. Save every general-purpose register
+     * including RBX (which an interrupted C function may be using). */
+    pushq %rax
+    pushq %rbx
+    pushq %rcx
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %rbp
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+    /* CPU may have interrupted a function at any RSP alignment. R12 is
+     * already saved and the SysV C callee must preserve it. */
+    movq %rsp,%r12
+    andq $-16,%rsp
+    call x86_irq0_handler
+    movq %r12,%rsp
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rbp
+    popq %rdi
+    popq %rsi
+    popq %rdx
+    popq %rcx
+    popq %rbx
+    popq %rax
+    iretq
+.size x86_irq0_entry,.-x86_irq0_entry
+
+/* xAPIC spurious interrupt does not set ISR and requires no EOI. */
+.global x86_apic_spurious_entry
+.type x86_apic_spurious_entry,@function
+x86_apic_spurious_entry:
+    iretq
+.size x86_apic_spurious_entry,.-x86_apic_spurious_entry
+.section .note.GNU-stack,"",@progbits

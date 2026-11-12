@@ -10,6 +10,13 @@
 /* Link-only stub table; hosted tests never call x86_idt_initialize or LIDT. */
 const uintptr_t x86_exception_stub_table[IDT_EXCEPTION_COUNT] = {0};
 
+/* Link-only timer/spurious symbols for the pure hosted constructor. These
+ * functions must never execute in the host; real IRQ entry lives in the
+ * assembly translation unit linked only into the freestanding kernel. */
+void x86_irq0_entry(void) {}
+void x86_apic_spurious_entry(void) {}
+
+
 /* Check both zero-on-invalid and all 32 explicit valid entries. No ownership
  * transfer, allocation, kernel instructions or concurrency occurs. */
 int main(void)

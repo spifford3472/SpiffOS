@@ -264,3 +264,6 @@ A read-only x86 PTE alias walker, MTRR/PAT policy check and bounded LAPIC/IOAPIC
 
 ## M9-3D6 authorized IRQ0 integration
 The first controlled timer interrupt is an internal QEMU-only boot-CPU path: MADT and xAPIC/memory-type proof (M9-3D5), one IOAPIC GSI route for PIT0 to vector 0x30, LAPIC EOI, and kernel_timer 100Hz monotonic ticks. Exceptions and IST1 remain distinct, PIC completely masked and polled keyboard/COM1 plus PIT channel2 F12 preserved. The IF enable is a release-critical test gate, not a generic IRQ ABI. See ADR-m9-3d6-irq0-delivery.md.
+
+## M9-3D6 first validated interrupt timer (QEMU)
+The first LAPIC/IOAPIC-delivered PIT0 interrupt now has bounded test-only 100/200-tick evidence, with a nominal 100Hz monotonic software clock via kernel_timer and IRQ0 vector 0x30/LAPIC EOI. The path is boot-CPU-only, source GSI from MADT and actual IOAPIC version, with full existing M9-3D5 cache and ID checks. PIC sources remain masked, keyboard/COM1 polled and F12 PIT2 overlay independent. No scheduler or ring-3 BASIC application is yet present. See ADR-m9-3d6-irq0-delivery.md.
