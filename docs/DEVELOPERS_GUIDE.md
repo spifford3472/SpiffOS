@@ -433,3 +433,6 @@ The x86-compatible pair of 8259 interrupt controllers has master ports 0x20/0x21
 ## Monotonic time without a wall clock (M9-3C)
 
 A monotonic timer measures intervals, not calendar dates. The kernel timer begins unavailable even though its state is initialized, and becomes readable after the first validated interrupt increments its count. The counter saturates at the maximum 64-bit value rather than rolling backward. Millisecond conversion divides first to avoid overflow in `ticks * 1000`; caller-visible output remains untouched on invalid inputs. An IRQ-updated tick must be loaded atomically because normal code can be interrupted between instructions.
+
+## APIC and ACPI discovery contract (M9-3D)
+ACPI tables are firmware-owned byte sequences. Validate signature, table length, checksum and every variable-length record before reading fields. The MADT describes LAPIC, IOAPIC and source overrides, but table addresses are physical and must not be dereferenced until mapped and validated. LAPIC and IOAPIC registers are MMIO, not legacy PIC I/O ports; their cache attributes and interrupt routing must be initialized before enabling IF. An I/O APIC global system interrupt (GSI) can differ from an ISA IRQ number because of an override. See ADR-m9-3-apic-routing.md.

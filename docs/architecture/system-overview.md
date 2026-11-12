@@ -242,3 +242,6 @@ The boot CPU remaps the QEMU-compatible dual 8259 PIC to vectors 32–47 with ev
 ## M9-3C monotonic clock foundation
 
 A static 64-bit saturating tick counter is initialized with an intended 100 Hz rate but returns unavailable until a real IRQ0 tick arrives. Hosted arithmetic tests verify conversion and overflow. PIT channel 2 F12 overlay is unchanged; Phase D controls the first actual IRQ enable. See ADR-m9-3-monotonic-clock.md.
+
+## Selected M9-3D APIC-first design (not yet implemented)
+The owner selected ACPI RSDP/XSDT/MADT discovery of LAPIC and IOAPIC topology before enabling only PIT0 IRQ0 through a dedicated vector. Existing PIC remains fully masked; a validated MMIO mapping and safe EOI/masks are prerequisites. The last verified mainline checkpoint remains M9-3C; see ADR-m9-3-apic-routing.md.
