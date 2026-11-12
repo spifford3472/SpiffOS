@@ -261,3 +261,6 @@ APIC register identity and I/O APIC version/GSI routing extent must be confirmed
 
 ## M9-3D6 controlled IRQ0 readiness (2026-11-12)
 With QEMU read-only register identities, IOAPIC version and MADT IRQ0 GSI validated under M9-3D5, active redirection configuration, LAPIC LVT/EOI, 100Hz PIT0 delivery, live tick/negative-storm tests, fallback and physical portability still remain OPEN. Preserve PIC masked, IF=0, keyboard polling and F12 PIT2 until separately validated. See ADR-m9-3d5-apic-readonly.md.
+
+## M9-3D6 controlled IRQ implementation — 2026-11-12
+Owner authorized the *tested* first single-boot-CPU APIC IRQ0, vector 0x30 and PIT0 timer path. Until actual QEMU positive/negative tick-delivery tests pass, IF/IRQ0 availability is not a completed operational feature. Do not generalize this QEMU path to physical laptops, multiple IOAPICs/SMP, scheduler, ring3 or PS/2 device IRQ. See ADR-m9-3d6-irq0-delivery.md.
