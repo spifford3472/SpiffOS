@@ -440,3 +440,7 @@ ACPI tables are firmware-owned byte sequences. Validate signature, table length,
 ## Local APIC CPU preflight
 
 The CPUID **leaf 1 EDX bit 9** reports the presence of local APIC hardware (not ECX). Register IA32_APIC_BASE MSR 0x1B contains enable (bit 11), x2APIC mode (bit 10), BSP flag (bit 8), and the physical APIC base address in bits 12–51. Confirm the base agrees with a validated ACPI MADT LAPIC address before considering mappings. This does not imply the page is mapped or safe for MMIO.
+
+## Read-only page-table walking for APIC (M9-3D3)
+
+A processor's CR3 points to a physical page-table root. A conservative x86-64 walker must resolve that root and every next-level page through a validated RAM mapping, reject missing/not-present or user-accessible entries, and handle 4 KiB, 2 MiB and 1 GiB leaves. A physical LAPIC address supplied by firmware is **not** a virtual pointer. Even when virtual translation matches physical MMIO, caching properties must be validated against PAT/MTRRs before any device-register read/write. An unavailable mapping proof is not the same as proof of an unmapped device.

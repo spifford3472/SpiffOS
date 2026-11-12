@@ -245,3 +245,7 @@ A static 64-bit saturating tick counter is initialized with an intended 100 Hz r
 
 ## Selected M9-3D APIC-first design (not yet implemented)
 The owner selected ACPI RSDP/XSDT/MADT discovery of LAPIC and IOAPIC topology before enabling only PIT0 IRQ0 through a dedicated vector. Existing PIC remains fully masked; a validated MMIO mapping and safe EOI/masks are prerequisites. The last verified mainline checkpoint remains M9-3C; see ADR-m9-3-apic-routing.md.
+
+## APIC MMIO readiness gate (read-only, 2026-11-11)
+
+The Phase D3 exploratory page-table walker verifies only whether the existing CR3 translation and caller-validated RAM page-table pointers can prove a mapping from HHDM+ACPI controller physical addresses. QEMU reported mapping **unverified**. No new page mapping, APIC MMIO access, device interrupt, or scheduler was added; M9-3C remains the last IRQ-disabled operational behavior.
