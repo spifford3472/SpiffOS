@@ -114,6 +114,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["test", "run", "debug"])
     parser.add_argument("--timeout", type=float, default=20.0, help="test deadline in seconds")
+    parser.add_argument("--wait-marker", default="SPIFFOS_BOOT_OK",
+                        help="exact serial line required to complete QEMU test")
     parser.add_argument("--screenshot", action="store_true", help="test framebuffer marker and capture build/framebuffer.ppm")
     parser.add_argument("--keyboard", action="store_true", help="inject and verify real keyboard events")
     parser.add_argument("--wait-keyboard-ready", action="store_true",
@@ -189,7 +191,7 @@ def main():
                     deadline = time.monotonic() + args.timeout
                     while time.monotonic() < deadline:
                         lines = serial.read_bytes().splitlines()
-                        if MARKER in lines:
+                        if args.wait_marker.encode() in lines:
                             # Some diagnostics need evidence emitted immediately
                             # after BOOT_OK. Keep QEMU alive until that complete
                             # serial line arrives instead of racing its flush.

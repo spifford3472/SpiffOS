@@ -264,3 +264,6 @@ With QEMU read-only register identities, IOAPIC version and MADT IRQ0 GSI valida
 
 ## M9-3D6 controlled IRQ implementation — 2026-11-12
 Owner authorized the *tested* first single-boot-CPU APIC IRQ0, vector 0x30 and PIT0 timer path. Until actual QEMU positive/negative tick-delivery tests pass, IF/IRQ0 availability is not a completed operational feature. Do not generalize this QEMU path to physical laptops, multiple IOAPICs/SMP, scheduler, ring3 or PS/2 device IRQ. See ADR-m9-3d6-irq0-delivery.md.
+
+## M9-3D6 post-IRQ validation follow-ups (2026-11-12)
+The controlled boot-CPU QEMU IRQ0 path has real 100/200-tick evidence; physical-chipset support, several IOAPICs or CPUs, NMI/SMI coordination, pending-IRQ shutdown, sustained storm/error handling beyond the bounded timing regression, recalibration and any public user/kernel IRQ ABI remain OPEN. Do not generalize from QEMU q35 success. See ADR-m9-3d6-irq0-delivery.md.

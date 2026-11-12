@@ -78,6 +78,11 @@ bool x86_idt_construct(struct x86_idt_gate *entries, size_t count,
  * ready, false keeps old IDTR. Boot CPU only with CPU interrupts disabled. */
 bool x86_idt_initialize(void);
 
+/* Add only the boot CPU's timer and spurious interrupt gates, preserving
+ * all exception/IST1 gates and existing PIC vectors absent. Requires IF=0,
+ * x86_idt_initialize() success, no concurrent IRQ or handler rebinding. */
+bool x86_idt_enable_apic_timer_gates(void);
+
 /* Static assertions for structure sizes */
 _Static_assert(sizeof(struct x86_idt_gate) == 16, "IDT gate must be exactly 16 bytes");
 _Static_assert(sizeof(struct x86_idtr) == 10, "IDTR must be exactly 10 bytes");

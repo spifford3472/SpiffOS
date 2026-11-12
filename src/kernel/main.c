@@ -26,6 +26,7 @@
 #include "mmio-page-policy.h"
 #include "apic-memory-type.h"
 #include "apic-readonly.h"
+#include "apic-irq0.h"
 #include "x86-mmio-map.h"
 
 /* 'used' retains these in the object; linker KEEP retains them in the ELF.
@@ -650,7 +651,8 @@ static bool apic_hw_ioapic_index_read(void *context,uint8_t index,
 
 /* Inspect bounded identity/version register values after all memory mapping,
  * MADT, CPU and cache/alias checks. This never enables an interrupt source. */
-static bool apic_boot_readonly_probe(const struct acpi_apic_topology *topology)
+static bool apic_boot_readonly_probe(const struct acpi_apic_topology *topology,
+                                     struct apic_readonly_result *out)
 {
     struct apic_cpu_snapshot cpu;
     if(topology==NULL || !apic_cpu_read_snapshot(&cpu) ||
@@ -658,9 +660,120 @@ static bool apic_boot_readonly_probe(const struct acpi_apic_topology *topology)
     const struct apic_readonly_backend backend={
         apic_hw_lapic_id_read,apic_hw_ioapic_index_read,NULL
     };
-    struct apic_readonly_result result;
-    return apic_readonly_validate(topology,cpu.cpuid_apic_id,
-                                  &backend,&result);
+    return out!=NULL && apic_readonly_validate(topology,cpu.cpuid_apic_id,
+                                                 &backend,out);
+}
+
+#ifndef SPIFFOS_IRQ0_DISABLED_TEST
+/* Physical APIC MMIO accesses are permitted only after the complete
+ * M9-3D5 mapping/cache/identity proof. This backend cannot access physical
+ * addresses, and rejects unknown offsets; no heap or IRQ disabling here. */
+static bool apic_boot_io_read(void *unused,bool local,uint32_t offset,
+                              uint32_t *value)
+{
+    (void)unused;
+    if(value==NULL || (offset&3u)!=0 ||
+       (local ? offset>=4096u : (offset!=0 && offset!=0x10))) return false;
+    uintptr_t base=local ? (uintptr_t)MMIO_APIC_LAPIC_VIRTUAL :
+                           (uintptr_t)MMIO_APIC_IOAPIC_VIRTUAL;
+    *value=*(volatile const uint32_t *)(base+offset);
+    return true;
+}
+
+/* Mutate only the LAPIC or IOAPIC 4KiB register window already verified.
+ * IOAPIC index/data writes are further restricted by apic-irq0.c; no
+ * arbitrary offsets can escape this narrowly scoped adapter. */
+static bool apic_boot_io_write(void *unused,bool local,uint32_t offset,
+                               uint32_t value)
+{
+    (void)unused;
+    if((offset&3u)!=0 ||
+       (local ? (offset!=0xf0 && offset!=0xb0) :
+                (offset!=0 && offset!=0x10))) return false;
+    uintptr_t base=local ? (uintptr_t)MMIO_APIC_LAPIC_VIRTUAL :
+                           (uintptr_t)MMIO_APIC_IOAPIC_VIRTUAL;
+    *(volatile uint32_t *)(base+offset)=value;
+    return true;
+}
+
+/* Interrupt context shares no mutable global except the atomic monotonic
+ * timer. The boot CPU's xAPIC EOI is required after each validated tick.
+ * No serial/heap/locks/scheduler/port use, with IF cleared by interrupt gate. */
+void x86_irq0_handler(void)
+{
+    if(!kernel_timer_boot_tick()) {
+        for(;;) __asm__ volatile ("cli; hlt" : : : "memory");
+    }
+    *(volatile uint32_t *)(uintptr_t)
+        (MMIO_APIC_LAPIC_VIRTUAL+UINT64_C(0xb0))=0;
+}
+
+/* Explicit PIT channel0 configuration; preserve PIT2 used for F12.
+ * 1,193,182Hz/11,932 ~99.999Hz. PIT mode2 emits one IRQ per reload.
+ * Startup-only with IF=0 and all device gates already installed. */
+static void apic_boot_pit0_100hz(void)
+{
+    port_write(UINT16_C(0x43),UINT8_C(0x34));
+    port_write(UINT16_C(0x40),(uint8_t)(11932u&255u));
+    port_write(UINT16_C(0x40),(uint8_t)(11932u>>8));
+}
+
+#endif /* SPIFFOS_IRQ0_DISABLED_TEST: no unused active-route backend */
+#ifdef SPIFFOS_IRQ0_DISABLED_TEST
+/* The disabled-IRQ test still links the assembly table but deliberately
+ * installs no IRQ0 IDT gate. If unexpectedly called, fail closed without
+ * touching LAPIC registers or advertising a live timer. */
+void x86_irq0_handler(void)
+{
+    halt_forever();
+}
+#endif
+
+
+/* Activate the one verified IRQ0 route; anything unsupported leaves IF=0.
+ * A programming failure while the hardware state might be partially changed
+ * must stop the CPU rather than start an unverified interrupt subsystem. */
+static bool apic_boot_irq0_activate(
+    const struct acpi_apic_topology *topology,
+    const struct apic_readonly_result *identified)
+{
+#ifdef SPIFFOS_IRQ0_DISABLED_TEST
+    (void)topology;
+    (void)identified;
+    (void)serial_write("SPIFFOS_IRQ0_DISABLED_TEST\r\n");
+    return false;
+#else
+    if(topology==NULL || identified==NULL) return false;
+    const struct apic_irq0_io io={
+        apic_boot_io_read,apic_boot_io_write,NULL
+    };
+    struct apic_irq0_route route={0};
+    if(!apic_irq0_probe(&io,topology,identified->lapic_id,
+                        identified->redirection_entries,&route)) {
+        (void)serial_write("SPIFFOS_IRQ0_PREFLIGHT_UNAVAILABLE\r\n");
+        return false;
+    }
+    (void)serial_write("SPIFFOS_IRQ0_PREFLIGHT_OK\r\n");
+    if(!x86_idt_enable_apic_timer_gates()) {
+        (void)serial_write("SPIFFOS_IRQ0_IDT_UNAVAILABLE\r\n");
+        return false;
+    }
+    if(!apic_irq0_prepare(&io,&route)) {
+        (void)serial_write("SPIFFOS_IRQ0_SETUP_FATAL\r\n");
+        halt_forever();
+    }
+    apic_boot_pit0_100hz();
+    if(!apic_irq0_unmask(&io,&route)) {
+        (void)serial_write("SPIFFOS_IRQ0_UNMASK_FATAL\r\n");
+        halt_forever();
+    }
+    /* IF must become 1 only after all readbacks and the full timer ISR.
+     * No other IOAPIC pin is unmasked, and PIC masks remain 0xffff. */
+    (void)serial_write("SPIFFOS_IRQ0_ROUTE_READY\r\n");
+    __asm__ volatile ("sti" : : : "memory");
+    (void)serial_write("SPIFFOS_IRQ0_ENABLED\r\n");
+    return true;
+#endif
 }
 
 /* Bounded read-only probe; a failed table lookup is reported but never
@@ -708,7 +821,26 @@ static void keyboard_run(struct text_console *console)
     uint16_t previous_pit = 0;
     uint32_t elapsed_pit = 0;
     unsigned int indicator_fade_step = 0;
+#ifdef SPIFFOS_IRQ0_TIMING_TEST
+    /* Independent real-QEMU wall-clock test observes serial milestones while
+     * this original polled editor stays responsive. No delay/sleep is added
+     * to ordinary images; no logging occurs inside the ISR. */
+    bool tick_100_reported=false,tick_200_reported=false;
+#endif
     for (;;) {
+#ifdef SPIFFOS_IRQ0_TIMING_TEST
+        uint64_t now_ms=0;
+        if(kernel_timer_boot_now_ms(&now_ms)) {
+            if(now_ms>=1000u && !tick_100_reported) {
+                (void)serial_write("SPIFFOS_IRQ0_TICK_100\r\n");
+                tick_100_reported=true;
+            }
+            if(now_ms>=2000u && !tick_200_reported) {
+                (void)serial_write("SPIFFOS_IRQ0_TICK_200\r\n");
+                tick_200_reported=true;
+            }
+        }
+#endif
         if (indicator_timed) {
             uint16_t current = pit_read_counter();
             elapsed_pit += (uint16_t)(previous_pit - current);
@@ -915,7 +1047,8 @@ void kmain(void)
     if (!memory_boot_service_start(hhdm_request.response, paging_mode_request.response, serial_write)) {
         halt_forever();
     }
-    /* ACPI discovery is informational; no LAPIC or IOAPIC register access. */
+    /* ACPI discovery is read-only; later validated M9-3D5 cache/ID checks
+     * gate every active M9-3D6 LAPIC/IOAPIC timer configuration write. */
     struct acpi_apic_topology boot_apic = {0};
     if (acpi_boot_discover(&boot_apic)) {
         (void)serial_write("SPIFFOS_ACPI_MADT_OK\r\n");
@@ -950,10 +1083,15 @@ void kmain(void)
                         (void)serial_write(cache_safe ?
                             "SPIFFOS_APIC_CACHE_SAFE\r\n" :
                             "SPIFFOS_APIC_CACHE_UNVERIFIED\r\n");
-                        if(cache_safe)
-                            (void)serial_write(apic_boot_readonly_probe(&boot_apic) ?
+                        if(cache_safe) {
+                            struct apic_readonly_result identified;
+                            bool registers_ok=apic_boot_readonly_probe(&boot_apic,&identified);
+                            (void)serial_write(registers_ok ?
                                 "SPIFFOS_APIC_REGISTERS_OK\r\n" :
                                 "SPIFFOS_APIC_REGISTERS_UNAVAILABLE\r\n");
+                            if(registers_ok)
+                                (void)apic_boot_irq0_activate(&boot_apic,&identified);
+                        }
                         else
                             (void)serial_write("SPIFFOS_APIC_REGISTERS_SKIPPED\r\n");
                     }
@@ -1004,6 +1142,16 @@ void kmain(void)
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }
     if (!memory_boot_service_check(serial_write)) halt_forever();
+#ifdef SPIFFOS_IRQ0_DISABLED_TEST
+    /* Negative guest ensures no imaginary clock is published when the
+     * APIC routing step is deliberately skipped and IF remains zero. */
+    uint64_t absent_time=UINT64_MAX;
+    if(kernel_timer_boot_now_ms(&absent_time) || absent_time!=UINT64_MAX) {
+        (void)serial_write("SPIFFOS_IRQ0_DISABLED_CLOCK_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_IRQ0_DISABLED_CLOCK_UNAVAILABLE\r\n");
+#endif
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }

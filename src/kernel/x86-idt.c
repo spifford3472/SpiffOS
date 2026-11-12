@@ -1,8 +1,8 @@
 /* Purpose: build and activate a static CPU-exception IDT for the boot CPU.
  * Dependencies: x86-idt.h, x86-64 long-mode instructions, static stub table.
- * Invariants: 32 exception gates, vector 8 uses a dedicated IST1 from the
- * boot-CPU TSS; all hardware IRQ gates absent, interrupts disabled
- * throughout, no dynamic allocation or CPU interrupt enable.
+ * Invariants: 32 CPU exception gates, vector 8 retains IST1; M9-3D6 adds
+ * exactly two boot-CPU APIC 0x30/0xff gates while IF=0. No other IRQ vectors,
+ * dynamic allocation, scheduler or CPU interrupt enable in this module.
  * References: ADR-m9-exception-idt.md and ADR-m9-kernel-foundation.md. */
 #include <stdbool.h>
 #include <stddef.h>
@@ -12,6 +12,8 @@
 
 enum { IDT_GATE_PRESENT_INTERRUPT = 0x8e };
 static struct x86_idt_gate exception_idt[IDT_TOTAL_COUNT];
+static bool idt_initialized;
+static bool apic_gates_enabled;
 
 /* The assembly stubs include the CPU vector and a normalized error code.
  * Each address is borrowed from the linked immutable kernel text segment. */
@@ -83,5 +85,37 @@ bool x86_idt_initialize(void)
         .base = (uint64_t)(uintptr_t)exception_idt
     };
     __asm__ volatile ("lidt %0" : : "m"(descriptor) : "memory");
+    idt_initialized=true;
+    return true;
+}
+
+/* Publish exactly two supported APIC interrupt gates once, after the CPU
+ * exception table is already active and IF has been verified clear.
+ * Both stubs retain the existing ring-0 CS and IST1 is untouched. */
+extern void x86_irq0_entry(void);
+extern void x86_apic_spurious_entry(void);
+bool x86_idt_enable_apic_timer_gates(void)
+{
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0" : "=r"(flags));
+    if(!idt_initialized || apic_gates_enabled || (flags&(UINT64_C(1)<<9)))
+        return false;
+    uint16_t cs;
+    __asm__ volatile ("movw %%cs,%0" : "=r"(cs));
+    struct x86_idt_gate irq,spurious;
+    if(!x86_idt_make_gate(&irq,(uint64_t)(uintptr_t)&x86_irq0_entry,cs) ||
+       !x86_idt_make_gate(&spurious,
+             (uint64_t)(uintptr_t)&x86_apic_spurious_entry,cs))
+        return false;
+    exception_idt[0x30]=irq;
+    exception_idt[0xff]=spurious;
+    /* Modifying the active IDT's entries is safe while IF=0. Reload IDTR
+     * explicitly to document ownership and prevent stale compiler stores. */
+    struct x86_idtr idtr={
+        .limit=(uint16_t)(sizeof exception_idt-1),
+        .base=(uint64_t)(uintptr_t)exception_idt
+    };
+    __asm__ volatile ("lidt %0" : : "m"(idtr) : "memory");
+    apic_gates_enabled=true;
     return true;
 }
