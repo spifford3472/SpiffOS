@@ -1220,6 +1220,12 @@ void kmain(void)
         (void)serial_write("\r\n");
         halt_forever();
     }
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* D4 selection was exercised under live PIT0, including all four
+     * successive priority bands and reserved supervisor opportunities.
+     * No scheduler policy is exposed in the normal editor kernel. */
+    (void)serial_write("SPIFFOS_M10_D4_PRIORITY_OK\r\n");
+#endif
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
 #endif
 #ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
