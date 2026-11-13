@@ -267,3 +267,7 @@ The first controlled timer interrupt is an internal QEMU-only boot-CPU path: MAD
 
 ## M9-3D6 first validated interrupt timer (QEMU)
 The first LAPIC/IOAPIC-delivered PIT0 interrupt now has bounded test-only 100/200-tick evidence, with a nominal 100Hz monotonic software clock via kernel_timer and IRQ0 vector 0x30/LAPIC EOI. The path is boot-CPU-only, source GSI from MADT and actual IOAPIC version, with full existing M9-3D5 cache and ID checks. PIC sources remain masked, keyboard/COM1 polled and F12 PIT2 overlay independent. No scheduler or ring-3 BASIC application is yet present. See ADR-m9-3d6-irq0-delivery.md.
+
+## M10-D3.1 planned boot preparation and system diagnostics — 2026-11-13
+
+All nine workspace identities/metadata are prepared at boot; the physical framebuffer and per-workspace snapshots remain lazily painted/allocated for memory efficiency. An F10 read-only monitor can report only verified diagnostic values. See [ADR-m10-d31-workspaces-debug-hub.md](../decisions/ADR-m10-d31-workspaces-debug-hub.md). D4 priority/supervisor integration remains a separate test milestone.
