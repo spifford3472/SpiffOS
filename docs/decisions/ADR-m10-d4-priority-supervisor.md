@@ -77,3 +77,25 @@ D5 remains independent.
 2026-11-13: owner approved D3.1 then moving to D4. QWEN completed a
 narrow read-only integration review; a stacked isolated branch records
 the first test-only D4 policy integration.
+
+
+## D4 second gate: simultaneous four-priority CPU hogs
+
+The next separately tested checkpoint extends **test-only** stack
+ownership from 2 to 4 independent 16KiB four-page stacks, with a
+fifth permanent supervisor dispatcher context. The ordinary D3,
+two-worker D4, and normal ISO builds retain their original
+2-stack fixture/ABI through a build-time flag. Worker A=Background,
+B=Normal, C=Interactive, D=Time-sensitive all remain runnable
+simultaneously under the real PIT0 IRQ0 path. All four must receive
+nonzero, bounded-latency CPU service despite the high-priority
+competitor. Every fourth dispatch still chooses reserved supervisor
+slot 15. Each worker's full saved IRETQ frame, stack canaries,
+progress and ownership is validated; partial allocation failure
+must unwind without losing tracked frames. Deliberate malformed
+priority, unavailable IRQ and stack-canary negatives must halt
+without reporting success or permitting the normal editor to
+enter with damaged state.
+
+This is separate from blocked/wakeup and recovery-under-failure
+acceptance, which remain open after the simultaneous-class gate.
