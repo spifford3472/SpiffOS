@@ -816,6 +816,20 @@ static void keyboard_run(struct text_console *console)
         halt_forever();
     }
     if (!memory_boot_service_editor_check(serial_write)) halt_forever();
+    /* All nine editors have independently owned logical storage, but only
+     * workspace 1 is drawn. The other 8 snapshots allocate on first use. */
+    bool nine_prepared=true;
+    for(size_t index=0;index<WORKSPACE_COUNT;++index)
+        if(!boot_workspaces.ready[index] ||
+           !boot_workspaces.editors[index].initialized ||
+           (index>0 && (!boot_workspaces.editors[index].deferred_activation ||
+                        boot_workspaces.snapshot_ready[index])))
+            nine_prepared=false;
+    if(!nine_prepared) {
+        (void)serial_write("SPIFFOS_WORKSPACES_PREPARE_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_WORKSPACES_READY_9\r\n");
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
     bool first = true;
     bool indicator_timed = false;
