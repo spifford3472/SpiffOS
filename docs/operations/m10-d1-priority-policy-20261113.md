@@ -74,3 +74,7 @@ fixtures and real QEMU state-preservation tests. Only D3 may introduce
 test-only actual timer preemption; D4 must validate priority and supervisor
 service with a CPU hog and reentrant behavior; D5 must pass the full existing
 regressions. Merge and deployment remain separately owner-controlled.
+
+## Additional final regression at exact tested code SHA
+
+Tested detached source `06094be2a93240fe09ef9610e3d3972167f90661` on isolated Forge with `make HOST_CC=gcc test-memory test-irq0`: **PASS**. Memory service sanitizers, 128/256/512 MiB QEMU inventory and exact framebuffer pixels passed; real IRQ0 counted 100 ticks in 1.003, 1.004 and 0.993 seconds respectively; IRQ0-disabled negative returned IF=0 and a normal boot. Tests did not link or invoke M10-D1 policy in the production IRQ path. These results apply to the tested source code; this final evidence note is a documentation-only branch change.
