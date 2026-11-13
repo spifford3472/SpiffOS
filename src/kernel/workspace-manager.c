@@ -87,6 +87,19 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
         !screen_editor_seed_line(&manager->editors[0], 14, second, sizeof second - 1))
         return false;
     manager->ready[0] = true;
+    /* All eight remaining workspaces get separate editor-owned line
+     * storage and a borrowed console descriptor now. No drawing or M3
+     * snapshot allocation occurs: only the foreground owns pixels. */
+    for(size_t index=1;index<WORKSPACE_COUNT;++index) {
+        manager->consoles[index]=*boot_console;
+        manager->consoles[index].column=0;
+        manager->consoles[index].row=13;
+        if(!screen_editor_prepare_offscreen(
+              &manager->editors[index],&manager->consoles[index],
+              submit,submit_context))
+            return false;
+        manager->ready[index]=true;
+    }
     return true;
 }
 
@@ -168,9 +181,27 @@ void workspace_manager_fade_indicator(struct workspace_manager *manager,
     }
 }
 
+/* Format unsigned 64-bit diagnostic metrics without a libc dependency.
+ * The output buffer must have at least 21 bytes; no heap, IRQs or prints. */
+static bool diagnostics_u64(char output[21],uint64_t value)
+{
+    if(output==NULL) return false;
+    char reversed[20];
+    size_t length=0;
+    do {
+        reversed[length++]=(char)('0'+value%10u);
+        value/=10u;
+    } while(value!=0 && length<sizeof reversed);
+    for(size_t offset=0;offset<length;++offset)
+        output[offset]=reversed[length-1-offset];
+    output[length]='\0';
+    return true;
+}
+
 /* F10 opens a dedicated read-only system screen. Repeated F10 is harmless;
  * the selected user workspace remains saved and can be restored by F1..F9. */
-bool workspace_manager_system(struct workspace_manager *manager)
+bool workspace_manager_system_with_diagnostics(struct workspace_manager *manager,
+    const struct workspace_system_diagnostics *diagnostics)
 {
     if (manager == NULL || !snapshot_supported(manager->framebuffer)) return false;
     workspace_manager_hide_indicator(manager);
@@ -192,8 +223,65 @@ bool workspace_manager_system(struct workspace_manager *manager)
         snapshot_transfer(fb, index, false);
         return false;
     }
+    /* The diagnostics are an immutable boot-CPU snapshot. No caller or
+     * IRQ handler can mutate workspace ownership through this read-only
+     * screen; all fields are grounded in manager flags / sampled clocks. */
+    size_t ready_count=0,snapshot_count=0;
+    for(size_t i=0;i<WORKSPACE_COUNT;++i) {
+        if(manager->ready[i]) ++ready_count;
+        if(manager->snapshot_ready[i]) ++snapshot_count;
+    }
+    char ready[]="\nREADY WORKSPACES: 0/9\nCAPTURED SCREENS: 0/9\n";
+    ready[19]=(char)('0'+ready_count);
+    ready[41]=(char)('0'+snapshot_count);
+    if(!text_console_write(&system_console,ready)) {
+        (void)snapshot_transfer(fb,index,false);
+        return false;
+    }
+    if(diagnostics!=NULL) {
+        char number[21];
+        if(diagnostics->clock_available) {
+            (void)diagnostics_u64(number,diagnostics->uptime_ms);
+            if(!text_console_write(&system_console,"UPTIME (MS): ") ||
+               !text_console_write(&system_console,number) ||
+               !text_console_write(&system_console,"\n")) {
+                (void)snapshot_transfer(fb,index,false);
+                return false;
+            }
+        } else if(!text_console_write(&system_console,
+                                     "UPTIME: UNAVAILABLE\n")) {
+            (void)snapshot_transfer(fb,index,false);
+            return false;
+        }
+        if(diagnostics->scheduler_available) {
+            (void)diagnostics_u64(number,diagnostics->scheduler_ticks);
+            if(!text_console_write(&system_console,"IRQ0 SCHEDULER TICKS: ") ||
+               !text_console_write(&system_console,number) ||
+               !text_console_write(&system_console,"\n")) {
+                (void)snapshot_transfer(fb,index,false);
+                return false;
+            }
+        } else if(!text_console_write(&system_console,
+                                      "SCHEDULER CLOCK: UNAVAILABLE\n")) {
+            (void)snapshot_transfer(fb,index,false);
+            return false;
+        }
+        if(!text_console_write(&system_console,
+            diagnostics->diagnostic_preemption_build ?
+             "PREEMPTION: D3 DIAGNOSTIC ONLY\n" :
+             "PREEMPTION: NORMAL EDITOR NONPREEMPTIVE\n")) {
+            (void)snapshot_transfer(fb,index,false);
+            return false;
+        }
+    }
     manager->system_visible = true;
     return true;
+}
+
+/* Compatibility wrapper for existing screen tests and callers. */
+bool workspace_manager_system(struct workspace_manager *manager)
+{
+    return workspace_manager_system_with_diagnostics(manager,NULL);
 }
 
 /* Prepare a new editor only after verifying snapshot bounds and target ID.
@@ -215,24 +303,36 @@ bool workspace_manager_switch(struct workspace_manager *manager, size_t id)
     size_t target = id - 1;
     if (!snapshot_transfer(manager->framebuffer, previous, true)) return false;
     manager->snapshot_ready[previous] = true;
-    bool newly_initialized = !manager->ready[target];
-    if (newly_initialized) {
-        if (!boot_workspace_reset(&manager->consoles[target], manager->framebuffer) ||
-            !screen_editor_initialize(&manager->editors[target],
-                &manager->consoles[target], manager->submit, manager->submit_context)) {
-            snapshot_transfer(manager->framebuffer, previous, false);
+    /* Prepared means logical model ready, not necessarily a captured
+     * framebuffer. First presentation draws the blank logo and binds the
+     * already-owned editor cursor without recreating its logical records. */
+    bool first_presentation=!manager->snapshot_ready[target];
+    if(first_presentation) {
+        if(!manager->ready[target]) {
+            manager->consoles[target]=manager->consoles[0];
+            manager->consoles[target].column=0;
+            manager->consoles[target].row=13;
+            if(!screen_editor_prepare_offscreen(
+                 &manager->editors[target],&manager->consoles[target],
+                 manager->submit,manager->submit_context)) {
+                (void)snapshot_transfer(manager->framebuffer,previous,false);
+                return false;
+            }
+            manager->ready[target]=true;
+        }
+        if(!boot_workspace_reset(&manager->consoles[target],
+                                  manager->framebuffer) ||
+           !screen_editor_activate_prepared(&manager->editors[target])) {
+            manager->ready[target]=false;
+            (void)snapshot_transfer(manager->framebuffer,previous,false);
             return false;
         }
-        manager->ready[target] = true;
-    } else if (manager->snapshot_ready[target]) {
-        if (!snapshot_transfer(manager->framebuffer, target, false))
-            return false;
-    } else {
-        snapshot_transfer(manager->framebuffer, previous, false);
+    } else if (!snapshot_transfer(manager->framebuffer,target,false)) {
+        (void)snapshot_transfer(manager->framebuffer,previous,false);
         return false;
     }
     if (!memory_boot_select_workspace(id)) {
-        if (newly_initialized) manager->ready[target] = false;
+        if (first_presentation) manager->ready[target] = false;
         snapshot_transfer(manager->framebuffer, previous, false);
         return false;
     }

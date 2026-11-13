@@ -75,7 +75,27 @@ int main(void)
     assert(text_console_write(&console, "SPIFFOS WORKSPACE\nOUTPUT SCROLLS THE LOGO."));
     struct workspace_manager *manager = calloc(1, sizeof *manager);
     assert(manager != NULL);
+    /* Workspace 1's normal editor initialization intentionally draws a
+     * visible cursor, so protect an independent logo/background location. */
+    uint32_t before_logo_pixel=pixels[0];
     assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    /* D3.1: all nine editor models are independent and ready immediately,
+     * without allocating eight snapshots or repainting their pixels. */
+    for(size_t index=0;index<WORKSPACE_COUNT;++index) {
+        assert(manager->ready[index]);
+        assert(manager->editors[index].initialized);
+        assert(manager->editors[index].console==&manager->consoles[index]);
+        assert(!manager->snapshot_ready[index]);
+        if(index>0) {
+            assert(manager->editors[index].deferred_activation);
+            assert(!manager->editors[index].cursor_visible);
+            assert(test_snapshot_memory[index]==NULL);
+            assert(screen_editor_accept(&manager->editors[index],
+                SCREEN_EDITOR_CHARACTER,'X')==SCREEN_EDITOR_ERROR);
+            assert(!screen_editor_activate_prepared(&manager->editors[index]));
+        }
+    }
+    assert(pixels[0]==before_logo_pixel);
     /* Verify F12 paints the center and restores every pixel without touching
      * the editor, and F10 is read-only and preserves workspace state. */
     uint64_t indicator_before = checksum(pixels, WIDTH * HEIGHT);
@@ -91,7 +111,12 @@ int main(void)
     assert(!workspace_manager_system(manager));
     assert(checksum(pixels, WIDTH * HEIGHT) == indicator_before);
     deny_snapshot = false;
-    assert(workspace_manager_system(manager));
+    struct workspace_system_diagnostics diagnostics={
+        .clock_available=true,.uptime_ms=UINT64_MAX,
+        .scheduler_available=true,.scheduler_ticks=123456789,
+        .diagnostic_preemption_build=false
+    };
+    assert(workspace_manager_system_with_diagnostics(manager,&diagnostics));
     assert(manager->system_visible);
     assert(checksum(pixels, WIDTH * HEIGHT) != indicator_before);
     assert(workspace_manager_switch(manager, 1));
@@ -115,6 +140,8 @@ int main(void)
     deny_switch = false;
     assert(workspace_manager_switch(manager, 2));
     assert(selected == 2 && !workspace_manager_active(manager)->insert_mode);
+    assert(!manager->editors[1].deferred_activation);
+    assert(manager->editors[1].cursor_visible);
     assert(screen_editor_accept(workspace_manager_active(manager), SCREEN_EDITOR_CHARACTER, 'B') == SCREEN_EDITOR_ACCEPTED);
     uint64_t second = checksum(pixels, WIDTH * HEIGHT);
     assert(first != second);

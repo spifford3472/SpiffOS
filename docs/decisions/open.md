@@ -289,3 +289,7 @@ CPU service, M10-D5 generalized production preemption/ABI, ring 3,
 physical devices, network and other interrupt routes all remain OPEN.
 See `ADR-m10-d-preemption-proposal.md` and
 `../operations/m10-d3-irq-handoff-20261113.md`.
+
+## M10-D3.1 / M10-D4 follow-up — 2026-11-13
+
+D3.1 implementation and validation are IN PROGRESS: prepare nine logical editors without offscreen framebuffer writes, keep snapshots lazy, and provide read-only F10 diagnostics, per the approved [D3.1 ADR](ADR-m10-d31-workspace-diagnostics.md). M10-D4 actual four-priority and reserved supervisor CPU service remains OPEN; D3 only proved two synthetic workers on test-only interrupt handoff. D5 general preemption/driver concurrency remains explicitly OPEN.

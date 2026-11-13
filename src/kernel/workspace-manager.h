@@ -6,6 +6,7 @@
 #define SPIFFOS_WORKSPACE_MANAGER_H
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "screen-editor.h"
 #include "text-console.h"
 struct limine_framebuffer;
@@ -31,7 +32,21 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     logical_line_submit_fn submit, void *submit_context);
 /* Switch to 1..9, preserving all visible pixels and editor state.
  * On unsupported framebuffer dimensions or bad ID, leaves active view intact. */
+/* Immutable diagnostic snapshot assembled by the owning keyboard loop.
+ * No clock or scheduler reads occur in the graphics manager/IRQ context.
+ * Data is informational, not a scheduler command or control interface. */
+struct workspace_system_diagnostics {
+    bool clock_available;
+    uint64_t uptime_ms;
+    bool scheduler_available;
+    uint64_t scheduler_ticks;
+    bool diagnostic_preemption_build;
+};
+
 /* Toggle read-only system view, preserving current user pixels and editor. */
+bool workspace_manager_system_with_diagnostics(struct workspace_manager *manager,
+    const struct workspace_system_diagnostics *diagnostics);
+
 bool workspace_manager_system(struct workspace_manager *manager);
 /* Draw a large centered ID, then restore its exact pixels on hide. */
 bool workspace_manager_identify(struct workspace_manager *manager);

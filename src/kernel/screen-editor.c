@@ -453,6 +453,7 @@ bool screen_editor_initialize(struct screen_editor *editor,
         return false;
     }
     editor->initialized = false;
+    editor->deferred_activation = false;
     editor->cursor_visible = false;
     editor->capacity_full = false;
     editor->insert_mode = false;
@@ -489,6 +490,71 @@ bool screen_editor_initialize(struct screen_editor *editor,
     (void)text_console_position(editor->console, editor->cursor_column,
                                 editor->cursor_row);
     return toggle_cursor(editor);
+}
+
+/* Prepare one independent offscreen editor without drawing or allocating
+ * display backing. Unlike screen_editor_initialize, this routine cannot
+ * call text_console_putc or toggle_cursor, so workspace 1's logo and cursor
+ * remain byte-identical throughout eight consecutive boot preparations.
+ * The metadata-only console is owned by the workspace manager; its row is
+ * the expected boot row 13, and its framebuffer is borrowed, never used. */
+bool screen_editor_prepare_offscreen(struct screen_editor *editor,
+    struct text_console *console, logical_line_submit_fn submit,
+    void *submit_context)
+{
+    if(editor==NULL || console==NULL || !console->initialized ||
+       submit==NULL || console->columns==0 || console->columns>160 ||
+       console->rows==0 || console->rows>SCREEN_EDITOR_MAX_ROWS ||
+       console->row>=console->rows-1)
+        return false;
+    editor->initialized=false;
+    editor->deferred_activation=false;
+    editor->cursor_visible=false;
+    editor->capacity_full=false;
+    editor->insert_mode=false;
+    editor->cursor_line=-1;
+    editor->console=console;
+    editor->submit=submit;
+    editor->submit_context=submit_context;
+    editor->cursor_row=console->row+1;
+    editor->cursor_column=0;
+    editor->cursor_offset=0;
+    for(int index=0;index<SCREEN_EDITOR_MAX_LINES;++index)
+        editor->lines[index].used=false;
+    int line=allocate_line(editor,(int64_t)editor->cursor_row);
+    if(line<0) return false;
+    editor->cursor_line=line;
+    editor->initialized=true;
+    editor->deferred_activation=true;
+    /* A metadata-only console is not a drawable viewport. Deliberately
+     * invalidate its rendering token: boot_workspace_reset must restore
+     * console->initialized before activate_prepared can touch pixels.
+     * This prevents accidental offscreen activation from painting over
+     * workspace 1 even when the model itself is fully prepared. */
+    console->initialized=false;
+    return true;
+}
+
+/* Rebind the prebuilt logical editor to pixels exactly once. The caller
+ * already reset the console, which restores row=13; a newline advances to
+ * row 14 without drawing. Failures retain the activation guard so a user
+ * cannot edit a model whose cursor was never visibly initialized. */
+bool screen_editor_activate_prepared(struct screen_editor *editor)
+{
+    if(editor==NULL || !editor->initialized ||
+       !editor->deferred_activation || editor->cursor_visible ||
+       editor->console==NULL || !editor->console->initialized ||
+       editor->console->row+1!=editor->cursor_row ||
+       editor->cursor_line<0 ||
+       !editor->lines[editor->cursor_line].used)
+        return false;
+    if(!text_console_putc(editor->console,'\n') ||
+       !text_console_position(editor->console,
+                              editor->cursor_column,editor->cursor_row) ||
+       !toggle_cursor(editor))
+        return false;
+    editor->deferred_activation=false;
+    return true;
 }
 
 /* Associate already-visible output with an immutable-at-import logical record.
@@ -533,7 +599,8 @@ bool screen_editor_seed_line(struct screen_editor *editor, uint64_t start_row,
 enum screen_editor_result screen_editor_accept(struct screen_editor *editor,
     enum screen_editor_action action, unsigned char character)
 {
-    if (editor == NULL || !editor->initialized || !hide_cursor(editor)) {
+    if (editor == NULL || !editor->initialized ||
+        editor->deferred_activation || !hide_cursor(editor)) {
         return SCREEN_EDITOR_ERROR;
     }
     enum screen_editor_result result;

@@ -816,6 +816,20 @@ static void keyboard_run(struct text_console *console)
         halt_forever();
     }
     if (!memory_boot_service_editor_check(serial_write)) halt_forever();
+    /* All nine editors have independently owned logical storage, but only
+     * workspace 1 is drawn. The other 8 snapshots allocate on first use. */
+    bool nine_prepared=true;
+    for(size_t index=0;index<WORKSPACE_COUNT;++index)
+        if(!boot_workspaces.ready[index] ||
+           !boot_workspaces.editors[index].initialized ||
+           (index>0 && (!boot_workspaces.editors[index].deferred_activation ||
+                        boot_workspaces.snapshot_ready[index])))
+            nine_prepared=false;
+    if(!nine_prepared) {
+        (void)serial_write("SPIFFOS_WORKSPACES_PREPARE_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_WORKSPACES_READY_9\r\n");
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
     bool first = true;
     bool indicator_timed = false;
@@ -910,7 +924,21 @@ static void keyboard_run(struct text_console *console)
                     indicator_timed = false;
                 }
                 if (event.type == KEYBOARD_EVENT_SYSTEM) {
-                    (void)serial_write(workspace_manager_system(&boot_workspaces) ?
+                    /* Take an immutable diagnostic snapshot in the normal
+                     * keyboard polling loop, never from an IRQ. The system
+                     * screen is strictly read-only and cannot alter queues. */
+                    struct workspace_system_diagnostics diagnostics={0};
+                    diagnostics.clock_available=kernel_timer_boot_now_ms(
+                        &diagnostics.uptime_ms);
+                    diagnostics.scheduler_available=
+                        kernel_scheduler_clock_boot_read_ticks(
+                            &diagnostics.scheduler_ticks);
+#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+                    diagnostics.diagnostic_preemption_build=true;
+#endif
+                    (void)serial_write(
+                        workspace_manager_system_with_diagnostics(
+                            &boot_workspaces,&diagnostics) ?
                         "EVENT:SYSTEM_OK\r\n" : "EVENT:SYSTEM_UNAVAILABLE\r\n");
                     continue;
                 }
