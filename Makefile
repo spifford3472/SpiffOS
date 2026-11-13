@@ -75,6 +75,13 @@ build/m10-d2-probe-run.o: src/kernel/m10-d2-probe-run.S Makefile
 test-m10-d2-guest:
 	python3 scripts/test-m10-d2-guest.py
 
+# Owner evening gate: one read-only, isolated end-to-end regression suite.
+# Existing tests build throwaway QEMU images with -net none and temporary
+# OVMF variables. This never installs or changes the Forge owner ISO.
+.PHONY: test-m10-d2-acceptance
+test-m10-d2-acceptance: test-m10-d1-priority test-m10-d2-guest test-memory test-keyboard test-irq0 test-idt-fault test-double-fault test-m10-b-host test-m10-b-guest test-m10-c-guest test-apic-readonly-all test-mmio
+	@echo SPIFFOS_M10_D2_ACCEPTANCE_OK
+
 build/apic-readonly.o: src/kernel/apic-readonly.c src/kernel/apic-readonly.h src/kernel/acpi-madt.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/apic-readonly.c -o $@
