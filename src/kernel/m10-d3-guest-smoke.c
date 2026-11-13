@@ -358,17 +358,30 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         d3_irq_restore(entry_flags);
         return false;
     }
-    void *a=NULL,*b=NULL;
-    bool prepared_a=memory_boot_m10_task_stack_prepare(0,&a);
-    bool prepared_b=prepared_a && memory_boot_m10_task_stack_prepare(1,&b);
-    if(prepared_a) d3_stack[0]=(uint8_t *)a;
-    if(prepared_b) d3_stack[1]=(uint8_t *)b;
-    if(!prepared_b) {
-        if(prepared_a) (void)memory_boot_m10_task_stack_release(0);
-        d3_failure="ALLOCATE_STACKS";
+    /* Prepare all owned 4-page stacks with IF=0. If any allocation
+     * fails, release ONLY successfully acquired owners in reverse order,
+     * before publishing the IRQ-enabled task set. This retains the old
+     * two-stack behavior for D3 and permits four stacks only in D4 tests. */
+    void *prepared_stacks[D3_WORKERS]={0};
+    size_t acquired=0;
+    for(;acquired<D3_WORKERS;++acquired) {
+        if(!memory_boot_m10_task_stack_prepare(
+              acquired,&prepared_stacks[acquired])) break;
+    }
+    if(acquired!=D3_WORKERS) {
+        bool rolled_back=true;
+        while(acquired>0) {
+            --acquired;
+            if(!memory_boot_m10_task_stack_release(acquired))
+                rolled_back=false;
+        }
+        d3_failure=rolled_back ? "ALLOCATE_STACKS" :
+                                  "STACK_ROLLBACK_POISONED";
         d3_irq_restore(entry_flags);
         return false;
     }
+    for(size_t worker=0;worker<D3_WORKERS;++worker)
+        d3_stack[worker]=(uint8_t *)prepared_stacks[worker];
     uint16_t code_segment=0,stack_segment=0;
     __asm__ volatile("movw %%cs,%0" : "=r"(code_segment));
     __asm__ volatile("movw %%ss,%0" : "=r"(stack_segment));
@@ -379,6 +392,10 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
             d3_stack[i][byte]=UINT8_C(0xa7);
     bool frames_ready=d3_prepare_frame(0,d3_worker_a) &&
                       d3_prepare_frame(1,d3_worker_b);
+#ifdef SPIFFOS_M10_D4_FOUR_CLASS_TEST
+    frames_ready=frames_ready && d3_prepare_frame(2,d3_worker_c) &&
+                  d3_prepare_frame(3,d3_worker_d);
+#endif
     uint64_t start_ms=0,end_ms=0;
     /* M9 publishes elapsed time only after its FIRST hardware tick.
      * At BOOT_OK, the genuine timer is routed but may not have fired yet.
@@ -432,10 +449,17 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         if(d4_phase_a[phase]==0) valid=false;
 #endif
 #endif
-    bool released_b=memory_boot_m10_task_stack_release(1);
-    bool released_a=memory_boot_m10_task_stack_release(0);
+    /* We are back on the permanent boot stack, with IF=0: no selected
+     * worker frame can be running while these exact owners are retired.
+     * Reverse order makes partial-failure evidence easy to audit. */
+    bool released_all=true;
+    for(size_t index=D3_WORKERS;index>0;) {
+        --index;
+        if(!memory_boot_m10_task_stack_release(index))
+            released_all=false;
+    }
     d3_irq_restore(end_flags);
-    if(!released_a || !released_b) { d3_failure="STACK_RELEASE"; return false; }
+    if(!released_all) { d3_failure="STACK_RELEASE"; return false; }
     if(!valid && d3_failure[0]=='U') d3_failure="PREEMPTION_PROGRESS";
     return valid;
 }
