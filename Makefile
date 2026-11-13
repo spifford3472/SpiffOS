@@ -101,8 +101,12 @@ test-m10-d4-guest:
 test-m10-d4-four-class:
 	python3 scripts/test-m10-d4-four-class.py
 
+.PHONY: test-m10-d4-block-wakeup
+test-m10-d4-block-wakeup:
+	python3 scripts/test-m10-d4-block-wakeup.py
+
 .PHONY: test-m10-d4-acceptance
-test-m10-d4-acceptance: test-m10-d4-guest test-m10-d4-four-class test-m10-d3-acceptance
+test-m10-d4-acceptance: test-m10-d4-guest test-m10-d4-four-class test-m10-d4-block-wakeup test-m10-d3-acceptance
 	@echo SPIFFOS_M10_D4_ACCEPTANCE_OK
 
 .PHONY: test-m10-d3-guest
