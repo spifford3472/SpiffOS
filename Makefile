@@ -12,7 +12,7 @@ KERNEL := build/spiffos-kernel.elf
 # production ISO links none of these objects and retains original behavior.
 M10B_TEST_OBJECTS :=
 ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
-M10B_TEST_OBJECTS := build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
+M10B_TEST_OBJECTS := build/kernel-task.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
 endif
 
 .PHONY: all
@@ -527,3 +527,8 @@ test-m10-b-host: build/m10-b-switch-host-test
 build/m10-b-switch-host-test: tests/x86-task-switch-test.c src/kernel/x86-task-context.c src/kernel/x86-task-context.h src/kernel/x86-task-switch.S Makefile
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -O1 -g -mno-red-zone -fno-omit-frame-pointer -Isrc/kernel tests/x86-task-switch-test.c src/kernel/x86-task-context.c src/kernel/x86-task-switch.S -o $@
+
+# Pure task policy is linked only into the M10-B QEMU smoke candidate.
+build/kernel-task.o: src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task.c -o $@
