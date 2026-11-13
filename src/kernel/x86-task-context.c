@@ -18,7 +18,7 @@ bool x86_task_context_init(struct x86_task_context *context,
 {
     if (context == NULL || stack == NULL || trampoline == NULL ||
         stack_bytes < X86_TASK_STACK_BYTES ||
-        ((uintptr_t)stack & UINTPTR_C(15)) != 0 ||
+        ((uintptr_t)stack & (uintptr_t)15) != 0 ||
         (stack_bytes & 15u) != 0 ||
         (uintptr_t)stack > UINTPTR_MAX - stack_bytes)
         return false;
