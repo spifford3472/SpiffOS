@@ -90,6 +90,53 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     return true;
 }
 
+/* Preload all remaining workspaces during boot instead of on first F-key
+ * activation. A snapshot of Workspace 1 is taken BEFORE any other pixels
+ * change, so restoring that snapshot preserves the logo, boot text and
+ * initialized cursor exactly. Existing full-frame ownership rules apply.
+ * A memory failure stops prewarming, restores Workspace 1 and leaves the
+ * unprepared workspaces on their previously supported lazy-init path.
+ * No tasking, IRQ disabling, or retained-memory owner selection occurs.
+ *
+ * A failed restore would mean the framebuffer cannot be trusted, so the
+ * function reports failure; the boot caller must verify the active view.
+ */
+bool workspace_manager_prewarm(struct workspace_manager *manager)
+{
+    if (manager == NULL || manager->active_id != 1 ||
+        manager->system_visible || manager->indicator_visible ||
+        !manager->ready[0] || !snapshot_supported(manager->framebuffer))
+        return false;
+
+    const struct limine_framebuffer *fb = manager->framebuffer;
+    if (!snapshot_transfer(fb, 0, true)) return false;
+    manager->snapshot_ready[0] = true;
+
+    bool complete = true;
+    for (size_t target = 1; target < WORKSPACE_COUNT; ++target) {
+        if (manager->ready[target] && manager->snapshot_ready[target])
+            continue;
+        /* Both reset and editor initialization paint the physical display.
+         * The full Workspace 1 image is restored once before user input. */
+        if (!boot_workspace_reset(&manager->consoles[target], fb) ||
+            !screen_editor_initialize(&manager->editors[target],
+                &manager->consoles[target], manager->submit,
+                manager->submit_context) ||
+            !snapshot_transfer(fb, target, true)) {
+            manager->ready[target] = false;
+            manager->snapshot_ready[target] = false;
+            complete = false;
+            break;
+        }
+        manager->ready[target] = true;
+        manager->snapshot_ready[target] = true;
+    }
+    /* The cached first view is the only source of original boot pixels.
+     * A failed prewarm cannot be exposed until this view is restored. */
+    if (!snapshot_transfer(fb, 0, false)) return false;
+    return complete;
+}
+
 /* Restore the exact original 128x128 region, including any cursor overlay.
  * This operation is idempotent and requires no allocation or interrupts. */
 void workspace_manager_hide_indicator(struct workspace_manager *manager)
