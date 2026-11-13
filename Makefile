@@ -494,6 +494,16 @@ build/workspace-manager-test: tests/workspace-manager-test.c src/kernel/workspac
 test-workspace-manager-memory: build/workspace-manager-test
 	./build/workspace-manager-test
 
+# M10-D1 isolated priority selection and starvation tests: hosted only.
+# These pure policy objects are not linked into the default QEMU image.
+.PHONY: test-m10-d1-priority
+test-m10-d1-priority: build/m10-d1-priority-test
+	./build/m10-d1-priority-test
+
+build/m10-d1-priority-test: tests/kernel-priority-policy-test.c src/kernel/kernel-priority-policy.c src/kernel/kernel-priority-policy.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/kernel-priority-policy-test.c src/kernel/kernel-priority-policy.c -o $@
+
 # M10-A standalone scheduler state/policy: no IRQ or kernel linkage yet.
 .PHONY: test-kernel-task
 test-kernel-task: build/kernel-task-test
