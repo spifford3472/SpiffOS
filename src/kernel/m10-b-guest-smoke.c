@@ -7,6 +7,7 @@
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #include "x86-task-context.h"
 #include "memory-boot.h"
+#include "kernel-task.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -19,6 +20,8 @@ static uint8_t *task_stacks[TEST_STACKS];
 static volatile uint32_t task_step[TEST_STACKS];
 static volatile bool task_done[TEST_STACKS];
 static volatile bool task_failed;
+static struct kernel_task_table task_table;
+static struct kernel_task_handle task_handles[TEST_STACKS];
 static const char *failure_reason = "UNSET";
 
 /* Borrow a static label for serial logging by the original boot stack. */
@@ -40,6 +43,28 @@ static void restore_irq(uint64_t flags)
         __asm__ volatile ("sti" : : : "memory");
 }
 
+/* Relinquish execution through policy BEFORE switching stacks. The queue
+ * edit is serialized with IF=0 but IRQ0 is restored before the switch. */
+static void guest_task_yield(size_t index)
+{
+    uint64_t flags=save_and_disable_irq();
+    enum kernel_task_result result=kernel_task_yield(
+        &task_table,task_handles[index]);
+    restore_irq(flags);
+    if(result!=KERNEL_TASK_OK) task_failed=true;
+}
+
+/* Exit removes the current descriptor; stack reclamation happens later
+ * on the boot stack after all contexts have transferred out. */
+static void guest_task_exit(size_t index)
+{
+    uint64_t flags=save_and_disable_irq();
+    enum kernel_task_result result=kernel_task_terminate(
+        &task_table,task_handles[index]);
+    restore_irq(flags);
+    if(result!=KERNEL_TASK_OK) task_failed=true;
+}
+
 /* First-run trampoline never returns, and always returns to the scheduler
  * stack after each yield. A completed task cannot be scheduled again. */
 __attribute__((noreturn))
@@ -48,8 +73,10 @@ static void task_one(void)
     for(uint32_t i=0;i<TEST_ROUNDS;++i) {
         if(task_step[0]!=i) task_failed=true;
         task_step[0]=i+1;
+        guest_task_yield(0);
         x86_task_switch(&task_context[0],&boot_context);
     }
+    guest_task_exit(0);
     task_done[0]=true;
     x86_task_switch(&task_context[0],&boot_context);
     for(;;) __asm__ volatile("cli; hlt" : : : "memory");
@@ -62,8 +89,10 @@ static void task_two(void)
     for(uint32_t i=0;i<TEST_ROUNDS;++i) {
         if(task_step[1]!=i) task_failed=true;
         task_step[1]=i+1;
+        guest_task_yield(1);
         x86_task_switch(&task_context[1],&boot_context);
     }
+    guest_task_exit(1);
     task_done[1]=true;
     x86_task_switch(&task_context[1],&boot_context);
     for(;;) __asm__ volatile("cli; hlt" : : : "memory");
@@ -97,6 +126,18 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     task_stacks[0]=(uint8_t *)owned0;
     task_stacks[1]=(uint8_t *)owned1;
     bool success=false;
+    flags=save_and_disable_irq();
+    bool policy_ready=kernel_task_init(&task_table);
+    for(size_t i=0;i<TEST_STACKS && policy_ready;++i)
+        policy_ready=kernel_task_create(&task_table,false,
+                         &task_handles[i])==KERNEL_TASK_OK &&
+                     kernel_task_make_runnable(&task_table,
+                         task_handles[i])==KERNEL_TASK_OK;
+    restore_irq(flags);
+    if(!policy_ready) {
+        failure_reason="POLICY_INIT";
+        goto cleanup;
+    }
     for(size_t task=0;task<TEST_STACKS;++task)
         for(size_t byte=0;byte<X86_TASK_STACK_BYTES;++byte)
             task_stacks[task][byte]=UINT8_C(0x5a);
@@ -109,17 +150,34 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     }
     uint64_t first_tick=0,last_tick=0;
     bool clock_available=read_clock_ms(&first_tick);
-    for(uint32_t round=0;round<TEST_ROUNDS;++round) {
-        x86_task_switch(&boot_context,&task_context[0]);
-        x86_task_switch(&boot_context,&task_context[1]);
-        if(task_failed || task_step[0]!=round+1 ||
-           task_step[1]!=round+1) {
-            failure_reason="PROGRESS";
+    /* The dispatcher, not a fixed test ordering, selects all 1026
+     * context transfers. FIFO fairness should naturally alternate slots. */
+    for(uint32_t turn=0;turn<TEST_ROUNDS*TEST_STACKS+TEST_STACKS;++turn) {
+        struct kernel_task_handle selected={0};
+        flags=save_and_disable_irq();
+        enum kernel_task_result chosen=kernel_task_dispatch(
+            &task_table,&selected);
+        restore_irq(flags);
+        if(chosen!=KERNEL_TASK_OK || selected.slot>=TEST_STACKS) {
+            failure_reason="DISPATCH";
+            goto cleanup;
+        }
+        x86_task_switch(&boot_context,&task_context[selected.slot]);
+        if(task_failed || !kernel_task_check(&task_table)) {
+            failure_reason="POLICY_OR_PROGRESS";
+            goto cleanup;
+        }
+        if(turn<TEST_ROUNDS*TEST_STACKS &&
+           (selected.slot!=(turn%TEST_STACKS) ||
+            task_step[selected.slot]!=(turn/TEST_STACKS)+1u)) {
+            failure_reason="ROUND_ROBIN";
             goto cleanup;
         }
     }
-    x86_task_switch(&boot_context,&task_context[0]);
-    x86_task_switch(&boot_context,&task_context[1]);
+    if(task_table.ready_count!=0 || task_table.current_slot!=SIZE_MAX) {
+        failure_reason="NONEMPTY_AT_EXIT";
+        goto cleanup;
+    }
     if(!task_done[0] || !task_done[1] ||
        (clock_available &&
         (!read_clock_ms(&last_tick) || last_tick<first_tick))) {
