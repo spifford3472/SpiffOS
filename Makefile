@@ -15,6 +15,12 @@ ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
 M10B_TEST_OBJECTS := build/kernel-task.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
 endif
 
+# D2 is a separate interrupt-frame diagnostic, never in the released ISO.
+M10D2_TEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D2_IRQ_FRAME_TEST,$(BOOT_TEST_FLAGS)),)
+M10D2_TEST_OBJECTS := build/m10-d2-irq-frame.o build/m10-d2-probe-run.o
+endif
+
 .PHONY: all
 all: $(KERNEL)
 
@@ -55,7 +61,19 @@ build/apic-irq0-test: tests/apic-irq0-test.c src/kernel/apic-irq0.c src/kernel/a
 
 build/x86-irq0.o: src/kernel/x86-irq0.S Makefile
 	mkdir -p build
-	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone -c src/kernel/x86-irq0.S -o $@
+	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone $(BOOT_TEST_FLAGS) -c src/kernel/x86-irq0.S -o $@
+
+build/m10-d2-irq-frame.o: src/kernel/m10-d2-irq-frame.c src/kernel/m10-d2-irq-frame.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d2-irq-frame.c -o $@
+
+build/m10-d2-probe-run.o: src/kernel/m10-d2-probe-run.S Makefile
+	mkdir -p build
+	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone -c src/kernel/m10-d2-probe-run.S -o $@
+
+.PHONY: test-m10-d2-guest
+test-m10-d2-guest:
+	python3 scripts/test-m10-d2-guest.py
 
 build/apic-readonly.o: src/kernel/apic-readonly.c src/kernel/apic-readonly.h src/kernel/acpi-madt.h Makefile
 	mkdir -p build
@@ -233,8 +251,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
