@@ -605,3 +605,23 @@ source checkout. The latter runs D1/D2, memory/keyboard/IRQ0,
 #UD/#DF, M10-B/C and APIC/MMIO regression gates. Do not run the
 test with the installed Forge owner ISO path; all test boot media
 are disposable and use isolated QEMU firmware variables.
+
+
+## M10-D3.1: prepared workspaces and read-only F10 monitor
+
+The nine diagnostic workspace identities are prepared at boot; only
+workspace 1 is painted and its editor is initially active. The eight
+inactive `consoles[]` structures borrow the framebuffer descriptor but
+**do not draw** until the first workspace selection. The separate
+`prepared[]` and `ready[]` flags prevent a prepared identity from being
+mistaken for an initialized, input-capable editor. No offscreen
+framebuffer snapshot is allocated at boot; a real F2–F9 switch still
+allocates bounded pages through the existing retained memory service.
+
+F10 samples the M10-C monotonic tick count outside IRQ context and
+shows actual prepared/editor/snapshot counts. Before the first real
+tick the source may be unavailable, which is displayed explicitly
+instead of inventing an uptime of zero. Task CPU percentage is also
+UNAVAILABLE until D4 provides verified scheduler accounting. This
+monitor is read-only and restores the previous workspace screen on
+F1–F9. See `docs/decisions/ADR-m10-d31-workspaces-debug-hub.md`.
