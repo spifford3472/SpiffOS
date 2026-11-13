@@ -76,6 +76,21 @@ int main(void)
     struct workspace_manager *manager = calloc(1, sizeof *manager);
     assert(manager != NULL);
     assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    /* D3.1 prepares all nine logical identities at boot without painting
+     * inactive editors or allocating their full framebuffer snapshots. */
+    for (size_t i=0; i<WORKSPACE_COUNT; ++i) {
+        assert(manager->prepared[i]);
+        assert(manager->ready[i] == (i == 0));
+        assert(!manager->snapshot_ready[i]);
+        assert(test_snapshot_memory[i] == NULL);
+    }
+    /* F10 must display actual prepared/editor counts, preserve pixels on
+     * return and leave the foreground editor ownership unchanged. */
+    uint64_t diagnostics_before=checksum(pixels,WIDTH*HEIGHT);
+    assert(workspace_manager_system_diagnostics(manager,true,12345));
+    assert(manager->system_visible);
+    assert(workspace_manager_switch(manager,1));
+    assert(checksum(pixels,WIDTH*HEIGHT)==diagnostics_before);
     /* Verify F12 paints the center and restores every pixel without touching
      * the editor, and F10 is read-only and preserves workspace state. */
     uint64_t indicator_before = checksum(pixels, WIDTH * HEIGHT);
