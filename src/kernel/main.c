@@ -1155,6 +1155,17 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
+#ifdef SPIFFOS_M10_B_SWITCH_TEST
+    /* Test-only: prove two independent kernel stacks can cooperatively
+     * resume while PIT0 interrupts continue. Never switch inside IRQ0.
+     * No physical stack ownership is claimed at this checkpoint. */
+    extern bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *));
+    if (!m10_b_guest_smoke(kernel_timer_boot_now_ms)) {
+        (void)serial_write("SPIFFOS_M10_B_SWITCH_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_B_SWITCH_OK\r\n");
+#endif
 #ifndef SPIFFOS_SCROLL_TEST
     if (console.initialized) {
         keyboard_run(&console);
