@@ -605,3 +605,41 @@ source checkout. The latter runs D1/D2, memory/keyboard/IRQ0,
 #UD/#DF, M10-B/C and APIC/MMIO regression gates. Do not run the
 test with the installed Forge owner ISO path; all test boot media
 are disposable and use isolated QEMU firmware variables.
+
+
+## M10-D3.1: boot-prepared editor models and F10 diagnostic snapshot
+
+The M7 workspace manager formerly initialized only workspace 1 at boot.
+First visits to workspaces 2–9 invoked `boot_workspace_reset` and
+`screen_editor_initialize`, both of which modify the active framebuffer.
+M10-D3.1 prepares **nine separate logical editor models** at boot instead,
+with *no* pixel or framebuffer snapshot allocation for inactive pages.
+The model's embedded line-storage pointers are initialized **in their
+final owner instance**; copying a live editor struct would be unsafe.
+
+`screen_editor_prepare_offscreen` initializes the logical line, cursor
+metadata and callback while setting `deferred_activation=true` and
+`console->initialized=false`. The latter is an intentional drawing
+guard: even if someone mistakenly calls the activation helper early,
+it cannot draw over the current workspace. On first F2–F9 visit,
+`boot_workspace_reset` initializes the destination viewport and paints
+its logo; `screen_editor_activate_prepared` advances the pending
+newline, positions the cursor and paints it once. Subsequent switches
+restore the frame snapshot captured when that workspace was last left.
+Snapshots remain page-allocated lazily. The foreground workspace 1
+retains its original seeded text and image.
+
+F10 is a read-only **snapshot**: the keyboard loop gathers elapsed
+milliseconds and M10-C scheduler ticks through their existing checked
+read-only interfaces, and the workspace manager renders actual
+ready/snapshot counters, clock availability and a clear distinction
+between a diagnostic D3 kernel and the normal nonpreemptive editor.
+The system view never modifies task priority, memory owners, interrupts
+or hardware state. Existing F1–F9 and one-second F12 behavior remains.
+
+Regression: `make HOST_CC=gcc test-workspace-manager-memory` exercises
+nine prepared models, deferred-activation rejection, snapshot allocation
+laziness and F10 restoration. `make -B iso` and QEMU at
+128/256/512MiB should emit `SPIFFOS_WORKSPACES_READY_9` before
+`SPIFFOS_KEYBOARD_READY`. The full M10-D3 acceptance suite must continue
+to pass. This is a diagnostic foundation, not D4 task scheduling.
