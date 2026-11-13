@@ -50,6 +50,9 @@ struct kernel_priority_candidate {
  * greater wait age and then lower slot. Every continually ready candidate
  * eventually outranks newly requeued CPU hogs. No IRQ-context calls allowed;
  * caller owns serialization and validates task membership separately.
+ * The D4 isolated single-CPU IRQ-exit diagnostic may call this pure bounded
+ * routine with IF=0, after the normal IRQ handler has sent its one EOI.
+ * General-purpose IRQ handlers must NOT invoke it or change task queues.
  */
 enum kernel_priority_result kernel_priority_choose(
     const struct kernel_priority_candidate *candidates, size_t count,
