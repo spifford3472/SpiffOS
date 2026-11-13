@@ -425,3 +425,7 @@ Owner authorized implementation, validation-gated merge and safe QEMU-only deplo
 ## M10-D architecture and D3 release authorization — 2026-11-13
 
 The owner explicitly approved the M10-D staged design and isolated implementation of D1–D5. After separately accepting the exact-source D2 evening suite, the owner specifically authorized proceeding with **M10-D3, merging and deploying when ready**. This supersedes the older no-merge gate in the M10-D proposed ADR **for a fully tested M10-D3 QEMU-only release only**. The default kernel must keep preemption disabled outside the explicit test build; the physical disk, USB, network and general-purpose preemption remain outside scope. Require all three QEMU memory sizes, corrupt-frame/IRQ-disabled negatives, full M9/M10 regression tests, precise source/ISO checksums, preserved owner rollback and documented change history before considering release complete. D4 prioritization and D5 production-preemption acceptance remain separate milestones.
+
+## M10-D3.1 workspace initialization and diagnostics approval — 2026-11-13
+
+After accepting D3, the owner approved boot-time logical preparation of all nine workspaces and read-only debugging tools before proceeding to D4. Preserve lazy framebuffer snapshots and the working keyboard/editor and F1–F12 features. See [ADR-m10-d31-workspaces-debug-hub.md](ADR-m10-d31-workspaces-debug-hub.md). This is implementation approval, not automatic release approval.
