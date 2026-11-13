@@ -910,7 +910,21 @@ static void keyboard_run(struct text_console *console)
                     indicator_timed = false;
                 }
                 if (event.type == KEYBOARD_EVENT_SYSTEM) {
-                    (void)serial_write(workspace_manager_system(&boot_workspaces) ?
+                    /* Take an immutable diagnostic snapshot in the normal
+                     * keyboard polling loop, never from an IRQ. The system
+                     * screen is strictly read-only and cannot alter queues. */
+                    struct workspace_system_diagnostics diagnostics={0};
+                    diagnostics.clock_available=kernel_timer_boot_now_ms(
+                        &diagnostics.uptime_ms);
+                    diagnostics.scheduler_available=
+                        kernel_scheduler_clock_boot_read_ticks(
+                            &diagnostics.scheduler_ticks);
+#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+                    diagnostics.diagnostic_preemption_build=true;
+#endif
+                    (void)serial_write(
+                        workspace_manager_system_with_diagnostics(
+                            &boot_workspaces,&diagnostics) ?
                         "EVENT:SYSTEM_OK\r\n" : "EVENT:SYSTEM_UNAVAILABLE\r\n");
                     continue;
                 }
