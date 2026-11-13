@@ -86,6 +86,13 @@ build/m10-d3-guest-smoke.o: src/kernel/m10-d3-guest-smoke.c src/kernel/m10-d2-ir
 test-m10-d3-guest:
 	python3 scripts/test-m10-d3-guest.py
 
+# Full isolated D3 release gate: D3 real handoffs, D2 trap frames,
+# D1 fairness and every M9/M10 regression from the previous acceptance
+# suite. No physical disk, network or owner ISO side effects.
+.PHONY: test-m10-d3-acceptance
+test-m10-d3-acceptance: test-m10-d3-guest test-m10-d2-acceptance
+	@echo SPIFFOS_M10_D3_ACCEPTANCE_OK
+
 .PHONY: test-m10-d2-guest
 test-m10-d2-guest:
 	python3 scripts/test-m10-d2-guest.py
