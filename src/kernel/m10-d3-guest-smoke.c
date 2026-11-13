@@ -64,6 +64,16 @@ static volatile uint32_t d4_supervisor_reserved;
 static volatile uint32_t d4_phase_a[D4_PHASE_COUNT];
 #endif
 static volatile uint32_t d4_worst_wait;
+#ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
+/* Deterministic synthetic READY mask. All saved stacks stay owned;
+ * block/unblock never reclaims backing or calls a general task syscall. */
+enum { D4_A_BLOCK_START=100, D4_A_WAKE=140,
+       D4_C_BLOCK_START=210, D4_C_WAKE=250,
+       D4_WAKE_DEADLINE_TICKS=64 };
+static bool d4_saw_block_a,d4_saw_block_c;
+static bool d4_resumed_a,d4_resumed_c;
+static uint64_t d4_blocked_iterations_a,d4_blocked_iterations_c;
+#endif
 #endif
 
 /* Owned static string is valid indefinitely, including after task cleanup.
@@ -203,6 +213,25 @@ static bool d3_valid_frame(unsigned current, const uint64_t *frame)
            (frame[M10_D2_RFLAGS]&UINT64_C(0x202))==UINT64_C(0x202);
 }
 
+#ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
+/* Called only under IF=0 on the boot CPU. A and C are prevented from
+ * entering the READY candidate snapshot while in their test block window.
+ * The NEVER_WAKE negative holds A blocked after tick 100 indefinitely. */
+static bool d4_worker_is_ready(unsigned worker,uint32_t tick)
+{
+    if(worker==0 && tick>=D4_A_BLOCK_START) {
+#ifdef SPIFFOS_M10_D4_NEVER_WAKE_TEST
+        return false;
+#else
+        if(tick<D4_A_WAKE) return false;
+#endif
+    }
+    if(worker==2 && tick>=D4_C_BLOCK_START && tick<D4_C_WAKE)
+        return false;
+    return true;
+}
+#endif
+
 #ifdef SPIFFOS_M10_D4_PRIORITY_TEST
 /* Choose among an always-runnable supervisor and two CPU hogs. Map the
  * existing D3 boot to D1's reserved policy slot 15, worker A to 0 and
@@ -212,6 +241,7 @@ static bool d4_choose_next(unsigned *next)
 {
     if(next==NULL || d3_ticks==0) return false;
     struct kernel_priority_candidate candidates[D3_CONTEXTS]={0};
+    size_t candidate_count=1;
     candidates[D3_BOOT]=(struct kernel_priority_candidate){
         .slot=KERNEL_PRIORITY_SUPERVISOR_SLOT,
         .priority=KERNEL_PRIORITY_NORMAL,
@@ -225,6 +255,28 @@ static bool d4_choose_next(unsigned *next)
     if(phase>=D4_PHASE_COUNT) phase=D4_PHASE_COUNT-1u;
 #endif
     for(unsigned worker=0;worker<D3_WORKERS;++worker) {
+#ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
+        if(!d4_worker_is_ready(worker,d3_ticks)) {
+            /* First blocked tick samples the exact progress value. Any
+             * change on later blocked ticks proves a mis-dispatch. */
+            if(worker==0) {
+                if(!d4_saw_block_a) {
+                    d4_saw_block_a=true;
+                    d4_blocked_iterations_a=d3_iterations[0];
+                } else if(d3_iterations[0]!=d4_blocked_iterations_a)
+                    return false;
+            }
+            if(worker==2) {
+                if(!d4_saw_block_c) {
+                    d4_saw_block_c=true;
+                    d4_blocked_iterations_c=d3_iterations[2];
+                } else if(d3_iterations[2]!=d4_blocked_iterations_c)
+                    return false;
+            }
+            d4_age[worker+1u]=0;
+            continue;
+        }
+#endif
 #ifdef SPIFFOS_M10_D4_FOUR_CLASS_TEST
         /* Second gate: four *simultaneous* READY CPU hogs each occupy a
          * different priority band, not just one worker changing class. */
@@ -235,7 +287,7 @@ static bool d4_choose_next(unsigned *next)
             (enum kernel_priority_class)phase :
             KERNEL_PRIORITY_TIME_SENSITIVE;
 #endif
-        candidates[worker+1u]=(struct kernel_priority_candidate){
+        candidates[candidate_count++]=(struct kernel_priority_candidate){
             .slot=worker,
             .priority=priority,
             .waiting_dispatches=d4_age[worker+1u],
@@ -248,7 +300,7 @@ static bool d4_choose_next(unsigned *next)
     candidates[1].priority=(enum kernel_priority_class)4;
 #endif
     uint32_t choice=UINT32_MAX;
-    if(kernel_priority_choose(candidates,D3_CONTEXTS,d3_ticks-1u,
+    if(kernel_priority_choose(candidates,candidate_count,d3_ticks-1u,
                               &choice)!=KERNEL_PRIORITY_OK)
         return false;
     if(choice==KERNEL_PRIORITY_SUPERVISOR_SLOT) *next=D3_BOOT;
@@ -262,10 +314,31 @@ static bool d4_choose_next(unsigned *next)
 #ifndef SPIFFOS_M10_D4_FOUR_CLASS_TEST
     if(*next==D3_WORKER_A) ++d4_phase_a[phase];
 #endif
+#ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
+    /* Confirm *actual* resumed execution is scheduled within one
+     * bounded aging window after each worker becomes READY again. */
+    if(*next==D3_WORKER_A && d3_ticks>=D4_A_WAKE)
+        d4_resumed_a=true;
+    if(*next==D3_WORKER_C && d3_ticks>=D4_C_WAKE)
+        d4_resumed_c=true;
+    if((d3_ticks>=D4_A_WAKE+D4_WAKE_DEADLINE_TICKS &&
+        !d4_resumed_a) ||
+       (d3_ticks>=D4_C_WAKE+D4_WAKE_DEADLINE_TICKS &&
+        !d4_resumed_c))
+        return false;
+#endif
     /* The pure D1 selector has no mutations: explicitly update all
      * three wait ages under the same masked IRQ-exit critical section.
      * Age saturation prevents wraparound and false starvation relief. */
     for(unsigned index=0;index<D3_CONTEXTS;++index) {
+#ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
+        /* Blocked tasks have no age credits until they become READY. */
+        if(index!=D3_BOOT &&
+           !d4_worker_is_ready(index-1u,d3_ticks)) {
+            d4_age[index]=0;
+            continue;
+        }
+#endif
         if(index==*next) d4_age[index]=0;
         else if(d4_age[index]!=UINT64_MAX) ++d4_age[index];
         if(d4_age[index]>d4_worst_wait)
@@ -444,6 +517,10 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
     for(size_t worker=1;worker<D3_CONTEXTS;++worker)
         if(d3_slices[worker]<D3_REQUIRED_SLICES ||
            d3_iterations[worker-1]==0) valid=false;
+#ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
+    valid=valid && d4_saw_block_a && d4_saw_block_c &&
+                   d4_resumed_a && d4_resumed_c;
+#endif
 #else
     for(size_t phase=0;phase<D4_PHASE_COUNT;++phase)
         if(d4_phase_a[phase]==0) valid=false;
