@@ -99,3 +99,25 @@ enter with damaged state.
 
 This is separate from blocked/wakeup and recovery-under-failure
 acceptance, which remain open after the simultaneous-class gate.
+
+
+## D4 third gate: static blocked/wakeup candidate transitions
+
+The next isolated diagnostic validates a **synthetic READY-set transition**
+without introducing general-purpose task block/wakeup syscalls. While
+four distinct-priority, non-yielding CPU hogs compete, the boot CPU's
+single IRQ-exit callback temporarily excludes worker A from policy
+dispatches during ticks [100,140), and worker C during [210,250).
+Their saved full-frame stacks remain owned and mapped, but cannot be
+selected while blocked. The callback checks that their volatile
+progress counters remain unchanged after initial suspension; when
+re-enabled, their wait ages restart from zero and they must be
+scheduled within 64 real PIT0 ticks. All other ready workers and the
+reserved boot supervisor continue to receive service. A separate
+negative image holds worker A blocked permanently and must **reject**
+the test instead of advertising full scheduling success.
+
+The scope is a read-only, deterministic READY-mask proof in a
+test-only interrupt scheduler. It is NOT a block/wakeup kernel ABI,
+general scheduling of physical drivers or preemption of editor
+critical sections. Those remain open for the next gate.
