@@ -47,7 +47,7 @@ def main():
             run = subprocess.run(
                 [sys.executable, "scripts/qemu.py", "test",
                  "--memory-mib", str(mib),
-                 "--wait-marker", "SPIFFOS_M10_D2_FRAME_OK",
+                 "--wait-marker", "SPIFFOS_KEYBOARD_READY",
                  "--timeout", "18"],
                 cwd=source, capture_output=True, timeout=23)
             serial = (source / "build/serial.log").read_bytes()
@@ -56,7 +56,7 @@ def main():
                     f"M10-D2 QEMU {mib} MiB failure: " +
                     (run.stdout + run.stderr).decode(errors="replace")[-2200:] +
                     "\nserial tail: " + repr(serial[-1400:]))
-            positions = [serial.find(marker) for marker in MARKERS[:3]]
+            positions = [serial.find(marker) for marker in MARKERS]
             if (any(position < 0 for position in positions) or
                     positions != sorted(positions) or
                     b"SPIFFOS_M10_D2_FRAME_ERROR" in serial or
