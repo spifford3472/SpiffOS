@@ -1,13 +1,14 @@
-/* Purpose: M10-D3 QEMU-only real PIT0 interrupt-driven ring-0 handoff.
- * Responsibilities: prepare two independently owned 16 KiB stacks, build
- * first-run long-mode IRETQ frames, and select completed IRQ exit frames.
- * Dependencies: M10-B mapped frame-backed stack service, M9 IRQ0, M10-D2
- * validated 20-qword saved frame, kernel timer service.
- * Invariants: single boot CPU, no floating point/SIMD, no page/heap calls
- * in IRQ; a stack is freed only from the original surviving boot stack.
- * No scheduler calls from a general-purpose IRQ handler. No production
- * preemption: linked only under SPIFFOS_M10_D3_PREEMPT_TEST.
- * Reference: docs/decisions/ADR-m10-d-preemption-proposal.md,
+/* Purpose: QEMU-only M10-D3 IRQ preemption and M10-D4 priority stress.
+ * Responsibilities: prepare two verified 16KiB worker stacks, expanded
+ * ONLY in D4 simultaneous-class diagnostic builds to four; construct
+ * long-mode IRETQ frames and select a validated next task after IRQ0 EOI.
+ * Dependencies: M10-B mapped stack provider, M9 IRQ0, M10-D2 trap-frame
+ * layout, D1 hosted priority selection in explicitly opted-in D4 tests.
+ * Invariants: single boot CPU, no floating point/SIMD, no allocator/IO
+ * or general task-table mutation in IRQ exit; release worker stacks
+ * solely from the surviving boot stack with IF=0. No preemptive editor.
+ * Reference: ADR-m10-d-preemption-proposal.md,
+ * ADR-m10-d4-priority-supervisor.md and
  * docs/operations/m10-d3-irq-handoff-20261113.md.
  */
 #include "memory-boot.h"
@@ -334,7 +335,7 @@ static bool d4_choose_next(unsigned *next)
         return false;
 #endif
     /* The pure D1 selector has no mutations: explicitly update all
-     * three wait ages under the same masked IRQ-exit critical section.
+     * up to five READY wait ages under the masked IRQ-exit critical section.
      * Age saturation prevents wraparound and false starvation relief. */
     for(unsigned index=0;index<D3_CONTEXTS;++index) {
 #ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
