@@ -293,3 +293,17 @@ See `ADR-m10-d-preemption-proposal.md` and
 ## M10-D3.1 / M10-D4 follow-up — 2026-11-13
 
 D3.1 implementation and validation are IN PROGRESS: prepare nine logical editors without offscreen framebuffer writes, keep snapshots lazy, and provide read-only F10 diagnostics, per the approved [D3.1 ADR](ADR-m10-d31-workspace-diagnostics.md). M10-D4 actual four-priority and reserved supervisor CPU service remains OPEN; D3 only proved two synthetic workers on test-only interrupt handoff. D5 general preemption/driver concurrency remains explicitly OPEN.
+
+
+## M10-D4 first real-policy integration — 2026-11-13
+
+The owner requested continuing into M10-D4 after D3.1. A separate
+reviewable branch implements **test-only** D1 priority selection in D3's
+real IRQ-exit scheduler; 2 CPU-bound workers and the reserved boot
+supervisor exercise four priority classes in successive 80-IRQ epochs,
+wait-age anti-starvation and every-fourth supervisor dispatch.
+This *does not* complete D4's simultaneous four-class workloads,
+blocked/wakeup transitions, resource-contention supervisor budget
+or general-purpose driver preemption. Those remain OPEN until further
+dedicated tests and a release decision. See
+`ADR-m10-d4-priority-supervisor.md`.
