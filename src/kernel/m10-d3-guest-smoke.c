@@ -41,6 +41,9 @@ static uint64_t d4_wait[D3_CONTEXTS];
 static uint64_t d4_dispatch_count;
 static uint32_t d4_supervisor_awards;
 static uint32_t d4_background_max_wait;
+static uint32_t d4_blocked_dispatches;
+static uint32_t d4_wakeup_events;
+static bool d4_background_was_ready=true;
 #endif
 
 /* Owned static string is valid indefinitely, including after task cleanup.
@@ -190,7 +193,19 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
     /* A bounded three-candidate snapshot feeds the D1 pure, hosted-tested
      * selector after the one IRQ0 EOI. This is test-only: the normal M9
      * interrupt path and editor never invoke a scheduler here. */
-    const struct kernel_priority_candidate candidates[D3_CONTEXTS]={
+    /* Synthetic readiness window: the Background worker is temporarily
+     * blocked for the first 8 dispatches of each 32-dispatch cycle. The
+     * worker's saved frame remains retained; waking restores eligibility
+     * without writing its execution stack. This is NOT a real block API. */
+    bool background_ready=(d4_dispatch_count%32u)>=8u;
+    if(!background_ready) {
+        ++d4_blocked_dispatches;
+        d4_wait[D3_WORKER_B]=0;
+    } else if(!d4_background_was_ready) {
+        ++d4_wakeup_events;
+    }
+    d4_background_was_ready=background_ready;
+    struct kernel_priority_candidate candidates[D3_CONTEXTS]={
         {.slot=KERNEL_PRIORITY_SUPERVISOR_SLOT,
          .priority=KERNEL_PRIORITY_NORMAL,
          .waiting_dispatches=d4_wait[D3_BOOT],.supervisor=true},
@@ -199,9 +214,10 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
         {.slot=1,.priority=KERNEL_PRIORITY_BACKGROUND,
          .waiting_dispatches=d4_wait[D3_WORKER_B]}
     };
+    size_t candidate_count=background_ready ? D3_CONTEXTS : D3_CONTEXTS-1;
     uint32_t selected=UINT32_MAX;
     enum kernel_priority_result outcome=kernel_priority_choose(
-        candidates,D3_CONTEXTS,d4_dispatch_count,&selected);
+        candidates,candidate_count,d4_dispatch_count,&selected);
     if(outcome!=KERNEL_PRIORITY_OK ||
        (selected!=0 && selected!=1 &&
         selected!=KERNEL_PRIORITY_SUPERVISOR_SLOT)) {
@@ -220,6 +236,7 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
     ++d4_dispatch_count;
     for(size_t i=0;i<D3_CONTEXTS;++i) {
         if(i==(size_t)next) d4_wait[i]=0;
+        else if(i==D3_WORKER_B && !background_ready) d4_wait[i]=0;
         else if(d4_wait[i]!=UINT64_MAX) ++d4_wait[i];
     }
     if(d4_wait[D3_WORKER_B]>d4_background_max_wait)
@@ -312,7 +329,8 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
      * This is dispatch-count evidence, not general realtime latency. */
     valid=valid && d4_supervisor_awards>=D3_REQUIRED_SLICES &&
         d4_dispatch_count>=D3_REQUIRED_SLICES*2u &&
-        d4_background_max_wait<80u;
+        d4_background_max_wait<80u &&
+        d4_blocked_dispatches>=8u && d4_wakeup_events>=1u;
 #endif
 #ifdef SPIFFOS_M10_D3_BAD_CANARY_TEST
     /* Negative guest only: corrupt a guard AFTER the IRQ selector is
