@@ -18,6 +18,7 @@ volatile uint32_t m10_d2_probe_seen = 0;
 uint64_t m10_d2_expected_rsp = 0;
 uint64_t m10_d2_expected_cs = 0;
 uint64_t m10_d2_expected_ss = 0;
+uint64_t m10_d2_expected_flags = 0;
 
 extern const char m10_d2_probe_spin_begin[];
 extern const char m10_d2_probe_spin_end[];
@@ -68,6 +69,9 @@ void m10_d2_probe_on_irq(const uint64_t *frame)
             frame[M10_D2_CS] == m10_d2_expected_cs &&
             frame[M10_D2_SS] == m10_d2_expected_ss &&
             frame[M10_D2_RSP] == m10_d2_expected_rsp &&
+            /* Real CPU-saved FLAGS must equal the assembly pre-snapshot,
+             * including arithmetic flags, IF and the mandatory bit. */
+            frame[M10_D2_RFLAGS] == m10_d2_expected_flags &&
             (frame[M10_D2_RFLAGS] & UINT64_C(0x202)) ==
                 UINT64_C(0x202);
     }
