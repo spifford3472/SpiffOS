@@ -904,6 +904,8 @@ enum { M10_B_TEST_STACKS=2, M10_B_STACK_PAGES=4 };
 static uint64_t m10_b_stack_physical[M10_B_TEST_STACKS][M10_B_STACK_PAGES];
 static bool m10_b_stack_active[M10_B_TEST_STACKS];
 static bool m10_b_stack_poisoned;
+/* Only the isolated guest test may force a deterministic partial allocation. */
+static size_t m10_b_forced_failure_index=SIZE_MAX;
 
 /* Release a partially acquired stack in reverse order. An unexpected owner
  * mismatch is fatal for this test allocator; never pretend backing is free. */
@@ -932,6 +934,9 @@ bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack)
     uint64_t first_physical=0, first_virtual=0;
     size_t acquired=0;
     for(;acquired<M10_B_STACK_PAGES;++acquired) {
+        /* Inject a refusal BEFORE the next frame is claimed, so rollback
+         * must release precisely the earlier frames and preserve outputs. */
+        if(acquired==m10_b_forced_failure_index) break;
         uint64_t physical=UINT64_MAX,virtual_address=0;
         enum page_access_result status=page_access_allocate_zero(
             &boot_allocator,&retained_policy,FRAME_OWNER_KERNEL,
@@ -977,5 +982,30 @@ bool memory_boot_m10_task_stack_release(size_t index)
     if(!m10_b_stack_rollback(index,M10_B_STACK_PAGES)) return false;
     m10_b_stack_active[index]=false;
     return frame_allocator_check(&boot_allocator);
+}
+
+/* Diagnostic fail-after-two-pages proof. Require complete rollback of frame
+ * ownership, ordinary/reserve counts and caller output before continuing.
+ * Called only with IF=0 from the temporary M10-B guest smoke test. */
+bool memory_boot_m10_task_stack_failure_probe(void)
+{
+    if(!retained_started || m10_b_stack_active[0] ||
+       m10_b_stack_active[1] || m10_b_stack_poisoned ||
+       !frame_allocator_check(&boot_allocator)) return false;
+    uint64_t ordinary_before=boot_allocator.ordinary_free;
+    uint64_t reserved_before=boot_allocator.reserve_free;
+    uint64_t kernel_before=boot_allocator.owned[FRAME_OWNER_KERNEL];
+    void *sentinel=(void *)(uintptr_t)UINT64_C(0x12340);
+    m10_b_forced_failure_index=2;
+    bool unexpectedly_allocated=
+        memory_boot_m10_task_stack_prepare(0,&sentinel);
+    m10_b_forced_failure_index=SIZE_MAX;
+    return !unexpectedly_allocated &&
+           sentinel==(void *)(uintptr_t)UINT64_C(0x12340) &&
+           !m10_b_stack_active[0] && !m10_b_stack_poisoned &&
+           boot_allocator.ordinary_free==ordinary_before &&
+           boot_allocator.reserve_free==reserved_before &&
+           boot_allocator.owned[FRAME_OWNER_KERNEL]==kernel_before &&
+           frame_allocator_check(&boot_allocator);
 }
 #endif

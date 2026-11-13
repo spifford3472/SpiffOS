@@ -524,5 +524,40 @@ Run `make HOST_CC=gcc test-m10-b-host` for the native stack-switch smoke
 test and `make test-m10-b-guest` for isolated 128/256/512 MiB QEMU runs.
 Both passed on 2026-11-12. The guest proof does **not** claim a general
 task-stack manager, hardware guard pages, ring-3 processes, asynchronous
-IRQ-frame switching, or complete manual callee-register sentinel coverage.
-Those remain separate production hardening gates.
+IRQ-frame switching, or fault-injected stack-allocation failure coverage.
+The six callee-saved registers RBX/RBP/R12–R15 are now independently tested
+with six unique assembly sentinels in `tests/x86-task-register-check.S`.
+The hosted probe passed on 2026-11-12. Guard pages and production task
+stack management remain separate hardening gates.
+
+
+## M10-C monotonic scheduler accounting and safe-point request — 2026-11-12
+
+M10-C adds `kernel-scheduler-clock.c`, a small independent IRQ0
+accounting service. The existing M9 clock still owns elapsed time, PIT0
+routing, IRQ vector 0x30 and LAPIC EOI. On each existing hardware tick,
+the new service increments a saturating 64-bit count and, every ten
+ticks, sets an atomic **coalescing Boolean** request. It does not select
+a task, alter any task stack, or execute an IRQ-driven context switch.
+A future cooperative dispatcher can atomically consume the request
+only at a separately proven safe point.
+
+A test-only branch in the existing polled keyboard loop consumes the
+pending bit and prints `SPIFFOS_M10_C_REQUEST_OK` after at least ten
+scheduler ticks. The default build does **not** consume or act on this
+flag; a pending request does not imply a CPU time-slice or privilege.
+No priority or real-time latency guarantee is established by M10-C.
+
+Run `make HOST_CC=gcc test-scheduler-clock` for ASan/UBSan hosted tests
+of interval boundaries, coalescing, invalid operations and saturation.
+Run `make test-m10-c-guest` for disposable QEMU guests at 128, 256 and
+512 MiB. Both passed on 2026-11-12. In the same isolated source checkout,
+M9 memory, keyboard, #UD, #DF and hardware IRQ0 regressions passed; IRQ0
+delivered 100 real ticks in 0.994, 0.994 and 0.995 seconds, respectively.
+The disabled-route negative test continued to leave IF=0 and the clock
+unavailable. The normal kernel ISO built without any M10-B diagnostic
+objects. No owner's installed ISO was changed.
+
+M10-D remains separately subject to architecture review and owner
+acceptance. Never interpret a pending request as permission to perform
+an asynchronous context switch.

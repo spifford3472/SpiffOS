@@ -20,6 +20,7 @@
 #include "x86-idt.h"
 #include "x86-pic.h"
 #include "kernel-timer.h"
+#include "kernel-scheduler-clock.h"
 #include "acpi-discovery.h"
 #include "apic-preflight.h"
 #include "x86-page-walk.h"
@@ -701,7 +702,7 @@ static bool apic_boot_io_write(void *unused,bool local,uint32_t offset,
  * No serial/heap/locks/scheduler/port use, with IF cleared by interrupt gate. */
 void x86_irq0_handler(void)
 {
-    if(!kernel_timer_boot_tick()) {
+    if(!kernel_timer_boot_tick() || !kernel_scheduler_clock_boot_note_tick()) {
         for(;;) __asm__ volatile ("cli; hlt" : : : "memory");
     }
     *(volatile uint32_t *)(uintptr_t)
@@ -827,7 +828,25 @@ static void keyboard_run(struct text_console *console)
      * to ordinary images; no logging occurs inside the ISR. */
     bool tick_100_reported=false,tick_200_reported=false;
 #endif
+#ifdef SPIFFOS_M10_C_REQUEST_TEST
+    bool m10_c_request_seen=false;
+#endif
     for (;;) {
+#ifdef SPIFFOS_M10_C_REQUEST_TEST
+        /* This is a cooperative safe point in the existing keyboard loop,
+         * NEVER an IRQ handler or an asynchronous preemption boundary. */
+        if(!m10_c_request_seen &&
+           kernel_scheduler_clock_boot_take_request()) {
+            uint64_t tick_count=0;
+            if(!kernel_scheduler_clock_boot_read_ticks(&tick_count) ||
+               tick_count<10u) {
+                (void)serial_write("SPIFFOS_M10_C_REQUEST_ERROR\r\n");
+                halt_forever();
+            }
+            (void)serial_write("SPIFFOS_M10_C_REQUEST_OK\r\n");
+            m10_c_request_seen=true;
+        }
+#endif
 #ifdef SPIFFOS_IRQ0_TIMING_TEST
         uint64_t now_ms=0;
         if(kernel_timer_boot_now_ms(&now_ms)) {
@@ -1015,6 +1034,12 @@ void kmain(void)
         halt_forever();
     }
     (void)serial_write("SPIFFOS_TIMER_WAITING\r\n");
+    /* M10-C initializes before any real IRQ. This clock only requests
+     * safe-point scheduling after ten ticks; it never changes CPU context. */
+    if (!kernel_scheduler_clock_boot_init(10u)) {
+        (void)serial_write("SPIFFOS_SCHEDULER_CLOCK_ERROR\r\n");
+        halt_forever();
+    }
 #ifdef SPIFFOS_DOUBLE_FAULT_TEST
     /* Test-only: poison RSP then execute invalid opcode. The failure to
      * push the #UD frame triggers a genuine #DF, using IST1 from the TSS.
