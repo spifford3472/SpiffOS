@@ -29,6 +29,13 @@ struct workspace_manager {
 bool workspace_manager_initialize(struct workspace_manager *manager,
     const struct text_console *boot_console,
     logical_line_submit_fn submit, void *submit_context);
+/* Optional boot-time optimization: prepare the remaining eight editors and
+ * full-screen snapshots before presenting the interactive keyboard. This
+ * may reserve up to ~35MiB at 1280x800. On allocation failure, restores
+ * original Workspace 1 pixels and leaves unprepared targets lazy, preserving
+ * previous behavior. Returns false when not all nine are ready. Caller must
+ * invoke only while Workspace 1 is active before normal user editing. */
+bool workspace_manager_prewarm(struct workspace_manager *manager);
 /* Switch to 1..9, preserving all visible pixels and editor state.
  * On unsupported framebuffer dimensions or bad ID, leaves active view intact. */
 /* Toggle read-only system view, preserving current user pixels and editor. */
