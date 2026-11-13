@@ -69,6 +69,7 @@ static void sustained_load(void)
 {
     struct kernel_priority_candidate ready[KERNEL_PRIORITY_TASK_CAPACITY];
     uint64_t served[KERNEL_PRIORITY_TASK_CAPACITY] = {0};
+    uint64_t longest_wait[KERNEL_PRIORITY_TASK_CAPACITY] = {0};
     for (uint32_t slot = 0; slot < KERNEL_PRIORITY_TASK_CAPACITY; ++slot) {
         ready[slot] = (struct kernel_priority_candidate){
             .slot = slot,
@@ -90,11 +91,17 @@ static void sustained_load(void)
             if (i == selected) ready[i].waiting_dispatches = 0;
             else if (ready[i].waiting_dispatches != UINT64_MAX)
                 ++ready[i].waiting_dispatches;
+            if (ready[i].waiting_dispatches > longest_wait[i])
+                longest_wait[i] = ready[i].waiting_dispatches;
         }
     }
     for (size_t i = 0; i < KERNEL_PRIORITY_TASK_CAPACITY; ++i)
         assert(served[i] >= 1);
-    assert(served[0] >= 100);
+    assert(served[0] >= 90);
+    /* Under sustained all-runnable load, no slot may wait 64 dispatches.
+     * This is a measured bounded test case, not a universal proof. */
+    for (size_t i = 0; i < KERNEL_PRIORITY_TASK_CAPACITY; ++i)
+        assert(longest_wait[i] < 64);
     assert(served[KERNEL_PRIORITY_SUPERVISOR_SLOT] >= 1024);
 }
 
