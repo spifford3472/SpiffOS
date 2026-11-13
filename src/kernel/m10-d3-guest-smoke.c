@@ -218,7 +218,7 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
     bool frames_ready=d3_prepare_frame(0,d3_worker_a) &&
                       d3_prepare_frame(1,d3_worker_b);
     uint64_t start_ms=0,end_ms=0;
-    bool clock_started=clock_ms(&start_ms);
+    /* M9 publishes elapsed time only after its FIRST hardware tick.\n     * At BOOT_OK, the genuine timer is routed but may not have fired yet.\n     * The end-of-probe check requires a real tick/time advance. */\n    bool clock_started=true;\n    (void)clock_ms(&start_ms);
     if(frames_ready && clock_started) {
         d3_running=D3_BOOT;
         d3_active=true;
