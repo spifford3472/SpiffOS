@@ -561,3 +561,47 @@ objects. No owner's installed ISO was changed.
 M10-D remains separately subject to architecture review and owner
 acceptance. Never interpret a pending request as permission to perform
 an asynchronous context switch.
+
+
+## M10-D1/D2: proof before timer-driven task switching — 2026-11-13
+
+The owner approved staged M10-D implementation after the M10-A/B/C
+acceptance; merge and deployment remain separate gates. M10-D1 is
+only a **pure host-tested priority selector**: four bands, accumulated
+wait-age preference, deterministic tie-breaks, and a reserved
+supervisor dispatch opportunity every fourth selection. It does not
+manage the task queues or guarantee a wall-clock CPU budget.
+
+M10-D2 is a **test-only real-interrupt frame check**. To interrupt
+arbitrary C code safely we must preserve more than a normal function
+call: all 15 general-purpose CPU registers, the saved RIP, code
+segment CS, flags (especially IF), the original stack pointer RSP,
+and stack segment SS. The existing M9 assembly already pushes all
+15 registers and returns with `IRETQ`. D2 adds a gated checker that
+reads that saved stack without changing it. It is called only in a
+special disposable QEMU build after the normal tick handler/EOI.
+
+In 64-bit mode, a subtle processor rule matters: **SS:RSP is pushed
+on every interrupt, even without a privilege change**. This differs
+from legacy x86. The handler's aligned RSP is NOT the interrupted
+function's original RSP. Use the hardware-saved RSP at offset 18
+(8-byte slots after the 15 saved GPRs), followed by SS at offset 19.
+See Intel SDM Volume 3A section 7.14.2 and
+`docs/operations/m10-d2-irq-frame-20261113.md` for the full layout.
+
+The probe's assembly routine fills all 15 GPRs with different
+64-bit sentinels and spins without yielding while three real PIT0
+interrupts arrive. The read-only IRQ checker verifies every register,
+saved original stack, RIP within the spin loop, CS, SS and the exact full RFLAGS word. The assembly establishes a known comparison-derived flags value and snapshots it with PUSHFQ before entering the interruptible spin. The
+assembly routine checks callee-saved registers again after `IRETQ`.
+An intentionally wrong R15 in a separate test ISO must produce
+`SPIFFOS_M10_D2_FRAME_ERROR`; otherwise the test is invalid.
+No task handoff or preemption is implemented by D2.
+
+Run `make HOST_CC=gcc test-m10-d2-guest` for D2 positive/negative
+QEMU tests at 128, 256 and 512 MiB. For the broad evening suite,
+run `make HOST_CC=gcc test-m10-d2-acceptance` in the disposable
+source checkout. The latter runs D1/D2, memory/keyboard/IRQ0,
+#UD/#DF, M10-B/C and APIC/MMIO regression gates. Do not run the
+test with the installed Forge owner ISO path; all test boot media
+are disposable and use isolated QEMU firmware variables.
