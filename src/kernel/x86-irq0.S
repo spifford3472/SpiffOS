@@ -5,6 +5,9 @@
  * Reference: docs/decisions/ADR-m9-3d6-irq0-delivery.md. */
 .section .text
 .extern x86_irq0_handler
+#ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
+.extern m10_d2_probe_on_irq
+#endif
 
 .global x86_irq0_entry
 .type x86_irq0_entry,@function
@@ -31,6 +34,13 @@ x86_irq0_entry:
     movq %rsp,%r12
     andq $-16,%rsp
     call x86_irq0_handler
+#ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
+    /* Test-only: check immutable saved frame AFTER normal tick and EOI.
+     * R12 was saved in the trap frame; SysV C preserves our temporary
+     * pointer. Normal production IRQ assembly contains no extra call. */
+    movq %r12,%rdi
+    call m10_d2_probe_on_irq
+#endif
     movq %r12,%rsp
     popq %r15
     popq %r14
