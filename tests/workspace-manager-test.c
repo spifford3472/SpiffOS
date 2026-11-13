@@ -163,6 +163,7 @@ int main(void)
     /* The allocation-failure path does not break the old lazy mode. */
     memset(manager, 0, sizeof *manager);
     assert(boot_workspace_reset(&console, &fb));
+    assert(text_console_write(&console, "SPIFFOS WORKSPACE\\nOUTPUT SCROLLS THE LOGO."));
     assert(workspace_manager_initialize(manager, &console, submit, NULL));
     uint64_t fallback_before = checksum(pixels, WIDTH * HEIGHT);
     deny_snapshot = true;
