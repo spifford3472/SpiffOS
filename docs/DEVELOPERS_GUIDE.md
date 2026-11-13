@@ -561,3 +561,35 @@ objects. No owner's installed ISO was changed.
 M10-D remains separately subject to architecture review and owner
 acceptance. Never interpret a pending request as permission to perform
 an asynchronous context switch.
+
+
+## Workspace snapshot prewarming — review checkpoint, 2026-11-13
+
+The first use of F2–F9 originally had to allocate thousands of
+physical snapshot frames, draw an initial logo, and initialize a
+screen editor. Subsequent switches were faster because those
+resources were retained. The proposed optional
+`workspace_manager_prewarm()` moves this initialization into
+the boot keyboard setup, before keyboard-ready is advertised.
+
+It first saves the exact pixels of Workspace 1, prepares Workspaces
+2–9 using their original editor/logo routines, captures each
+prepared screen into its owned backing pages, and finally restores
+the exact original Workspace 1 image. All nine workspaces are then
+immediately ready for keyboard selection. At 1280x800 RGB32,
+nine snapshots total approximately 35.16 MiB, and the boot must
+touch that memory and render eight initial screens. Therefore this
+**trades boot latency and memory usage for shorter first-switch latency**.
+It does not eliminate the per-switch full-frame copy.
+
+If prewarm fails due to insufficient frames, it restores Workspace
+1 and preserves the existing lazy-initialization path. The prewarm
+call is synchronous on the boot CPU before task preemption, not a
+background worker and not an IRQ callback.
+
+Run `make HOST_CC=gcc test-workspace-manager-memory` to check
+original pixel preservation, all-ready setup and failure fallback;
+`make HOST_CC=gcc test-memory test-keyboard` exercises existing
+memory and editor/workspace regressions in real QEMU. See
+`docs/decisions/ADR-workspace-boot-prewarm-20261113.md`
+for alternatives, measured test evidence and release boundaries.
