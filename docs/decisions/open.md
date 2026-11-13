@@ -307,3 +307,25 @@ blocked/wakeup transitions, resource-contention supervisor budget
 or general-purpose driver preemption. Those remain OPEN until further
 dedicated tests and a release decision. See
 `ADR-m10-d4-priority-supervisor.md`.
+
+
+## D4 simultaneous-class and READY-mask test checkpoints — 2026-11-13
+
+The D4 review branch now contains **test-only** proof of all four
+priority bands concurrently competing under actual PIT0 IRQ0 with
+five independent contexts (four worker stacks + surviving boot
+supervisor), bounded aging and reserved supervisor dispatch.
+A separate deterministic synthetic READY-mask test excludes blocked
+workers from the D1 selector and requires resume within 64 ticks,
+with deliberately missing wake and impossible blocked-progress
+negatives. The allocation path tests failure after two fully owned
+stacks and reverse rollback.
+
+**Still OPEN before final D4 completion:** integration of real
+kernel task BLOCKED/READY state transitions and wakeup API; supervisor
+service/recovery latency under realistic resource pressure and
+driver errors; full owner QEMU interactive acceptance and
+production release authorization. No general editor preemption,
+ring 3 processes, SMP or FPU state handling is approved.
+See `ADR-m10-d4-priority-supervisor.md` and
+`../operations/m10-d4-integrated-validation-20261113.md`.
