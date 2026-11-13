@@ -200,7 +200,9 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
     bool background_ready=(d4_dispatch_count%32u)>=8u;
     if(!background_ready) {
         ++d4_blocked_dispatches;
-        d4_wait[D3_WORKER_B]=0;
+        /* Retain the runnable-time waiting debt across a short block.
+         * A worker repeatedly ready for <24 dispatches must not lose
+         * all aging credit every time it temporarily becomes blocked. */
     } else if(!d4_background_was_ready) {
         ++d4_wakeup_events;
     }
@@ -236,7 +238,9 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
     ++d4_dispatch_count;
     for(size_t i=0;i<D3_CONTEXTS;++i) {
         if(i==(size_t)next) d4_wait[i]=0;
-        else if(i==D3_WORKER_B && !background_ready) d4_wait[i]=0;
+        else if(i==D3_WORKER_B && !background_ready) {
+            /* No aging while blocked, but do not erase prior wait debt. */
+        }
         else if(d4_wait[i]!=UINT64_MAX) ++d4_wait[i];
     }
     if(d4_wait[D3_WORKER_B]>d4_background_max_wait)
