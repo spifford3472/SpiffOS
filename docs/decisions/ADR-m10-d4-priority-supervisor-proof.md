@@ -92,3 +92,37 @@ execution, an actual kernel task block/wakeup API, CPU budget/latency
 quantification, supervisor recovery under faults, priority inversion
 controls and editor isolation under generalized preemption remain
 OPEN. Do not enable D4 scheduling in the normal ISO yet.
+
+
+## Full current D4 checkpoint acceptance — 2026-11-13
+
+At exact code commit `c425fa6462d351bd008fcae850af621dc64d757a`,
+on isolated Forge review checkout:
+
+```sh
+make HOST_CC=gcc test-m10-d4-acceptance
+```
+
+**PASS**, runtime approximately 214.55 seconds, log
+`/tmp/spiffos-d4-full-regressions.log`, final markers
+`SPIFFOS_M10_D2_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D3_ACCEPTANCE_OK`, and
+`SPIFFOS_M10_D4_CHECKPOINT_OK`.
+
+This includes D4 20,000-decision all-four-band hosted sanitizer tests,
+three 128/256/512MiB real-IRQ priority/supervisor positives,
+three IRQ-disabled negatives, three stack-canary corruption negatives,
+D3 non-yielding handoff positives/negatives, D2 complete IRQ trap-frame
+positives/negatives, D1 age policy, M10-A/B/C, M9 memory/framebuffer,
+F1–F9/F10/F12 keyboard/editor and timed IRQ0, #UD/#DF, APIC/MMIO
+positive/negative regression tests.
+
+After that exact code commit, GitHub comparison confirmed **only**
+`docs/DEVELOPERS_GUIDE.md` and this ADR changed on the branch
+(no C/ASM/Makefile/test changes). A separate ordinary unflagged ISO
+was built from both D3.1 and D4 using the same pinned Limine source.
+Their debug-stripped kernel executable SHA-256 was identically
+`82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`.
+Thus the D4 experiment is excluded from the regular kernel runtime,
+while the D3.1 F10/boot preparation changes intentionally remain.
+No merge, physical media or owner ISO deployment has occurred.
