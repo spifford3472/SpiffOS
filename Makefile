@@ -18,7 +18,7 @@ endif
 .PHONY: all
 all: $(KERNEL)
 
-build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/x86-pic.h src/kernel/acpi-discovery.h src/kernel/apic-preflight.h src/kernel/x86-page-walk.h src/kernel/mmio-page-policy.h src/kernel/x86-mmio-map.h src/kernel/apic-memory-type.h src/kernel/apic-readonly.h src/kernel/apic-irq0.h src/kernel/kernel-timer.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
+build/main.o: src/kernel/main.c src/kernel/keyboard.h src/kernel/keyboard-ps2.h src/kernel/screen-editor.h src/kernel/memory-boot.h src/kernel/workspace-manager.h src/kernel/x86-idt.h src/kernel/x86-pic.h src/kernel/acpi-discovery.h src/kernel/apic-preflight.h src/kernel/x86-page-walk.h src/kernel/mmio-page-policy.h src/kernel/x86-mmio-map.h src/kernel/apic-memory-type.h src/kernel/apic-readonly.h src/kernel/apic-irq0.h src/kernel/kernel-timer.h src/kernel/kernel-scheduler-clock.h src/kernel/logical-line.h src/kernel/text-console.h src/kernel/boot-logo.h src/kernel/framebuffer.h include/limine.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -233,7 +233,7 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) linker.ld Makefile
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) linker.ld Makefile
 	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) -o $@
 
 .PHONY: iso test run debug
@@ -537,3 +537,19 @@ build/kernel-task.o: src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
 .PHONY: test-m10-b-guest
 test-m10-b-guest:
 	python3 scripts/test-m10-b-guest.py
+
+# M10-C bounded tick and pending-request policy. The ordinary kernel links
+# only IRQ accounting and retains cooperative-only task execution.
+build/kernel-scheduler-clock.o: src/kernel/kernel-scheduler-clock.c src/kernel/kernel-scheduler-clock.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-scheduler-clock.c -o $@
+
+.PHONY: test-scheduler-clock
+test-scheduler-clock: build/kernel-scheduler-clock-test
+	./build/kernel-scheduler-clock-test
+
+build/kernel-scheduler-clock-test: tests/kernel-scheduler-clock-test.c src/kernel/kernel-scheduler-clock.c src/kernel/kernel-scheduler-clock.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/kernel-scheduler-clock-test.c src/kernel/kernel-scheduler-clock.c -o $@
+
+test-memory: test-scheduler-clock
