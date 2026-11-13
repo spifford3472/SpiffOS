@@ -21,6 +21,7 @@ static volatile bool task_done[2];
 static volatile bool task_failed;
 static bool (*guest_clock)(uint64_t *);
 static uint64_t first_tick, last_tick;
+static bool clock_available_at_entry;
 static const char *failure_reason = "UNSET";
 
 /* Test-only borrowed static error string for bounded serial diagnostics. */
@@ -60,11 +61,14 @@ static void task_two(void)
  * receives its separate physical-frame ownership/cleanup implementation. */
 bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
 {
-    if(read_clock_ms==NULL || !read_clock_ms(&first_tick)) {
-        failure_reason="CLOCK_UNAVAILABLE";
+    if(read_clock_ms==NULL) {
+        failure_reason="CLOCK_CALLBACK_MISSING";
         return false;
     }
     guest_clock=read_clock_ms;
+    /* M9 timer is intentionally unavailable until its first hardware IRQ.
+     * A fast switch probe must not invent a tick or mistake that for failure. */
+    clock_available_at_entry=guest_clock(&first_tick);
     for(size_t task=0;task<2;++task)
         for(size_t byte=0;byte<X86_TASK_STACK_BYTES;++byte)
             task_stacks[task][byte]=UINT8_C(0x5a);
@@ -86,8 +90,9 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     }
     x86_task_switch(&boot_context,&task_context[0]);
     x86_task_switch(&boot_context,&task_context[1]);
-    if(!task_done[0] || !task_done[1] || !guest_clock(&last_tick) ||
-       last_tick<first_tick) {
+    if(!task_done[0] || !task_done[1] ||
+       (clock_available_at_entry &&
+        (!guest_clock(&last_tick) || last_tick<first_tick))) {
         failure_reason="FINAL_STATE_OR_CLOCK";
         return false;
     }
