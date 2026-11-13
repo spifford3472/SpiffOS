@@ -1180,6 +1180,20 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
+#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+    /* Only the separate diagnostic build enters timer-based ring-0
+     * task handoff, before the ordinary keyboard/editor environment.
+     * There are no voluntary yields in either temporary worker. */
+    extern bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *));
+    extern const char *m10_d3_failure_reason(void);
+    if(!m10_d3_guest_smoke(kernel_timer_boot_now_ms)) {
+        (void)serial_write("SPIFFOS_M10_D3_PREEMPT_ERROR:");
+        (void)serial_write(m10_d3_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
+#endif
 #ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
     /* D2 intentionally runs before normal keyboard polling, when the
      * real IRQ0 route is active. Test-only CPU sentinel cannot yield;
