@@ -271,7 +271,9 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
         d3_running=D3_BOOT;
         return d3_frame[D3_BOOT];
     }
-    ++d3_switches;
+    /* Choosing the currently executing frame is valid, but it is NOT
+     * a cross-task handoff. Only count actual stack/context changes. */
+    if(next!=current) ++d3_switches;
     d3_running=next;
     return d3_frame[next];
 }
