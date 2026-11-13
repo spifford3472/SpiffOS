@@ -55,6 +55,8 @@ struct screen_editor {
     bool cursor_visible;
     bool capacity_full;
     bool initialized;
+    /* Prepared logical lines are valid, but invisible until first paint. */
+    bool deferred_activation;
 };
 
 /* Initialize static caller-owned editor state after existing boot output.
