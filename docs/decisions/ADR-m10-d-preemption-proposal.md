@@ -1,6 +1,8 @@
 # ADR M10-D — proposed timer-driven preemption of kernel tasks
 
-Status: **PROPOSED FOR OWNER ARCHITECTURE APPROVAL**, 2026-11-13.
+Status: **OWNER APPROVED FOR ARCHITECTURE AND IMPLEMENTATION**, 2026-11-13.
+Merge, ISO deployment and physical hardware changes are NOT authorized.
+Design and implementation proceed in isolated reviewable checkpoints.
 Issue: #58. Branch is documentation-only; no source, ISO, system or
 network deployment is authorized by this proposal.
 Baseline: M10-A/B/C accepted and deployed in QEMU; release source
@@ -131,3 +133,5 @@ not itself authorize merges, ISO deployment or physical hardware changes.
 2026-11-13: M10-A/B/C owner accepted; owner requested start M10-D.
 Draft design authored for separate review while Issue #58's explicit
 architecture acceptance gate remains open. No code changes.
+
+2026-11-13: owner explicitly replied "i approve" to the proposed staged M10-D design in draft PR #62. This authorizes D1–D5 implementation and testing on isolated Forge checkouts, but does not authorize a merge or deployment. The architecture remains subject to exact trap-frame and priority-policy test evidence; unresolved behavior must be documented instead of assumed.
