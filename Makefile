@@ -532,3 +532,8 @@ build/m10-b-switch-host-test: tests/x86-task-switch-test.c src/kernel/x86-task-c
 build/kernel-task.o: src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/kernel-task.c -o $@
+
+# Build and run the M10-B guest only in a disposable child checkout/ISO.
+.PHONY: test-m10-b-guest
+test-m10-b-guest:
+	python3 scripts/test-m10-b-guest.py
