@@ -272,3 +272,7 @@ The controlled boot-CPU QEMU IRQ0 path has real 100/200-tick evidence; physical-
 ## M10 open implementation gates — 2026-11-12
 
 The owner approved the A–C architecture and requires separate M10-D acceptance. Before M10-B, prove mapped stack backing ownership, cleanup from a surviving stack, initial 16 KiB stack sizing, and assembly ABI/interrupt-state preservation. Before M10-C, prove the cooperative context switch in QEMU; no switching in IRQ0. Four priority classes and actual preemptive scheduling remain M10-D review items, while ring-3 user-process ABI, SMP, FPU/SIMD and CR3 switching are deferred. Resolve the discrepancy between the accepted M9-3D6 ISO SHA256 (06856f9311f7894d5b870add2afd0b457309853433a689e4c74f1f11aa0b5a32) and the Forge current ISO (758492d3b4aea5587e28514e5882231929e25a90f31c7ce1a38bae8135eb4ba2) before deployment. See [M10 ADR](ADR-m10-task-scheduler-foundation.md).
+
+## M10-D preemption approval gate — 2026-11-13
+
+The owner accepted the M10-A/B/C release and requested that development of M10-D begin. Design work has started in [the proposed M10-D ADR](ADR-m10-d-preemption-proposal.md). The separate Issue #58 architecture-acceptance gate remains OPEN: complete interrupt-frame/flags/RSP ownership, single-CPU non-reentrant IRQ dispatch, per-task stack lifetime, four-priority starvation safeguards, and supervisor reserved-service budget need explicit approval before the first preemptive source-code change. QEMU-only tests must retain legacy IRQ0/keyboard/editor behavior. No M10-D merge or deployment is currently authorized.
