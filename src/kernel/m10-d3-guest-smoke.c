@@ -13,11 +13,14 @@
 #include "memory-boot.h"
 #include "m10-d2-irq-frame.h"
 #include "x86-task-context.h"
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+#include "kernel-priority-policy.h"
+#endif
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+#if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 enum {
     D3_BOOT=0, D3_WORKER_A=1, D3_WORKER_B=2,
     D3_CONTEXTS=3, D3_WORKERS=2, D3_REQUIRED_SLICES=12,
@@ -31,6 +34,14 @@ static uint64_t *d3_frame[D3_CONTEXTS];
 static uint8_t *d3_stack[D3_WORKERS];
 static uint64_t d3_cs, d3_ss;
 static const char *d3_failure="UNSET";
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+/* Dispatcher boot uses D1's reserved supervisor slot 15; the two
+ * physical workers stay in their existing 16KiB owner-backed stacks. */
+static uint64_t d4_wait[D3_CONTEXTS];
+static uint64_t d4_dispatch_count;
+static uint32_t d4_supervisor_awards;
+static uint32_t d4_background_max_wait;
+#endif
 
 /* Owned static string is valid indefinitely, including after task cleanup.
  * Called only on the boot stack, never from an interrupt. */
@@ -175,6 +186,50 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
         return d3_frame[D3_BOOT];
     }
     unsigned next=(current+1u)%D3_CONTEXTS;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* A bounded three-candidate snapshot feeds the D1 pure, hosted-tested
+     * selector after the one IRQ0 EOI. This is test-only: the normal M9
+     * interrupt path and editor never invoke a scheduler here. */
+    const struct kernel_priority_candidate candidates[D3_CONTEXTS]={
+        {.slot=KERNEL_PRIORITY_SUPERVISOR_SLOT,
+         .priority=KERNEL_PRIORITY_NORMAL,
+         .waiting_dispatches=d4_wait[D3_BOOT],.supervisor=true},
+        {.slot=0,.priority=KERNEL_PRIORITY_TIME_SENSITIVE,
+         .waiting_dispatches=d4_wait[D3_WORKER_A]},
+        {.slot=1,.priority=KERNEL_PRIORITY_BACKGROUND,
+         .waiting_dispatches=d4_wait[D3_WORKER_B]}
+    };
+    uint32_t selected=UINT32_MAX;
+    enum kernel_priority_result outcome=kernel_priority_choose(
+        candidates,D3_CONTEXTS,d4_dispatch_count,&selected);
+    if(outcome!=KERNEL_PRIORITY_OK ||
+       (selected!=0 && selected!=1 &&
+        selected!=KERNEL_PRIORITY_SUPERVISOR_SLOT)) {
+        d3_failed=true;
+        d3_active=false;
+        d3_running=D3_BOOT;
+        return d3_frame[D3_BOOT];
+    }
+    next=selected==KERNEL_PRIORITY_SUPERVISOR_SLOT ? D3_BOOT :
+        selected==0 ? D3_WORKER_A : D3_WORKER_B;
+    if(d4_dispatch_count%KERNEL_PRIORITY_SUPERVISOR_INTERVAL==
+           KERNEL_PRIORITY_SUPERVISOR_INTERVAL-1) {
+        if(next!=D3_BOOT) d3_failed=true;
+        else ++d4_supervisor_awards;
+    }
+    ++d4_dispatch_count;
+    for(size_t i=0;i<D3_CONTEXTS;++i) {
+        if(i==(size_t)next) d4_wait[i]=0;
+        else if(d4_wait[i]!=UINT64_MAX) ++d4_wait[i];
+    }
+    if(d4_wait[D3_WORKER_B]>d4_background_max_wait)
+        d4_background_max_wait=(uint32_t)d4_wait[D3_WORKER_B];
+    if(d3_failed) {
+        d3_active=false;
+        d3_running=D3_BOOT;
+        return d3_frame[D3_BOOT];
+    }
+#endif
     if(d3_frame[next]==NULL ||
        !d3_valid_frame(next,d3_frame[next])) {
         d3_failed=true;
@@ -251,6 +306,14 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         d3_slices[D3_WORKER_B]>=D3_REQUIRED_SLICES &&
         d3_iterations[0]!=0 && d3_iterations[1]!=0 &&
         clock_ms(&end_ms) && end_ms>start_ms;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* With a 100Hz IRQ and both CPU hogs continuously runnable, D1's
+     * supervisor reservation must yield actual boot-stack CPU service.
+     * This is dispatch-count evidence, not general realtime latency. */
+    valid=valid && d4_supervisor_awards>=D3_REQUIRED_SLICES &&
+        d4_dispatch_count>=D3_REQUIRED_SLICES*2u &&
+        d4_background_max_wait<80u;
+#endif
 #ifdef SPIFFOS_M10_D3_BAD_CANARY_TEST
     /* Negative guest only: corrupt a guard AFTER the IRQ selector is
      * disabled and execution has returned to the surviving boot stack.
