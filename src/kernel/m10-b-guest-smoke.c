@@ -25,10 +25,6 @@ static const char *failure_reason = "UNSET";
 
 /* Test-only borrowed static error string for bounded serial diagnostics. */
 const char *m10_b_guest_failure_reason(void) { return failure_reason; }
-static const char *failure_reason = "UNSET";
-
-/* Test-only borrowed static error string for bounded serial diagnostics. */
-const char *m10_b_guest_failure_reason(void) { return failure_reason; }
 
 /* Each task validates its caller-independent progress and saved stack
  * guards, then yields to the persistent root stack. It never returns. */
