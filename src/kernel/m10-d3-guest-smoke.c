@@ -251,6 +251,12 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         d3_slices[D3_WORKER_B]>=D3_REQUIRED_SLICES &&
         d3_iterations[0]!=0 && d3_iterations[1]!=0 &&
         clock_ms(&end_ms) && end_ms>start_ms;
+#ifdef SPIFFOS_M10_D3_BAD_CANARY_TEST
+    /* Negative guest only: corrupt a guard AFTER the IRQ selector is
+     * disabled and execution has returned to the surviving boot stack.
+     * It must be detected before any false success is reported. */
+    d3_stack[0][0]=0;
+#endif
     for(size_t i=0;i<D3_WORKERS;++i)
         for(size_t byte=0;byte<D3_CANARY_BYTES;++byte)
             if(d3_stack[i][byte]!=UINT8_C(0xa7)) valid=false;
