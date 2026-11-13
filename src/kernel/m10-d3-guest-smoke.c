@@ -345,6 +345,20 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
     bool released_a=memory_boot_m10_task_stack_release(0);
     d3_irq_restore(end_flags);
     if(!released_a || !released_b) { d3_failure="STACK_RELEASE"; return false; }
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* Assign a specific boot-side failure reason so failed IRQ stress
+     * tests are diagnosable without ever logging in interrupt context. */
+    if(d4_supervisor_awards<D3_REQUIRED_SLICES)
+        d3_failure="D4_SUPERVISOR_QUOTA";
+    else if(d4_dispatch_count<D3_REQUIRED_SLICES*2u)
+        d3_failure="D4_DISPATCH_COUNT";
+    else if(d4_background_max_wait>=80u)
+        d3_failure="D4_BACKGROUND_WAIT";
+    else if(d4_blocked_dispatches<8u)
+        d3_failure="D4_NO_BLOCK_EVENT";
+    else if(d4_wakeup_events<1u)
+        d3_failure="D4_NO_WAKE_EVENT";
+#endif
     if(!valid && d3_failure[0]=='U') d3_failure="PREEMPTION_PROGRESS";
     return valid;
 }
