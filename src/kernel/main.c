@@ -1187,7 +1187,7 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
-#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+#if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* Only the separate diagnostic build enters timer-based ring-0
      * task handoff, before the ordinary keyboard/editor environment.
      * There are no voluntary yields in either temporary worker. */
@@ -1199,7 +1199,11 @@ void kmain(void)
         (void)serial_write("\r\n");
         halt_forever();
     }
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    (void)serial_write("SPIFFOS_M10_D4_PRIORITY_OK\r\n");
+#else
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
+#endif
 #endif
 #ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
     /* D2 intentionally runs before normal keyboard polling, when the
