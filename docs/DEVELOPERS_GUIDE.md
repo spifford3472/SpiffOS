@@ -685,3 +685,47 @@ adds the full D1–D3 and older IRQ/editor/fault/memory/APIC/MMIO
 regression tests. The normal ISO includes **no** D4 policy or
 preemptive IRQ handoff code. A failed test cannot change the
 installed Forge ISO or physical laptop media.
+
+
+## D4 next diagnostic gates: simultaneous priorities and synthetic READY wakeups
+
+The first D4 test rotated one worker among the four priorities while
+a Time-sensitive CPU hog competed. The second test adds **four
+concurrently runnable, separately owned 16KiB kernel stacks** under
+`SPIFFOS_M10_D4_FOUR_CLASS_TEST`, retaining the two-stack fixture for
+ordinary D3/earlier D4 tests. Worker A is Background, B is Normal,
+C is Interactive and D is Time-sensitive. The boot supervisor is a
+fifth, permanent context mapped to D1's reserved policy slot 15.
+Its every-fourth dispatch service requirement remains in force.
+No worker voluntarily yields; D3's existing complete IRQ frame
+restore is the only way a new worker can receive CPU service.
+
+The four-stack allocator tracks exactly four groups of four mapped
+ordinary kernel-owner frames. If a request fails after two complete
+stacks are acquired, the caller releases both in reverse order with
+interrupts masked. No task descriptor is published to the IRQ
+scheduler on failure. Frame owners are released only after the
+supervisor has returned to its own stack and disabled interrupt
+handoff.
+
+`SPIFFOS_M10_D4_BLOCK_WAKE_TEST` adds deterministic synthetic
+READY-state filtering without a public block/wakeup API. Worker A
+is excluded from scheduling during ticks 100–139, and C during
+210–249. Their saved frames remain mapped and unchanged; the IRQ
+selector verifies their volatile CPU-progress counters stop
+advancing. At wakeup their wait age restarts from zero, and selection
+must resume within 64 real PIT0 ticks. A negative test that never
+wakes A, and one that illegally advances a blocked worker's
+counter, must halt without claiming successful scheduling. This
+is evidence for READY-filter behavior under real interrupt load,
+not an implemented kernel BLOCKED/READY syscall or driver API.
+
+For the new focused tests run
+`make HOST_CC=gcc test-m10-d4-four-class` (positives plus invalid
+priority, IRQ0-disabled, stack corruption and third-stack failure)
+and `make HOST_CC=gcc test-m10-d4-block-wakeup`
+(wakeups, never-wake and blocked-progress negatives), each across
+QEMU 128/256/512MiB. The full test gate is
+`make HOST_CC=gcc test-m10-d4-acceptance`. These commands
+build disposable copies with diagnostic flags. The normal
+SpiffOS ISO has no D4 IRQ handoff symbols.
