@@ -126,3 +126,41 @@ Their debug-stripped kernel executable SHA-256 was identically
 Thus the D4 experiment is excluded from the regular kernel runtime,
 while the D3.1 F10/boot preparation changes intentionally remain.
 No merge, physical media or owner ISO deployment has occurred.
+
+
+## D4 completion architecture — approved development extension, 2026-11-13
+
+The owner explicitly requested completion of D4 after the initial
+passing checkpoint. The additional implementation is restricted
+to isolated QEMU boot-CPU/ring-0/test-only diagnostics and does not
+authorize a new production task ABI or enabling preemption in the
+editor. The completion fixture must exercise **four different
+CPU-bound worker stacks**, one in each priority band, plus a permanent
+supervisor boot stack. It must use distinct owner-backed 16KiB
+mapped frames per worker, and prove cleanup after IRETQ has returned
+to the surviving boot stack.
+
+The **real task state** control module (not a synthetic candidate
+mask) owns the READY/BLOCKED/QUARANTINED state and retains
+per-task scheduling age. A worker may BLOCK itself only while it
+owns the CPU and with interrupts masked at transition. A supervisor
+on slot 15 may WAKE a BLOCKED task or validate/recover a QUARANTINED
+task; neither action guesses the frame of a running task or
+unconditionally re-enqueues a broken pointer. Snapshot construction
+does not include blocked/quarantined workers. The supervisor itself
+cannot be blocked or quarantined.
+
+Every fourth selection must choose an available supervisor, and
+real guest instrumentation must record maximum dispatch gaps for
+each continuously READY worker, actual per-worker progress and
+supervisor quantum counts; do not confuse dispatch opportunities
+with wall-clock CPU time. A failed/wrong task state or frame pointer
+must fail closed to the surviving boot context with an error marker.
+CPU #UD/#DF/#PF kernel exception recovery remains explicitly
+**outside** this checkpoint: the kernel still halts on fatal CPU faults.
+Do not claim those can resume without a separately designed
+fault containment ABI and trustworthy address spaces.
+
+Do not change the normal executable's symbol set or switch policy.
+As a gate, compare ordinary stripped ELFs to prior D4 checkpoint,
+then run the full D4 QEMU + M9/M10 regression suite.
