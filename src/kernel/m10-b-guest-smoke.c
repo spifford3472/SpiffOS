@@ -1,34 +1,47 @@
-/* Purpose: M10-B QEMU-only cooperative context-switch execution probe.
- * Dependencies: x86-task-context.h and dedicated x86-task-switch.S.
- * Invariants: two static test stacks never escape this module; the test
- * returns to the boot stack for diagnostics and never frees a running stack.
- * This is a bounded first switch proof, NOT production task stack allocation.
- * IRQ context: no switch in IRQ0, caller has enabled safe PIT0 route.
+/* Purpose: QEMU-only M10-B cooperative switch and owned-stack probe.
+ * Dependencies: x86-task-context, memory-boot M2/M3 verified 4-frame stacks.
+ * Invariants: every task stack is ordinary KERNEL owned, contiguous, zeroed,
+ * and released only after task execution returns to the surviving boot stack.
+ * IRQ restrictions: save/restore prior IF; no M2/M3 allocation with IF=1;
+ * real PIT0 IRQ0 can interrupt task execution but never switches context.
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #include "x86-task-context.h"
+#include "memory-boot.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #ifdef SPIFFOS_M10_B_SWITCH_TEST
-enum { TEST_ROUNDS = 512 };
+enum { TEST_ROUNDS = 512, TEST_STACKS = 2 };
 static struct x86_task_context boot_context;
-static struct x86_task_context task_context[2];
-static uint8_t task_stacks[2][X86_TASK_STACK_BYTES]
-    __attribute__((aligned(16)));
-static volatile uint32_t task_step[2];
-static volatile bool task_done[2];
+static struct x86_task_context task_context[TEST_STACKS];
+static uint8_t *task_stacks[TEST_STACKS];
+static volatile uint32_t task_step[TEST_STACKS];
+static volatile bool task_done[TEST_STACKS];
 static volatile bool task_failed;
-static bool (*guest_clock)(uint64_t *);
-static uint64_t first_tick, last_tick;
-static bool clock_available_at_entry;
 static const char *failure_reason = "UNSET";
 
-/* Test-only borrowed static error string for bounded serial diagnostics. */
+/* Borrow a static label for serial logging by the original boot stack. */
 const char *m10_b_guest_failure_reason(void) { return failure_reason; }
 
-/* Each task validates its caller-independent progress and saved stack
- * guards, then yields to the persistent root stack. It never returns. */
+/* Save RFLAGS, then disable interrupts for exclusive M2/M3 ownership edits.
+ * Restore exactly previous IF; never blindly enable an originally disabled
+ * interrupt state. All other RFLAGS are left to normal C ABI semantics. */
+static uint64_t save_and_disable_irq(void)
+{
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+    return flags;
+}
+
+static void restore_irq(uint64_t flags)
+{
+    if((flags & UINT64_C(0x200))!=0)
+        __asm__ volatile ("sti" : : : "memory");
+}
+
+/* First-run trampoline never returns, and always returns to the scheduler
+ * stack after each yield. A completed task cannot be scheduled again. */
 __attribute__((noreturn))
 static void task_one(void)
 {
@@ -39,10 +52,10 @@ static void task_one(void)
     }
     task_done[0]=true;
     x86_task_switch(&task_context[0],&boot_context);
-    for(;;) __asm__ volatile("hlt");
+    for(;;) __asm__ volatile("cli; hlt" : : : "memory");
 }
 
-/* Same checks on completely disjoint stack and context storage. */
+/* Independent entry and saved callee registers on separately owned pages. */
 __attribute__((noreturn))
 static void task_two(void)
 {
@@ -53,55 +66,84 @@ static void task_two(void)
     }
     task_done[1]=true;
     x86_task_switch(&task_context[1],&boot_context);
-    for(;;) __asm__ volatile("hlt");
+    for(;;) __asm__ volatile("cli; hlt" : : : "memory");
 }
 
-/* Invoked only by test-specific kernel branch after real IRQ0 activation.
- * Restrict all operations to preinitialized, static 16KiB stacks until B
- * receives its separate physical-frame ownership/cleanup implementation. */
+/* Real QEMU guest is already in a functioning M9-3D6 timer environment.
+ * Initialize stack ownership only under IF=0, run entirely cooperatively,
+ * then reclaim under IF=0 after returning to the bootstrap stack. */
 bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
 {
     if(read_clock_ms==NULL) {
         failure_reason="CLOCK_CALLBACK_MISSING";
         return false;
     }
-    guest_clock=read_clock_ms;
-    /* M9 timer is intentionally unavailable until its first hardware IRQ.
-     * A fast switch probe must not invent a tick or mistake that for failure. */
-    clock_available_at_entry=guest_clock(&first_tick);
-    for(size_t task=0;task<2;++task)
+    uint64_t flags=save_and_disable_irq();
+    if((flags & UINT64_C(0x200))==0) {
+        failure_reason="INTERRUPTS_NOT_ENABLED";
+        return false;
+    }
+    void *owned0=NULL,*owned1=NULL;
+    bool prepared0=memory_boot_m10_task_stack_prepare(0,&owned0);
+    bool prepared1=prepared0 &&
+        memory_boot_m10_task_stack_prepare(1,&owned1);
+    if(!prepared1 && prepared0)
+        (void)memory_boot_m10_task_stack_release(0);
+    restore_irq(flags);
+    if(!prepared0 || !prepared1) {
+        failure_reason="OWNED_STACK_PREPARE";
+        return false;
+    }
+    task_stacks[0]=(uint8_t *)owned0;
+    task_stacks[1]=(uint8_t *)owned1;
+    bool success=false;
+    for(size_t task=0;task<TEST_STACKS;++task)
         for(size_t byte=0;byte<X86_TASK_STACK_BYTES;++byte)
             task_stacks[task][byte]=UINT8_C(0x5a);
     if(!x86_task_context_init(&task_context[0],task_stacks[0],
-                                sizeof task_stacks[0],task_one) ||
+                                X86_TASK_STACK_BYTES,task_one) ||
        !x86_task_context_init(&task_context[1],task_stacks[1],
-                                sizeof task_stacks[1],task_two)) {
-        failure_reason="STACK_INIT";
-        return false;
+                                X86_TASK_STACK_BYTES,task_two)) {
+        failure_reason="CONTEXT_INIT";
+        goto cleanup;
     }
+    uint64_t first_tick=0,last_tick=0;
+    bool clock_available=read_clock_ms(&first_tick);
     for(uint32_t round=0;round<TEST_ROUNDS;++round) {
         x86_task_switch(&boot_context,&task_context[0]);
         x86_task_switch(&boot_context,&task_context[1]);
         if(task_failed || task_step[0]!=round+1 ||
            task_step[1]!=round+1) {
             failure_reason="PROGRESS";
-            return false;
+            goto cleanup;
         }
     }
     x86_task_switch(&boot_context,&task_context[0]);
     x86_task_switch(&boot_context,&task_context[1]);
     if(!task_done[0] || !task_done[1] ||
-       (clock_available_at_entry &&
-        (!guest_clock(&last_tick) || last_tick<first_tick))) {
-        failure_reason="FINAL_STATE_OR_CLOCK";
-        return false;
+       (clock_available &&
+        (!read_clock_ms(&last_tick) || last_tick<first_tick))) {
+        failure_reason="TERMINATION_OR_CLOCK";
+        goto cleanup;
     }
-    for(size_t task=0;task<2;++task)
+    for(size_t task=0;task<TEST_STACKS;++task)
         for(size_t byte=0;byte<64;++byte)
             if(task_stacks[task][byte]!=UINT8_C(0x5a)) {
                 failure_reason="STACK_CANARY";
-                return false;
+                goto cleanup;
             }
-    return true;
+    success=true;
+cleanup:
+    /* Task exit has already returned to the boot stack. Releasing either
+     * frame group while executing on it would be a use-after-free. */
+    flags=save_and_disable_irq();
+    bool released1=memory_boot_m10_task_stack_release(1);
+    bool released0=memory_boot_m10_task_stack_release(0);
+    restore_irq(flags);
+    if(!released0 || !released1) {
+        failure_reason="OWNED_STACK_RELEASE";
+        return false;
+    }
+    return success;
 }
 #endif
