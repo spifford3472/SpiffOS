@@ -112,6 +112,13 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         failure_reason="INTERRUPTS_NOT_ENABLED";
         return false;
     }
+    /* Prove that an injected failure after two allocations completely
+     * restores ordinary, kernel and supervisor-reserve accounting. */
+    if(!memory_boot_m10_task_stack_failure_probe()) {
+        restore_irq(flags);
+        failure_reason="PARTIAL_ROLLBACK";
+        return false;
+    }
     void *owned0=NULL,*owned1=NULL;
     bool prepared0=memory_boot_m10_task_stack_prepare(0,&owned0);
     bool prepared1=prepared0 &&
