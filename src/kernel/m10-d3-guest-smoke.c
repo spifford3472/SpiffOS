@@ -21,11 +21,23 @@
 #endif
 
 #ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+/* D4 second stress image expands the existing two-worker proven
+ * fixture to four independently frame-backed workers. Production and
+ * older D3/D4 test builds retain the original exact stack dimensions. */
+#ifdef SPIFFOS_M10_D4_FOUR_CLASS_TEST
+enum {
+    D3_BOOT=0, D3_WORKER_A=1, D3_WORKER_B=2,
+    D3_WORKER_C=3, D3_WORKER_D=4,
+    D3_CONTEXTS=5, D3_WORKERS=4, D3_REQUIRED_SLICES=6,
+    D3_MAX_IRQ_SLICES=900, D3_CANARY_BYTES=64
+};
+#else
 enum {
     D3_BOOT=0, D3_WORKER_A=1, D3_WORKER_B=2,
     D3_CONTEXTS=3, D3_WORKERS=2, D3_REQUIRED_SLICES=12,
     D3_MAX_IRQ_SLICES=600, D3_CANARY_BYTES=64
 };
+#endif
 static volatile bool d3_active, d3_done, d3_failed;
 static volatile uint32_t d3_running, d3_switches, d3_ticks;
 static volatile uint32_t d3_slices[D3_CONTEXTS];
@@ -95,6 +107,34 @@ static void d3_worker_b(void)
         __asm__ volatile("pause" : : : "memory");
     }
 }
+
+#ifdef SPIFFOS_M10_D4_FOUR_CLASS_TEST
+/* The Interactive worker has its own mapped stack and counter; like A/B it
+ * cannot voluntarily yield, so CPU progress proves a real IRQ dispatch. */
+__attribute__((noreturn))
+static void d3_worker_c(void)
+{
+    volatile uint64_t local=UINT64_C(0x9abced);
+    for(;;) {
+        local=local*UINT64_C(7)+UINT64_C(5);
+        ++d3_iterations[2];
+        __asm__ volatile("pause" : : : "memory");
+    }
+}
+
+/* The Time-sensitive worker is the highest-priority adversarial CPU hog,
+ * deliberately holding the CPU unless timer preemption selects another. */
+__attribute__((noreturn))
+static void d3_worker_d(void)
+{
+    volatile uint64_t local=UINT64_C(0xbeef55);
+    for(;;) {
+        local=local*UINT64_C(11)+UINT64_C(7);
+        ++d3_iterations[3];
+        __asm__ volatile("pause" : : : "memory");
+    }
+}
+#endif
 
 /* Construct the exact M10-D2 20-word saved frame on a mapped stack.
  * For the System V ABI, first entry RSP is 8 mod 16, as after CALL.
