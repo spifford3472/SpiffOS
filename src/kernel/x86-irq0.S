@@ -8,6 +8,9 @@
 #ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
 .extern m10_d2_probe_on_irq
 #endif
+#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+.extern m10_d3_irq_select
+#endif
 
 .global x86_irq0_entry
 .type x86_irq0_entry,@function
@@ -40,6 +43,15 @@ x86_irq0_entry:
      * pointer. Normal production IRQ assembly contains no extra call. */
     movq %r12,%rdi
     call m10_d2_probe_on_irq
+#endif
+#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+    /* D3-only: normal bounded IRQ0 callback and EOI already completed.
+     * C chooses only an already-owned, saved 20-qword IRETQ frame. The
+     * return address is a frame pointer, NOT a cooperative return RIP.
+     * IF remains cleared until IRETQ restores the chosen task's RFLAGS. */
+    movq %r12,%rdi
+    call m10_d3_irq_select
+    movq %rax,%r12
 #endif
     movq %r12,%rsp
     popq %r15
