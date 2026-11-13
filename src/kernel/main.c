@@ -816,6 +816,14 @@ static void keyboard_run(struct text_console *console)
         halt_forever();
     }
     if (!memory_boot_service_editor_check(serial_write)) halt_forever();
+    /* Move one-time editor creation, full-frame snapshot allocation and
+     * initial logo rendering to boot. Failure preserves lazy activation:
+     * constrained-memory guests still retain the original keyboard path.
+     * Workspaces remain editor data, never independent CPU tasks. */
+    if (workspace_manager_prewarm(&boot_workspaces))
+        (void)serial_write("SPIFFOS_WORKSPACES_PREWARMED\r\n");
+    else
+        (void)serial_write("SPIFFOS_WORKSPACES_LAZY_FALLBACK\r\n");
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
     bool first = true;
     bool indicator_timed = false;
