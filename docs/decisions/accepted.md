@@ -413,3 +413,10 @@ Owner approved read-only APIC register and cache/alias validation and authorized
 
 ## M9-3D6 owner approval — 2026-11-12
 Owner authorized implementation, validation-gated merge and safe QEMU-only deployment of controlled boot-CPU APIC IRQ0 and PIT0 ~100-Hz monotonic ticks under [ADR-m9-3d6-irq0-delivery](ADR-m9-3d6-irq0-delivery.md) and Issue #51. Combined user interactive acceptance of M9-3D5 (#48) and M9-3D6 (#51) is permitted after all automated regression and QEMU hardware tests pass. Physical installation, new public timer/IRQ ABI, keyboard IRQ and unsupported ACPI routes remain unapproved.
+
+
+## M10 task scheduler — owner decision 2026-11-12
+
+**A-039 (approved direction, scope-limited):** Implement M10-A task metadata/state/round-robin hosted tests, M10-B cooperative kernel context switching, and M10-C 100 Hz timer accounting/reschedule requests in that order. Preserve existing working kernel/keyboard/workspace features and enforce independent testing gates. One kernel execution context per task and a single-CPU scheduler are the initial design; no public process ABI is implied. See [M10 ADR](ADR-m10-task-scheduler-foundation.md).
+
+**A-040 (explicit separate acceptance):** M10-D hardware timer-driven preemption is NOT authorized by M10-A/B/C approval and requires a separate architectural and acceptance decision. A-006's eventual preemptive/four-priority design remains an accepted long-term requirement, not completed M10-C behavior. Merge, deploy, physical tests and network changes are not granted by this architecture approval.
