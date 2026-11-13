@@ -491,3 +491,38 @@ The normal `make test-memory` now includes them. On 2026-11-12 an isolated
 Forge checkout successfully compiled with freestanding Clang, ran sanitized
 GCC tests, and passed QEMU 128/256/512MiB exact-memory/framebuffer tests.
 The original working owner's checkout and ISO were not modified.
+
+
+## M10-B cooperative switching — isolated guest proof, 2026-11-12
+
+The initial M10-B private assembly switch (`x86-task-switch.S`) saves RBX,
+RBP and R12–R15 and stores the current RSP in the caller-owned task context.
+The saved return address already present on each task's stack supplies RIP
+when that task resumes. A never-before-run task gets an explicitly prepared
+stack frame with those six saved-register slots and the trampoline return
+address. The trampoline begins with RSP modulo 16 equal to 8, as a normal
+SysV x86-64 C function does after a call.
+
+This is **cooperative**, not preemptive: an explicit call transfers control
+only when task code yields. IRQ0's existing complete register trap frame and
+IRETQ implementation are unchanged. IF must be enabled on entry to task
+switching; scheduler metadata transitions use short saved-IF critical
+sections, never scheduling directly from the IRQ handler.
+
+The first diagnostic kernel test requests four contiguous, independently
+owned M2/M3 ordinary KERNEL pages for each of two stacks. A checked direct
+map supplies a continuous 16 KiB stack window. Failed/fragmented acquisition
+rolls back all frames; the supervisor pool remains reserved. The root
+dispatcher uses M10-A's FIFO selection for 512 yields per task, checks task
+termination and bottom-of-stack canaries, and releases the pages from its
+own surviving boot stack. The retained-memory service and polled keyboard
+are revalidated after release. The normal kernel does not link these
+diagnostic switch objects; the guest proof is compiled only with
+`SPIFFOS_M10_B_SWITCH_TEST`.
+
+Run `make HOST_CC=gcc test-m10-b-host` for the native stack-switch smoke
+test and `make test-m10-b-guest` for isolated 128/256/512 MiB QEMU runs.
+Both passed on 2026-11-12. The guest proof does **not** claim a general
+task-stack manager, hardware guard pages, ring-3 processes, asynchronous
+IRQ-frame switching, or complete manual callee-register sentinel coverage.
+Those remain separate production hardening gates.
