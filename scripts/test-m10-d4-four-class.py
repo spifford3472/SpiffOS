@@ -90,7 +90,10 @@ def main():
              "IRQ0-disabled"),
             ("-DSPIFFOS_M10_D3_BAD_CANARY_TEST",
              "SPIFFOS_M10_D3_PREEMPT_ERROR:PREEMPTION_PROGRESS",
-             "corrupt-canary")
+             "corrupt-canary"),
+            ("-DSPIFFOS_M10_D4_FAIL_STACK_INDEX_TEST",
+             "SPIFFOS_M10_D3_PREEMPT_ERROR:ALLOCATE_STACKS",
+             "third-stack-allocation-rollback")
         )
         for extra, marker, label in cases:
             build(source, env, extra)
