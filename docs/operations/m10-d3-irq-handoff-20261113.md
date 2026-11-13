@@ -19,3 +19,48 @@ Real QEMU 128/256/512MiB: both tasks execute without cooperative yields, each re
 ## Change history
 
 2026-11-13: Owner explicitly requested development, merging and deployment once safe. QWEN reviewed a narrow IRQ-exit pointer contract; coordinator will require independent real QEMU evidence. This document is the design-first foundation for the D3 branch.
+
+
+## First verified real handoff — 2026-11-13
+
+On isolated Forge detached checkout at code SHA
+`8d80371f2fb1abf69f478b4407ecfd6fc43be82c`:
+`make test-m10-d3-guest` **PASS**. Positive real PIT0 handoff
+tests passed at 128, 256 and 512 MiB, including two non-yielding
+CPU-bound stack owners, 12 or more IRQ slices each, progress of both
+workers, boot-stack restoration, canary checks and owned backing release,
+followed by `SPIFFOS_KEYBOARD_READY`. Negative disabled-IRQ tests at
+128/256/512 MiB refused to activate any preemption and stopped with
+`SPIFFOS_M10_D3_PREEMPT_ERROR:IRQ0_NOT_ENABLED`.
+The non-trivial integration checkpoint is a gated three-context
+test dispatcher only; it does not yet integrate the four-band D1
+priority selector or provide a general-purpose task syscall/ABI.
+
+The first build failed because the owned-stack service was originally
+gated only to M10-B; the D3 diagnostic now reuses the same provider by
+a compile-time OR guard (no duplicate allocator). The first guest boot
+reported CLOCK_PREPARE: M9 does not publish elapsed time until the
+first real IRQ0, so D3 now tolerates a pre-first-tick clock absence but
+requires elapsed time and real ticks by completion. Both corrections
+were retested in QEMU.
+
+## Full regression command
+
+```sh
+make HOST_CC=gcc test-m10-d3-acceptance
+```
+
+This first runs positive/negative real preemption, then the D2
+comprehensive suite (D2 trap/negative, D1 priority, M10-A/B/C,
+128/256/512MiB memory and framebuffer, keyboard/editor F1–F12,
+real IRQ0 timing and disabled route, CPU #UD/#DF, APIC and MMIO).
+Only an entirely green result plus an independent exact-source SHA
+and protected rollback should permit owner-authorized release.
+
+## Default-kernel boundary
+
+No D3 code is linked to the normal ISO without
+`SPIFFOS_M10_D3_PREEMPT_TEST`; its path uses the existing M9 IRQ0
+callback/EOI and plain IRETQ without a switch. Staging, testing and
+release must not replace the owner ISO without a verified original
+checksum and a persistent rollback. Physical boot media are forbidden.
