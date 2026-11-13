@@ -526,6 +526,12 @@ bool screen_editor_prepare_offscreen(struct screen_editor *editor,
     editor->cursor_line=line;
     editor->initialized=true;
     editor->deferred_activation=true;
+    /* A metadata-only console is not a drawable viewport. Deliberately
+     * invalidate its rendering token: boot_workspace_reset must restore
+     * console->initialized before activate_prepared can touch pixels.
+     * This prevents accidental offscreen activation from painting over
+     * workspace 1 even when the model itself is fully prepared. */
+    console->initialized=false;
     return true;
 }
 
