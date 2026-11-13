@@ -207,8 +207,11 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         d3_irq_restore(entry_flags);
         return false;
     }
-    __asm__ volatile("movw %%cs,%0" : "=r"(*(uint16_t *)&d3_cs));
-    __asm__ volatile("movw %%ss,%0" : "=r"(*(uint16_t *)&d3_ss));
+    uint16_t code_segment=0,stack_segment=0;
+    __asm__ volatile("movw %%cs,%0" : "=r"(code_segment));
+    __asm__ volatile("movw %%ss,%0" : "=r"(stack_segment));
+    d3_cs=code_segment;
+    d3_ss=stack_segment;
     for(size_t i=0;i<D3_WORKERS;++i)
         for(size_t byte=0;byte<D3_CANARY_BYTES;++byte)
             d3_stack[i][byte]=UINT8_C(0xa7);
@@ -224,7 +227,7 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         while(!d3_done && !d3_failed)
             __asm__ volatile("pause" : : : "memory");
     } else {
-        d3_failure="FRAME_OR_CLOCK_PREPARE";
+        d3_failure=frames_ready ? "CLOCK_PREPARE" : "FRAME_PREPARE";
         d3_irq_restore(entry_flags);
     }
     uint64_t end_flags=d3_irq_disable();
