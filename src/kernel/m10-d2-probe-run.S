@@ -57,7 +57,7 @@ m10_d2_probe_run:
     movl $1,m10_d2_probe_armed(%rip)
 .global m10_d2_probe_spin_begin
 m10_d2_probe_spin_begin:
-    cmpq $0,m10_d2_probe_done(%rip)
+    cmpl $0,m10_d2_probe_done(%rip)
     je m10_d2_probe_spin_begin
 .global m10_d2_probe_spin_end
 m10_d2_probe_spin_end:
