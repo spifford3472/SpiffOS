@@ -47,3 +47,48 @@ reassigning a static synthetic snapshot.
   existing regression suite and normal default ISO isolation.
 - Do not merge/deploy D4 diagnostic or enable normal-editor
   preemption until a separate full end-to-end review.
+
+
+## First integrated test evidence and discovered starvation edge
+
+D4 hosted all-four-band test at 20,000 deterministic dispatch decisions
+with alternating blocked/woken readiness passed using GCC's address
+and undefined-behavior sanitizers, marker
+`SPIFFOS_M10_D4_HOST_PRIORITY_CHURN_OK`. The live IRQ test-only
+dispatcher preserves D3's owned-stack and trusted IRQ-exit frame design,
+maps boot supervisor to slot 15, worker A to Time-sensitive (slot 0)
+and worker B to Background (slot 1). It proves actual supervisor
+reservation, two non-yielding worker slices, maximum background
+ready-wait, and distinct blocked/woken transitions in QEMU. Normal
+kernel code remains excluded by compile flag; D3 unchanged when
+its own diagnostic flag is used.
+
+The first live readiness stress failed its completion gate with
+`PREEMPTION_PROGRESS`: Background was repeatedly blocked for
+8 of each 32 dispatches and reset its aging score to zero on each
+block. A worker runnable only for a short recurring interval could
+never accumulate enough credit to overcome the 24-point
+base-priority gap, despite eventually waking. The coordinator
+corrected the D4 *test scheduler* to **preserve already-earned
+ready-time aging credit across short blocked intervals while
+pausing the age clock when blocked**. This permits eventual service
+without awarding credits for time spent blocked. No change was
+made to D1's immutable pure selection interface. The hosted
+readiness-churn model was updated to enforce the same policy.
+This is an explicit fairness contract for future scheduler work.
+
+Local QWEN performed a narrow no-code architecture review. It
+proposed modulo age counters to 'avoid overflow'; rejected because
+wraparound defeats monotonic fairness. Existing saturated 64-bit
+age counters are retained. No Codex escalation was necessary.
+
+## Remaining D4 requirements
+
+This is a **test-only D4 checkpoint**, not completion of generalized
+preemptive task scheduling. QEMU proves Background, Time-sensitive
+and supervisor Normal under real timer IRQ; Interactive is covered
+in the deterministic hosted policy tests. Full four-class live
+execution, an actual kernel task block/wakeup API, CPU budget/latency
+quantification, supervisor recovery under faults, priority inversion
+controls and editor isolation under generalized preemption remain
+OPEN. Do not enable D4 scheduling in the normal ISO yet.
