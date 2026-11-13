@@ -100,3 +100,29 @@ independently compiled and tested as described above.
 2026-11-12: initial M10 architecture, A scheduler, B cooperative switch,
 C timer accounting and isolated regression evidence recorded. No QTH
 network, OPNsense, hardware or production service changes were made.
+
+
+## Later review checkpoint — 2026-11-12
+
+The earlier B limitation concerning independent callee-register sentinels
+was subsequently addressed. `tests/x86-task-register-check.S` sets unique
+64-bit values in RBX, RBP and R12–R15, calls the cooperative switch, and
+checks all six values after resumption. `make HOST_CC=gcc test-m10-b-host`
+passed with this additional independent assembly probe.
+
+After these test-source/Makefile changes, the complete A–C recheck passed:
+`make HOST_CC=gcc test-memory test-m10-b-host test-m10-b-guest test-m10-c-guest`,
+including real guest 128/256/512 MiB for B and C and exact framebuffer
+memory checks. Source checkpoint:
+`4a10a62440f5e14cd967122063faa2cf3cc0f2e8`.
+The newly rebuilt **default** ISO checksum at this checkpoint was
+`7de7bcd928f5fd682b287375b037b53380fca8045d285c42d47a453a87ddc71d`;
+this supersedes the earlier checkpoint checksum for proposed release
+validation. Later documentation-only commits do not themselves constitute
+a new kernel-source test. Recompute checksum after any future source change.
+
+Remaining separate release-hardening requirements: negative fault injection
+for partial stack acquisition/rollback, a review of stack overflow protection
+(guard pages not implemented), final source/ISO correspondence audit,
+and explicit owner review/merge/deployment authorization. M10-D is not
+implemented or authorized.
