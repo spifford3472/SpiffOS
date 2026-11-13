@@ -486,3 +486,15 @@ build/workspace-manager-test: tests/workspace-manager-test.c src/kernel/workspac
 
 test-workspace-manager-memory: build/workspace-manager-test
 	./build/workspace-manager-test
+
+# M10-A standalone scheduler state/policy: no IRQ or kernel linkage yet.
+.PHONY: test-kernel-task
+test-kernel-task: build/kernel-task-test
+	./build/kernel-task-test
+
+build/kernel-task-test: tests/kernel-task-test.c src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/kernel-task-test.c src/kernel/kernel-task.c -o $@
+
+# A's pure hosted checks run as part of the existing memory regression suite.
+test-memory: test-kernel-task
