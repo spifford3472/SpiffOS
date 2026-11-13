@@ -134,3 +134,18 @@ Draft design authored for separate review while Issue #58's explicit
 architecture acceptance gate remains open. No code changes.
 
 2026-11-13: owner explicitly replied "i approve" to the proposed staged M10-D design in draft PR #62. This authorizes D1–D5 implementation and testing on isolated Forge checkouts, but does not authorize a merge or deployment. The architecture remains subject to exact trap-frame and priority-policy test evidence; unresolved behavior must be documented instead of assumed.
+
+
+## Scoped D3 merge and Forge QEMU deployment authorization — 2026-11-13
+
+Following independent owner-run D2 acceptance, the owner specifically
+authorized proceeding with **M10-D3, merging and deploying when ready**.
+This supersedes the historical no-merge/no-deploy restriction above for
+a *verified, test-only D3 QEMU release*, not for general-purpose kernel
+preemption. The normal SpiffOS ISO must still keep IRQ-based switching
+disabled unless the special diagnostic build flag is present; do not
+activate preemption in the live editor or physical hardware. Release
+is conditional on exact-source tests, 128/256/512MiB positive and
+fail-closed negatives, M9/M10 regressions, maintained owner rollback,
+and a separately reviewable merged source. D4 priority integration
+and D5 full production scheduler remain unapproved for deployment.
