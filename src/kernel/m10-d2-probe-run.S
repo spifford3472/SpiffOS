@@ -13,6 +13,7 @@
 .extern m10_d2_expected_rsp
 .extern m10_d2_expected_cs
 .extern m10_d2_expected_ss
+.extern m10_d2_expected_flags
 
 .global m10_d2_probe_run
 .type m10_d2_probe_run,@function
@@ -35,6 +36,15 @@ m10_d2_probe_run:
     movw %ss,%ax
     movzwq %ax,%rax
     movq %rax,m10_d2_expected_ss(%rip)
+
+    /* The same CMP used in the spin loop sets a known deterministic
+     * FLAGS pattern. PUSHFQ/POP-to-memory takes an exact snapshot while
+     * leaving every general-purpose register and the final RSP intact.
+     * MOV instructions below do not alter FLAGS; before each IRQ,
+     * the loop CMP reproduces this same value while done remains zero. */
+    cmpl $0,m10_d2_probe_done(%rip)
+    pushfq
+    popq m10_d2_expected_flags(%rip)
 
     movabsq $0x0101010101010101,%rax
     movabsq $0x0a0a0a0a0a0a0a0a,%rbx
