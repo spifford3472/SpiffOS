@@ -101,6 +101,18 @@ test-m10-d3-guest:
 test-m10-d4-guest:
 	python3 scripts/test-m10-d4-guest.py
 
+.PHONY: test-m10-d4-host
+test-m10-d4-host: build/m10-d4-host-test
+	./build/m10-d4-host-test
+
+build/m10-d4-host-test: tests/kernel-priority-d4-test.c src/kernel/kernel-priority-policy.c src/kernel/kernel-priority-policy.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/kernel-priority-d4-test.c src/kernel/kernel-priority-policy.c -o $@
+
+.PHONY: test-m10-d4-acceptance
+test-m10-d4-acceptance: test-m10-d4-host test-m10-d4-guest test-m10-d3-acceptance
+	@echo SPIFFOS_M10_D4_CHECKPOINT_OK
+
 # Full isolated D3 release gate: D3 real handoffs, D2 trap frames,
 # D1 fairness and every M9/M10 regression from the previous acceptance
 # suite. No physical disk, network or owner ISO side effects.
