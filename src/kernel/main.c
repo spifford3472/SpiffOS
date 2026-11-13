@@ -1180,6 +1180,20 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
+#ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
+    /* D2 intentionally runs before normal keyboard polling, when the
+     * real IRQ0 route is active. Test-only CPU sentinel cannot yield;
+     * three hardware interrupts must preserve all saved registers,
+     * hardware RIP/CS/RFLAGS and the actual pre-interrupt SS:RSP. */
+    extern void m10_d2_probe_run(void);
+    extern bool m10_d2_probe_passed(void);
+    m10_d2_probe_run();
+    if (!m10_d2_probe_passed()) {
+        (void)serial_write("SPIFFOS_M10_D2_FRAME_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D2_FRAME_OK\r\n");
+#endif
 #ifdef SPIFFOS_M10_B_SWITCH_TEST
     /* Test-only: prove two independent kernel stacks can cooperatively
      * resume while PIT0 interrupts continue. Never switch inside IRQ0.
