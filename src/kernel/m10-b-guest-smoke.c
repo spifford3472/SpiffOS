@@ -21,6 +21,10 @@ static volatile bool task_done[2];
 static volatile bool task_failed;
 static bool (*guest_clock)(uint64_t *);
 static uint64_t first_tick, last_tick;
+static const char *failure_reason = "UNSET";
+
+/* Test-only borrowed static error string for bounded serial diagnostics. */
+const char *m10_b_guest_failure_reason(void) { return failure_reason; }
 
 /* Each task validates its caller-independent progress and saved stack
  * guards, then yields to the persistent root stack. It never returns. */
@@ -56,7 +60,10 @@ static void task_two(void)
  * receives its separate physical-frame ownership/cleanup implementation. */
 bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
 {
-    if(read_clock_ms==NULL || !read_clock_ms(&first_tick)) return false;
+    if(read_clock_ms==NULL || !read_clock_ms(&first_tick)) {
+        failure_reason="CLOCK_UNAVAILABLE";
+        return false;
+    }
     guest_clock=read_clock_ms;
     for(size_t task=0;task<2;++task)
         for(size_t byte=0;byte<X86_TASK_STACK_BYTES;++byte)
@@ -64,21 +71,32 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     if(!x86_task_context_init(&task_context[0],task_stacks[0],
                                 sizeof task_stacks[0],task_one) ||
        !x86_task_context_init(&task_context[1],task_stacks[1],
-                                sizeof task_stacks[1],task_two))
+                                sizeof task_stacks[1],task_two)) {
+        failure_reason="STACK_INIT";
         return false;
+    }
     for(uint32_t round=0;round<TEST_ROUNDS;++round) {
         x86_task_switch(&boot_context,&task_context[0]);
         x86_task_switch(&boot_context,&task_context[1]);
         if(task_failed || task_step[0]!=round+1 ||
-           task_step[1]!=round+1) return false;
+           task_step[1]!=round+1) {
+            failure_reason="PROGRESS";
+            return false;
+        }
     }
     x86_task_switch(&boot_context,&task_context[0]);
     x86_task_switch(&boot_context,&task_context[1]);
     if(!task_done[0] || !task_done[1] || !guest_clock(&last_tick) ||
-       last_tick<first_tick) return false;
+       last_tick<first_tick) {
+        failure_reason="FINAL_STATE_OR_CLOCK";
+        return false;
+    }
     for(size_t task=0;task<2;++task)
         for(size_t byte=0;byte<64;++byte)
-            if(task_stacks[task][byte]!=UINT8_C(0x5a)) return false;
+            if(task_stacks[task][byte]!=UINT8_C(0x5a)) {
+                failure_reason="STACK_CANARY";
+                return false;
+            }
     return true;
 }
 #endif
