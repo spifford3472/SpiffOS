@@ -106,3 +106,6 @@ No M10-D scheduler preemption, physical disk/bootloader, network, or
 OPNsense changes occurred. Automated acceptance complete. The owner still
 needs to manually validate interactive QEMU keyboard, F1–F10 workspace
 switching, and the F12 indicator before final human acceptance.
+
+## User interactive acceptance — 2026-11-13
+The owner launched the installed M10 ISO using `python3 scripts/qemu.py run` on Forge and reported **"everything works"** in response to the requested acceptance checks: visible normal SpiffOS screen, keyboard typing and editing, F1–F9 workspace switching, F10 system workspace, and F12 timed workspace overlay. Combined with the independent exact-ISO QEMU boot and post-merge regression test results above, M10-A, M10-B and M10-C are accepted and complete. M10-D (true preemptive scheduling) remains open and unimplemented. This documentation-only update is newer than the deployed source commit; it does not alter the installed ISO.
