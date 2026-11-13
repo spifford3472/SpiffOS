@@ -105,6 +105,15 @@ test-m10-d4-guest:
 test-m10-d4-host: build/m10-d4-host-test
 	./build/m10-d4-host-test
 
+# The real D4 state transition owner is tested independently of IRQ context.
+.PHONY: test-m10-d4-state
+test-m10-d4-state: build/m10-d4-task-state-test
+	./build/m10-d4-task-state-test
+
+build/m10-d4-task-state-test: tests/m10-d4-task-control-test.c src/kernel/m10-d4-task-control.c src/kernel/m10-d4-task-control.h src/kernel/kernel-priority-policy.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d4-task-control-test.c src/kernel/m10-d4-task-control.c src/kernel/kernel-priority-policy.c -o $@
+
 build/m10-d4-host-test: tests/kernel-priority-d4-test.c src/kernel/kernel-priority-policy.c src/kernel/kernel-priority-policy.h Makefile
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/kernel-priority-d4-test.c src/kernel/kernel-priority-policy.c -o $@
