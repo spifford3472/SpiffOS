@@ -139,6 +139,40 @@ int main(void)
     assert(resets[1] == 2);
     assert(workspace_manager_switch(manager, 1));
     assert(checksum(pixels, WIDTH * HEIGHT) == first);
+    /* A fresh boot after the lazy-switch tests must prewarm all nine views
+     * while keeping the exact initial workspace visible. Existing page
+     * storage is reused here as the hosted memory ownership mock. */
+    memset(manager, 0, sizeof *manager);
+    memset(resets, 0, sizeof resets);
+    selected = 1;
+    assert(boot_workspace_reset(&console, &fb));
+    assert(text_console_write(&console, "SPIFFOS WORKSPACE\\nOUTPUT SCROLLS THE LOGO."));
+    assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    uint64_t preload_before = checksum(pixels, WIDTH * HEIGHT);
+    assert(workspace_manager_prewarm(manager));
+    assert(manager->active_id == 1 && !manager->system_visible);
+    assert(checksum(pixels, WIDTH * HEIGHT) == preload_before);
+    for (size_t index = 0; index < 9; ++index) {
+        assert(manager->ready[index]);
+        assert(manager->snapshot_ready[index]);
+    }
+    assert(workspace_manager_switch(manager, 9));
+    assert(workspace_manager_switch(manager, 1));
+    assert(checksum(pixels, WIDTH * HEIGHT) == preload_before);
+
+    /* The allocation-failure path does not break the old lazy mode. */
+    memset(manager, 0, sizeof *manager);
+    assert(boot_workspace_reset(&console, &fb));
+    assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    uint64_t fallback_before = checksum(pixels, WIDTH * HEIGHT);
+    deny_snapshot = true;
+    assert(!workspace_manager_prewarm(manager));
+    assert(checksum(pixels, WIDTH * HEIGHT) == fallback_before);
+    assert(manager->ready[0] && !manager->ready[1]);
+    deny_snapshot = false;
+    assert(workspace_manager_switch(manager, 2));
+    assert(workspace_manager_switch(manager, 1));
+    assert(checksum(pixels, WIDTH * HEIGHT) == fallback_before);
     for (size_t i = 0; i < 9; ++i) free(test_snapshot_memory[i]);
     free(manager);
     free(pixels);
