@@ -445,6 +445,11 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
     void *prepared_stacks[D3_WORKERS]={0};
     size_t acquired=0;
     for(;acquired<D3_WORKERS;++acquired) {
+#ifdef SPIFFOS_M10_D4_FAIL_STACK_INDEX_TEST
+        /* Negative image only: reject the third owner after allocating
+         * two complete 16KiB stacks, then prove reverse cleanup. */
+        if(acquired==2) break;
+#endif
         if(!memory_boot_m10_task_stack_prepare(
               acquired,&prepared_stacks[acquired])) break;
     }
