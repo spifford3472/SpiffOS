@@ -267,3 +267,8 @@ Owner authorized the *tested* first single-boot-CPU APIC IRQ0, vector 0x30 and P
 
 ## M9-3D6 post-IRQ validation follow-ups (2026-11-12)
 The controlled boot-CPU QEMU IRQ0 path has real 100/200-tick evidence; physical-chipset support, several IOAPICs or CPUs, NMI/SMI coordination, pending-IRQ shutdown, sustained storm/error handling beyond the bounded timing regression, recalibration and any public user/kernel IRQ ABI remain OPEN. Do not generalize from QEMU q35 success. See ADR-m9-3d6-irq0-delivery.md.
+
+
+## M10 open implementation gates — 2026-11-12
+
+The owner approved the A–C architecture and requires separate M10-D acceptance. Before M10-B, prove mapped stack backing ownership, cleanup from a surviving stack, initial 16 KiB stack sizing, and assembly ABI/interrupt-state preservation. Before M10-C, prove the cooperative context switch in QEMU; no switching in IRQ0. Four priority classes and actual preemptive scheduling remain M10-D review items, while ring-3 user-process ABI, SMP, FPU/SIMD and CR3 switching are deferred. Resolve the discrepancy between the accepted M9-3D6 ISO SHA256 (06856f9311f7894d5b870add2afd0b457309853433a689e4c74f1f11aa0b5a32) and the Forge current ISO (758492d3b4aea5587e28514e5882231929e25a90f31c7ce1a38bae8135eb4ba2) before deployment. See [M10 ADR](ADR-m10-task-scheduler-foundation.md).
