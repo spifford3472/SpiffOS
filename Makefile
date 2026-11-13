@@ -553,3 +553,8 @@ build/kernel-scheduler-clock-test: tests/kernel-scheduler-clock-test.c src/kerne
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/kernel-scheduler-clock-test.c src/kernel/kernel-scheduler-clock.c -o $@
 
 test-memory: test-scheduler-clock
+
+# Real APIC IRQ0 and safe-point reschedule request in disposable guests.
+.PHONY: test-m10-c-guest
+test-m10-c-guest:
+	python3 scripts/test-m10-c-guest.py
