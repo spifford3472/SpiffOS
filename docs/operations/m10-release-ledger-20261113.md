@@ -81,3 +81,28 @@ not a production general task service. M10-C records timer ticks and
 a coalescing safe-point request, not asynchronous preemption.
 Guard pages, production task stack manager, priority enforcement and
 M10-D are not part of this release.
+
+
+## Verified owner installation — 2026-11-13
+The owner ran `bash /tmp/spiffos-m10-abc-merged-install.sh`; the guarded
+installer reported `M10_DEPLOY_OK`, advanced the clean owner worktree to
+release ledger commit `8809c15f044f82d8e6c9afc8152980adff37d987`,
+and atomically installed the ISO after exact source and hash checks.
+Remote independent verification confirmed:
+- Owner checkout source exactly `8809c15f044f82d8e6c9afc8152980adff37d987`,
+  Git worktree clean.
+- Installed `build/spiffos.iso` SHA-256 exactly
+  `ffb0631bbbc0eb4b6885dfe46db158939f75a726c5f3d79fd57ddf9a6c78ab90`;
+  byte-for-byte matches the staged, tested release candidate.
+- Protected `build/spiffos.iso.pre-m10-release-20261113-0210` preserved
+  with SHA-256
+  `758492d3b4aea5587e28514e5882231929e25a90f31c7ce1a38bae8135eb4ba2`.
+- Booted the **installed owner ISO path** in isolated 256 MiB QEMU
+  (TCG, fresh temporary OVMF variables, no network, no host disks):
+  `SPIFFOS_IRQ0_ENABLED`, `SPIFFOS_BOOT_OK`,
+  `SPIFFOS_KEYBOARD_READY` all present; no kernel exception marker.
+  Result `INSTALLED_M10_QEMU_BOOT PASS`.
+No M10-D scheduler preemption, physical disk/bootloader, network, or
+OPNsense changes occurred. Automated acceptance complete. The owner still
+needs to manually validate interactive QEMU keyboard, F1–F10 workspace
+switching, and the F12 indicator before final human acceptance.
