@@ -892,3 +892,90 @@ bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
         out_pages[i] = snapshot_virt[slot][i];
     return true;
 }
+
+#ifdef SPIFFOS_M10_B_SWITCH_TEST
+/* M10-B first owned-stack QEMU proof. Each 16 KiB stack must be made of
+ * exactly four contiguous, individually M2-owned ordinary KERNEL frames.
+ * Contiguity is NOT assumed from M2's allocation order: it is verified
+ * before a single pointer becomes visible to the caller. Allocations occur
+ * only with IF=0, after retained-service validation and before its next
+ * read-only check; the test returns these frames before keyboard startup. */
+enum { M10_B_TEST_STACKS=2, M10_B_STACK_PAGES=4 };
+static uint64_t m10_b_stack_physical[M10_B_TEST_STACKS][M10_B_STACK_PAGES];
+static bool m10_b_stack_active[M10_B_TEST_STACKS];
+static bool m10_b_stack_poisoned;
+
+/* Release a partially acquired stack in reverse order. An unexpected owner
+ * mismatch is fatal for this test allocator; never pretend backing is free. */
+static bool m10_b_stack_rollback(size_t index, size_t acquired)
+{
+    bool clean=true;
+    while(acquired>0) {
+        --acquired;
+        if(frame_release(&boot_allocator,FRAME_OWNER_KERNEL,
+                m10_b_stack_physical[index][acquired])!=FRAME_OK) clean=false;
+        m10_b_stack_physical[index][acquired]=0;
+    }
+    if(!clean) m10_b_stack_poisoned=true;
+    return clean;
+}
+
+/* Acquire mapped, zeroed ordinary pages without using the supervisor pool.
+ * Any failed mapping/contiguity check rolls back every acquired frame. */
+bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack)
+{
+    if(index>=M10_B_TEST_STACKS || out_stack==NULL || m10_b_stack_poisoned ||
+       m10_b_stack_active[index] || !retained_started ||
+       !boot_allocator_available ||
+       retained_policy.allocator!=&boot_allocator ||
+       !frame_allocator_check(&boot_allocator)) return false;
+    uint64_t first_physical=0, first_virtual=0;
+    size_t acquired=0;
+    for(;acquired<M10_B_STACK_PAGES;++acquired) {
+        uint64_t physical=UINT64_MAX,virtual_address=0;
+        enum page_access_result status=page_access_allocate_zero(
+            &boot_allocator,&retained_policy,FRAME_OWNER_KERNEL,
+            kernel_page_zero,NULL,&physical);
+        if(status!=PAGE_ACCESS_OK) {
+            if(status==PAGE_ACCESS_ROLLBACK_FAILED) m10_b_stack_poisoned=true;
+            break;
+        }
+        m10_b_stack_physical[index][acquired]=physical;
+        /* Count this frame as owned even when address resolution fails. */
+        if(page_access_resolve(&retained_policy,FRAME_OWNER_KERNEL,physical,
+              &virtual_address)!=PAGE_ACCESS_OK) {
+            ++acquired;
+            break;
+        }
+        if(acquired==0) {
+            first_physical=physical;
+            first_virtual=virtual_address;
+        } else if(first_physical > UINT64_MAX - 4096u*acquired ||
+                  first_virtual > UINT64_MAX - 4096u*acquired ||
+                  physical!=first_physical+4096u*acquired ||
+                  virtual_address!=first_virtual+4096u*acquired) {
+            ++acquired;
+            break;
+        }
+    }
+    if(acquired!=M10_B_STACK_PAGES) {
+        (void)m10_b_stack_rollback(index,acquired);
+        return false;
+    }
+    m10_b_stack_active[index]=true;
+    *out_stack=(void *)(uintptr_t)first_virtual;
+    return true;
+}
+
+/* Retire backing only after the caller has returned to a different stack.
+ * The exact physical slots are released; a second call must fail. */
+bool memory_boot_m10_task_stack_release(size_t index)
+{
+    if(index>=M10_B_TEST_STACKS || m10_b_stack_poisoned ||
+       !m10_b_stack_active[index] ||
+       !frame_allocator_check(&boot_allocator)) return false;
+    if(!m10_b_stack_rollback(index,M10_B_STACK_PAGES)) return false;
+    m10_b_stack_active[index]=false;
+    return frame_allocator_check(&boot_allocator);
+}
+#endif

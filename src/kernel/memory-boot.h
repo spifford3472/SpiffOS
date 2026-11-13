@@ -85,4 +85,13 @@ bool memory_boot_mmio_table_release(uint64_t physical);
  * pointers are borrowed until shutdown. No partial publication or IRQ use. */
 bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
                                   uint32_t **out_pages);
+
+#ifdef SPIFFOS_M10_B_SWITCH_TEST
+/* Test-only four-page contiguous stack backing from ordinary M2/M3-owned
+ * KERNEL frames. Exact ownership/contiguity is checked before publication.
+ * Caller owns exclusive IF=0 interval, runs no stack switch during release,
+ * and must release from the surviving boot stack. No supervisor reserve. */
+bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack);
+bool memory_boot_m10_task_stack_release(size_t index);
+#endif
 #endif

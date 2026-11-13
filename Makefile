@@ -8,6 +8,13 @@ POWERUP_CHECK_FLAGS ?= --powerup --console --workspace
 LDFLAGS := -nostdlib -static -z max-page-size=0x1000 -T linker.ld
 KERNEL := build/spiffos-kernel.elf
 
+# M10-B first QEMU smoke uses a dedicated test-only object set; the default
+# production ISO links none of these objects and retains original behavior.
+M10B_TEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
+M10B_TEST_OBJECTS := build/kernel-task.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
+endif
+
 .PHONY: all
 all: $(KERNEL)
 
@@ -226,8 +233,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -498,3 +505,35 @@ build/kernel-task-test: tests/kernel-task-test.c src/kernel/kernel-task.c src/ke
 
 # A's pure hosted checks run as part of the existing memory regression suite.
 test-memory: test-kernel-task
+
+# M10-B isolated first-run context proof. This is deliberately NOT part of
+# default kernel linkage or M10-A's release gate yet.
+build/x86-task-context.o: src/kernel/x86-task-context.c src/kernel/x86-task-context.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/x86-task-context.c -o $@
+
+build/x86-task-switch.o: src/kernel/x86-task-switch.S Makefile
+	mkdir -p build
+	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone -c src/kernel/x86-task-switch.S -o $@
+
+build/m10-b-guest-smoke.o: src/kernel/m10-b-guest-smoke.c src/kernel/x86-task-context.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-b-guest-smoke.c -o $@
+
+.PHONY: test-m10-b-host
+test-m10-b-host: build/m10-b-switch-host-test
+	./build/m10-b-switch-host-test
+
+build/m10-b-switch-host-test: tests/x86-task-switch-test.c src/kernel/x86-task-context.c src/kernel/x86-task-context.h src/kernel/x86-task-switch.S Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -O1 -g -mno-red-zone -fno-omit-frame-pointer -Isrc/kernel tests/x86-task-switch-test.c src/kernel/x86-task-context.c src/kernel/x86-task-switch.S -o $@
+
+# Pure task policy is linked only into the M10-B QEMU smoke candidate.
+build/kernel-task.o: src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task.c -o $@
+
+# Build and run the M10-B guest only in a disposable child checkout/ISO.
+.PHONY: test-m10-b-guest
+test-m10-b-guest:
+	python3 scripts/test-m10-b-guest.py
