@@ -276,3 +276,16 @@ The owner approved the A–C architecture and requires separate M10-D acceptance
 ## M10-D preemption approval gate — 2026-11-13
 
 The owner accepted the M10-A/B/C release and requested that development of M10-D begin. Design work has started in [the proposed M10-D ADR](ADR-m10-d-preemption-proposal.md). The owner approved the staged architecture and isolated D1–D5 implementation on 2026-11-13. Issue #58 remains OPEN for implementation and test acceptance; release merge/deployment still require separate authorization. Required implementation evidence includes: complete interrupt-frame/flags/RSP ownership, single-CPU non-reentrant IRQ dispatch, per-task stack lifetime, four-priority starvation safeguards, and supervisor reserved-service budget must be validated before any production preemption switch is enabled. QEMU-only tests must retain legacy IRQ0/keyboard/editor behavior. No M10-D merge or deployment is currently authorized.
+
+
+## M10-D3 implementation/release boundary — 2026-11-13
+
+The owner subsequently approved M10-D3 implementation, merge and Forge
+QEMU deployment **only after passing release validation**. This is a
+scoped exception to the earlier no-merge text for the separate
+test-only real IRQ handoff: the default keyboard/editor remains
+nonpreemptive. M10-D4 full priority scheduling and guaranteed supervisor
+CPU service, M10-D5 generalized production preemption/ABI, ring 3,
+physical devices, network and other interrupt routes all remain OPEN.
+See `ADR-m10-d-preemption-proposal.md` and
+`../operations/m10-d3-irq-handoff-20261113.md`.
