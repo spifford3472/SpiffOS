@@ -257,6 +257,12 @@ static bool d4_choose_next(unsigned *next)
     for(unsigned worker=0;worker<D3_WORKERS;++worker) {
 #ifdef SPIFFOS_M10_D4_BLOCK_WAKE_TEST
         if(!d4_worker_is_ready(worker,d3_ticks)) {
+#ifdef SPIFFOS_M10_D4_BLOCK_PROGRESS_CORRUPT_TEST
+            /* Negative only: simulate impossible worker execution during a
+             * blocked window. The saved progress guard must reject it. */
+            if(worker==0 && d3_ticks==110)
+                ++d3_iterations[0];
+#endif
             /* First blocked tick samples the exact progress value. Any
              * change on later blocked ticks proves a mis-dispatch. */
             if(worker==0) {
