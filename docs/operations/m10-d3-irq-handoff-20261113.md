@@ -64,3 +64,36 @@ No D3 code is linked to the normal ISO without
 callback/EOI and plain IRETQ without a switch. Staging, testing and
 release must not replace the owner ISO without a verified original
 checksum and a persistent rollback. Physical boot media are forbidden.
+
+
+## Hardened D3 negative and frame-pointer lifetime review
+
+The coordinator reviewed the exact IRQ-frame handoff function with local
+QWEN `qwen3-coder:30b` (narrow, read-only audit). QWEN raised possible
+use-after-free, pointer bounds and stale bootstrap-frame concerns. **The
+positive and negative QEMU evidence does not, by itself, establish
+general-purpose protection against arbitrary corrupt kernel pointers.**
+For the restricted D3 test, only the boot CPU runs; the IRQ gate clears IF,
+the two separately owned stacks stay mapped until `d3_active` is disabled,
+and the boot dispatcher releases them only after IRETQ returns. Thus
+no other CPU or task can concurrently release a selected stack. The
+implementation was nonetheless tightened to verify the worker-frame
+pointer and complete 20-word extent are inside the owning stack BEFORE
+reading saved SS/CS/RFLAGS; null and out-of-range task indices are rejected.
+The boot frame is supplied by the trusted M9 interrupt-entry stub.
+
+The hardened test now includes **nine** 128/256/512 MiB guest cases:
+three genuine CPU-hog preemption successes with worker progress and
+stack cleanup, three disabled-IRQ fail-closed cases, and three deliberate
+corrupt-canary cases after returning to the boot stack, each requiring a
+diagnostic error and refusing keyboard/success publication. These
+negative tests do not emulate malicious ring-3 pointers or SMP races.
+
+The first D3 compile failed because the existing stack ownership provider
+was guarded for M10-B only; D3 now reuses the exact provider under a
+narrow compile-time diagnostic OR. An initial boot failure
+`CLOCK_PREPARE` was traced to M9's documented time-unavailable-before-
+first-IRQ behavior, and corrected without weakening the final requirement
+for actual elapsed hardware ticks. A malformed newline in a source
+comment was separately caught by strict Clang compilation and corrected.
+All corrections remained isolated; the owner ISO was never changed.
