@@ -900,7 +900,14 @@ bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
  * before a single pointer becomes visible to the caller. Allocations occur
  * only with IF=0, after retained-service validation and before its next
  * read-only check; the test returns these frames before keyboard startup. */
+/* Four stacks are available only in the D4 simultaneous-priority
+ * diagnostic image. Every normal/D3/first-D4 build retains two, so no
+ * wider allocator or permanent memory reservation is introduced. */
+#ifdef SPIFFOS_M10_D4_FOUR_CLASS_TEST
+enum { M10_B_TEST_STACKS=4, M10_B_STACK_PAGES=4 };
+#else
 enum { M10_B_TEST_STACKS=2, M10_B_STACK_PAGES=4 };
+#endif
 static uint64_t m10_b_stack_physical[M10_B_TEST_STACKS][M10_B_STACK_PAGES];
 static bool m10_b_stack_active[M10_B_TEST_STACKS];
 static bool m10_b_stack_poisoned;
