@@ -289,3 +289,7 @@ CPU service, M10-D5 generalized production preemption/ABI, ring 3,
 physical devices, network and other interrupt routes all remain OPEN.
 See `ADR-m10-d-preemption-proposal.md` and
 `../operations/m10-d3-irq-handoff-20261113.md`.
+
+## M10-D3.1 debug visibility and D4 open gates — 2026-11-13
+
+The owner approved D3.1 then D4 development. Workspace metadata may be prepared at boot but inactive editor painting remains lazy; any nonpainting editor initializer and F10 diagnostics must be tested. Real four-priority preemptive scheduling, anti-starvation and supervisor recovery under CPU load remain M10-D4 acceptance gates. See [ADR-m10-d31-workspaces-debug-hub.md](ADR-m10-d31-workspaces-debug-hub.md).
