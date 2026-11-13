@@ -1161,7 +1161,10 @@ void kmain(void)
      * No physical stack ownership is claimed at this checkpoint. */
     extern bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *));
     if (!m10_b_guest_smoke(kernel_timer_boot_now_ms)) {
-        (void)serial_write("SPIFFOS_M10_B_SWITCH_ERROR\r\n");
+        extern const char *m10_b_guest_failure_reason(void);
+        (void)serial_write("SPIFFOS_M10_B_SWITCH_ERROR:");
+        (void)serial_write(m10_b_guest_failure_reason());
+        (void)serial_write("\r\n");
         halt_forever();
     }
     (void)serial_write("SPIFFOS_M10_B_SWITCH_OK\r\n");
