@@ -97,3 +97,45 @@ first-IRQ behavior, and corrected without weakening the final requirement
 for actual elapsed hardware ticks. A malformed newline in a source
 comment was separately caught by strict Clang compilation and corrected.
 All corrections remained isolated; the owner ISO was never changed.
+
+
+## Final independent release-gate evidence — 2026-11-13
+
+At exact **tested code SHA**
+`237fc2bcbfb392dab12aa4feb4c00f6a70467f79` on an isolated
+Forge review checkout:
+
+- `make test-m10-d3-guest`: PASS nine QEMU guest proofs at
+  128/256/512MiB: three actual timer-preempted pairs of non-yielding
+  workers with >=12 IRQ slices each and owned-stack release; three
+  IRQ0-disabled negatives; three independently built, guard-corruption
+  fail-closed negatives.
+- `make HOST_CC=gcc test-m10-d3-acceptance`: **PASS**, log
+  `/tmp/spiffos-m10-d3-hardened-full.log`,
+  `SPIFFOS_M10_D2_ACCEPTANCE_OK` and
+  `SPIFFOS_M10_D3_ACCEPTANCE_OK` verified; runtime ~160.51s.
+  All D1 policy sanitizers, D2 real trap positive+negative,
+  M10-A/B/C, memory/framebuffer exact pixels at three RAM sizes,
+  keyboard/editor special characters, nine workspaces/F10/F12,
+  positive/negative real IRQ0, #UD/#DF fault fixtures,
+  APIC cache identity/negative and MMIO UC/NX/rollback passed.
+  Real IRQ0 100-tick timing was 1.002 / 0.994 / 0.995 seconds.
+- `make -B HOST_CC=gcc iso`: PASS, ordinary production build.
+  Debug-stripped kernel ELF SHA-256
+  `74fcf145423e0311366bc55223bd3a93cc24c46442f755183ba90b061bdac1fe`
+  matched byte-for-byte the accepted M10-A/B/C executable
+  (`cmp` PASS). No D1 priority, D2 probe or D3 handoff symbols were
+  linked in the ordinary kernel. ISO container SHA differs because
+  image packaging includes independently generated metadata; runtime
+  ELF equality, not ISO checksum equality, is the verified claim.
+
+GitHub comparisons between the tested code commit and the final
+D3 branch show only additional ADR/operations documentation changes,
+not a different compiled/tested D3 implementation. Final merge
+and Forge deployment remain conditioned on an exact-main SHA,
+a verified persistent backup of the current installed ISO
+(`ffb0631bbbc0eb4b6885dfe46db158939f75a726c5f3d79fd57ddf9a6c78ab90`),
+and postmerge isolated QEMU proof. Original M9 backup must be retained.
+Only the D3 test ISO enables timer-driven handoff. Normal ISO
+must retain M10-A/B/C runtime behavior. No D4 general priority/supervisor
+CPU guarantees or preemptive editor support are claimed.
