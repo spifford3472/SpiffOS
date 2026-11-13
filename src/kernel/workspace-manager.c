@@ -87,6 +87,19 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
         !screen_editor_seed_line(&manager->editors[0], 14, second, sizeof second - 1))
         return false;
     manager->ready[0] = true;
+    /* All eight remaining workspaces get separate editor-owned line
+     * storage and a borrowed console descriptor now. No drawing or M3
+     * snapshot allocation occurs: only the foreground owns pixels. */
+    for(size_t index=1;index<WORKSPACE_COUNT;++index) {
+        manager->consoles[index]=*boot_console;
+        manager->consoles[index].column=0;
+        manager->consoles[index].row=13;
+        if(!screen_editor_prepare_offscreen(
+              &manager->editors[index],&manager->consoles[index],
+              submit,submit_context))
+            return false;
+        manager->ready[index]=true;
+    }
     return true;
 }
 
@@ -215,24 +228,36 @@ bool workspace_manager_switch(struct workspace_manager *manager, size_t id)
     size_t target = id - 1;
     if (!snapshot_transfer(manager->framebuffer, previous, true)) return false;
     manager->snapshot_ready[previous] = true;
-    bool newly_initialized = !manager->ready[target];
-    if (newly_initialized) {
-        if (!boot_workspace_reset(&manager->consoles[target], manager->framebuffer) ||
-            !screen_editor_initialize(&manager->editors[target],
-                &manager->consoles[target], manager->submit, manager->submit_context)) {
-            snapshot_transfer(manager->framebuffer, previous, false);
+    /* Prepared means logical model ready, not necessarily a captured
+     * framebuffer. First presentation draws the blank logo and binds the
+     * already-owned editor cursor without recreating its logical records. */
+    bool first_presentation=!manager->snapshot_ready[target];
+    if(first_presentation) {
+        if(!manager->ready[target]) {
+            manager->consoles[target]=manager->consoles[0];
+            manager->consoles[target].column=0;
+            manager->consoles[target].row=13;
+            if(!screen_editor_prepare_offscreen(
+                 &manager->editors[target],&manager->consoles[target],
+                 manager->submit,manager->submit_context)) {
+                (void)snapshot_transfer(manager->framebuffer,previous,false);
+                return false;
+            }
+            manager->ready[target]=true;
+        }
+        if(!boot_workspace_reset(&manager->consoles[target],
+                                  manager->framebuffer) ||
+           !screen_editor_activate_prepared(&manager->editors[target])) {
+            manager->ready[target]=false;
+            (void)snapshot_transfer(manager->framebuffer,previous,false);
             return false;
         }
-        manager->ready[target] = true;
-    } else if (manager->snapshot_ready[target]) {
-        if (!snapshot_transfer(manager->framebuffer, target, false))
-            return false;
-    } else {
-        snapshot_transfer(manager->framebuffer, previous, false);
+    } else if (!snapshot_transfer(manager->framebuffer,target,false)) {
+        (void)snapshot_transfer(manager->framebuffer,previous,false);
         return false;
     }
     if (!memory_boot_select_workspace(id)) {
-        if (newly_initialized) manager->ready[target] = false;
+        if (first_presentation) manager->ready[target] = false;
         snapshot_transfer(manager->framebuffer, previous, false);
         return false;
     }
