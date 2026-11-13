@@ -8,7 +8,7 @@
 #ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
 .extern m10_d2_probe_on_irq
 #endif
-#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+#if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 .extern m10_d3_irq_select
 #endif
 
@@ -44,7 +44,7 @@ x86_irq0_entry:
     movq %r12,%rdi
     call m10_d2_probe_on_irq
 #endif
-#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+#if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* D3-only: normal bounded IRQ0 callback and EOI already completed.
      * C chooses only an already-owned, saved 20-qword IRETQ frame. The
      * return address is a frame pointer, NOT a cooperative return RIP.
