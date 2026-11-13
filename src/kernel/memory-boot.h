@@ -93,5 +93,7 @@ bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
  * and must release from the surviving boot stack. No supervisor reserve. */
 bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack);
 bool memory_boot_m10_task_stack_release(size_t index);
+/* Isolated QEMU test: fail after two owned pages and prove rollback counts. */
+bool memory_boot_m10_task_stack_failure_probe(void);
 #endif
 #endif
