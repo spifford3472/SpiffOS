@@ -126,3 +126,33 @@ for partial stack acquisition/rollback, a review of stack overflow protection
 (guard pages not implemented), final source/ISO correspondence audit,
 and explicit owner review/merge/deployment authorization. M10-D is not
 implemented or authorized.
+
+
+## Final isolated A–C source checkpoint — 2026-11-12
+
+A dedicated test-only fault injector now fails M10-B task stack
+allocation after two successfully acquired frames. The guest verifies
+that caller output remains unchanged, all partially allocated frames
+are released, kernel-owned and ordinary free counts are restored, and
+the supervisor reserve is untouched. It then completes normal
+two-stack cooperative scheduling and post-release editor initialization.
+`make test-m10-b-guest` PASS at 128/256/512 MiB.
+
+After these source changes, a new full default ISO was built and tested
+under the normal (not M10-B diagnostic) build configuration. Exact
+source commit `fcfda08916459c3395ec05c61215f5ac43dcbe2e`:
+- `make HOST_CC=gcc test-memory test-m10-b-host test-m10-c-guest`: PASS.
+- Exact framebuffer and memory QEMU 128/256/512 MiB: PASS.
+- Independent six-register assembly sentinel: PASS.
+- C safe-point request QEMU 128/256/512 MiB: PASS.
+- Default ISO SHA256:
+  `f051c3eee9e95727a353fbb4e79c8e890c6aee8fffa624006734714967c74f5c`.
+
+The above checksum supersedes the older candidate ISO hashes recorded
+earlier in this document. Documentation commits made after this source
+checkpoint require a final GitHub blob/commit audit before any release.
+No installed owner ISO, physical device or network was changed. Remaining
+release gate: review and explicit authorization to merge/deploy, verify
+final exact-source correspondence, and retain rollback. Unmapped hardware
+guard pages and general production task stacks are deferred beyond the
+two-task M10-B diagnostic. M10-D is still separately unapproved.
