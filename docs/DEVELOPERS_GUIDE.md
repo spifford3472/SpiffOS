@@ -462,3 +462,32 @@ QEMU q35 PIT channel0 IRQ0 may be delivered through IOAPIC GSI2 rather than lega
 
 ## Implemented boot-CPU IRQ0 (M9-3D6)
 An x86 hardware interrupt gate automatically saves RIP/CS/RFLAGS and clears IF, but it does *not* preserve general-purpose registers or guarantee a 16-byte aligned interrupted stack. The M9-3D6 assembly saves RAX/RBX/RCX/RDX/RSI/RDI/RBP/R8–R15, saves RSP in callee-preserved R12 **after** saving the original R12, aligns down to 16 for the C handler, and restores exactly before IRETQ. The handler increments `kernel_timer`'s 64-bit atomic tick and sends local APIC EOI at offset 0xb0; it never talks to the masked legacy PIC. An IOAPIC indirect entry occupies two 32-bit registers: low contains vector, trigger/polarity and mask, high contains destination APIC ID in bits31:24. Setup writes the masked entry, validates readback, then unmasks only the actual IRQ0 GSI after PIT channel0 reload=11932. A disabled-route QEMU test must continue showing an unavailable clock. Spurious vector 0xff has its own IRETQ-only gate and no EOI. These implementation details are internal to the QEMU-first boot CPU and are not a published driver ABI.
+
+
+## M10-A kernel task policy — initial hosted implementation, 2026-11-12
+
+The kernel's **task policy** is a pure C state machine in
+`src/kernel/kernel-task.h` and `src/kernel/kernel-task.c`. No instruction
+pointer or stack is switched in M10-A. A task descriptor's `state` controls
+whether the scheduler can select it. The FIFO queue stores numeric indices
+into a fixed 16-entry table, not raw pointers into temporary memory.
+Exactly one slot (15) is reserved for a future system supervisor.
+
+A task handle contains both its slot and a generation. When a terminated
+descriptor is reused, the generation advances; an old handle must fail
+validation rather than control a different task. If generation reaches
+`UINT32_MAX`, that slot cannot be reused. Because the task table is bounded,
+simple shifting of the small FIFO on removal is deliberate: it is easier
+to reason about than lock-free queues or pointer-linked structures.
+
+The scheduler owns **metadata only**. The caller must ensure no function is
+called concurrently or from IRQ context. M10-B must separately own stacks,
+saved registers, bootstrap/idle execution and deferred stack reclamation.
+M10-C may add tick accounting but MUST NOT move execution from within IRQ0.
+See [the governing ADR](decisions/ADR-m10-task-scheduler-foundation.md).
+
+Run `make HOST_CC=gcc test-kernel-task` for the ASan/UBSan hosted tests.
+The normal `make test-memory` now includes them. On 2026-11-12 an isolated
+Forge checkout successfully compiled with freestanding Clang, ran sanitized
+GCC tests, and passed QEMU 128/256/512MiB exact-memory/framebuffer tests.
+The original working owner's checkout and ISO were not modified.
