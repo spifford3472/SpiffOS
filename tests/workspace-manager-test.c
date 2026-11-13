@@ -14,10 +14,12 @@
 static uint32_t *test_snapshot_memory[9];
 static size_t test_snapshot_pages[9];
 static bool deny_snapshot;
+static size_t deny_snapshot_workspace;
 bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
                                   uint32_t **out_pages)
 {
-    if (deny_snapshot || workspace_id < 1 || workspace_id > 9 ||
+    if (deny_snapshot || workspace_id == deny_snapshot_workspace ||
+        workspace_id < 1 || workspace_id > 9 ||
         pages == 0 || pages > 1000 || out_pages == NULL) return false;
     size_t i = workspace_id - 1;
     if (test_snapshot_memory[i] == NULL) {
@@ -159,6 +161,24 @@ int main(void)
     assert(workspace_manager_switch(manager, 9));
     assert(workspace_manager_switch(manager, 1));
     assert(checksum(pixels, WIDTH * HEIGHT) == preload_before);
+
+    /* A failure after some other workspaces are prepared must restore
+     * exactly the original pixels and leave the missing slot lazy. */
+    memset(manager, 0, sizeof *manager);
+    assert(boot_workspace_reset(&console, &fb));
+    assert(text_console_write(&console, "SPIFFOS WORKSPACE\\nOUTPUT SCROLLS THE LOGO."));
+    assert(workspace_manager_initialize(manager, &console, submit, NULL));
+    uint64_t partial_before = checksum(pixels, WIDTH * HEIGHT);
+    deny_snapshot_workspace = 5;
+    assert(!workspace_manager_prewarm(manager));
+    deny_snapshot_workspace = 0;
+    assert(checksum(pixels, WIDTH * HEIGHT) == partial_before);
+    for (size_t index = 0; index < 4; ++index)
+        assert(manager->ready[index] && manager->snapshot_ready[index]);
+    assert(!manager->ready[4] && !manager->snapshot_ready[4]);
+    assert(workspace_manager_switch(manager, 5));
+    assert(workspace_manager_switch(manager, 1));
+    assert(checksum(pixels, WIDTH * HEIGHT) == partial_before);
 
     /* The allocation-failure path does not break the old lazy mode. */
     memset(manager, 0, sizeof *manager);
