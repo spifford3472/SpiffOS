@@ -12,6 +12,9 @@
 #include <string.h>
 
 static struct x86_task_context root, tasks[2];
+/* Separate assembly test writes six unique GPR sentinels around a yield. */
+extern int x86_task_register_probe(struct x86_task_context *old,
+                                  const struct x86_task_context *next);
 static unsigned char stacks[2][X86_TASK_STACK_BYTES]
     __attribute__((aligned(16)));
 static volatile unsigned int steps[2],done[2];
@@ -59,8 +62,8 @@ static void cooperative_execution(void)
     assert(x86_task_context_init(&tasks[1],stacks[1],
             sizeof stacks[1],task_b));
     for(unsigned i=0;i<4;++i) {
-        x86_task_switch(&root,&tasks[0]);
-        x86_task_switch(&root,&tasks[1]);
+        assert(x86_task_register_probe(&root,&tasks[0]));
+        assert(x86_task_register_probe(&root,&tasks[1]));
         assert(event_count==2u*(i+1u));
     }
     x86_task_switch(&root,&tasks[0]);
