@@ -97,8 +97,12 @@ build/kernel-priority-policy.o: src/kernel/kernel-priority-policy.c src/kernel/k
 test-m10-d4-guest:
 	python3 scripts/test-m10-d4-guest.py
 
+.PHONY: test-m10-d4-four-class
+test-m10-d4-four-class:
+	python3 scripts/test-m10-d4-four-class.py
+
 .PHONY: test-m10-d4-acceptance
-test-m10-d4-acceptance: test-m10-d4-guest test-m10-d3-acceptance
+test-m10-d4-acceptance: test-m10-d4-guest test-m10-d4-four-class test-m10-d3-acceptance
 	@echo SPIFFOS_M10_D4_ACCEPTANCE_OK
 
 .PHONY: test-m10-d3-guest
