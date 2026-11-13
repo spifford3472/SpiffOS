@@ -91,6 +91,23 @@ def main():
             print(f"PASS M10-D3 negative QEMU {mib}MiB: IRQ0 "
                   "unavailable, no preemption enabled", flush=True)
 
+        # A second independent negative starts with live IRQ handoffs but
+        # corrupts the worker's low-stack guard on the surviving boot stack.
+        # This must reject D3 after releasing the owned stack frames.
+        build_guest(source, env, "-DSPIFFOS_M10_D3_PREEMPT_TEST "
+                    "-DSPIFFOS_M10_D3_BAD_CANARY_TEST")
+        for mib in (128, 256, 512):
+            serial = guest_run(
+                source, mib,
+                "SPIFFOS_M10_D3_PREEMPT_ERROR:PREEMPTION_PROGRESS")
+            if (b"SPIFFOS_M10_D3_PREEMPT_OK" in serial or
+                b"SPIFFOS_KEYBOARD_READY" in serial or
+                b"SPIFFOS_EXCEPTION:" in serial):
+                raise RuntimeError(
+                    f"D3 canary corruption at {mib}MiB did not fail closed")
+            print(f"PASS M10-D3 canary-negative QEMU {mib}MiB: "
+                  "corrupted worker stack guard rejected", flush=True)
+
 
 if __name__ == "__main__":
     main()
