@@ -524,8 +524,11 @@ Run `make HOST_CC=gcc test-m10-b-host` for the native stack-switch smoke
 test and `make test-m10-b-guest` for isolated 128/256/512 MiB QEMU runs.
 Both passed on 2026-11-12. The guest proof does **not** claim a general
 task-stack manager, hardware guard pages, ring-3 processes, asynchronous
-IRQ-frame switching, or complete manual callee-register sentinel coverage.
-Those remain separate production hardening gates.
+IRQ-frame switching, or fault-injected stack-allocation failure coverage.
+The six callee-saved registers RBX/RBP/R12–R15 are now independently tested
+with six unique assembly sentinels in `tests/x86-task-register-check.S`.
+The hosted probe passed on 2026-11-12. Guard pages and production task
+stack management remain separate hardening gates.
 
 
 ## M10-C monotonic scheduler accounting and safe-point request — 2026-11-12
