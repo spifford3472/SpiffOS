@@ -64,6 +64,21 @@ bool screen_editor_initialize(struct screen_editor *editor,
     struct text_console *console, logical_line_submit_fn submit,
     void *submit_context);
 
+/* Prepare a complete independent blank editor model without touching pixels.
+ * The caller owns an initialized metadata-only console with row 13.
+ * Set up one empty line at row 14 and all private backing pointers; no
+ * framebuffer snapshot, cursor drawing, or heap allocation occurs.
+ * The editor rejects input until its first activation succeeds. */
+bool screen_editor_prepare_offscreen(struct screen_editor *editor,
+    struct text_console *console, logical_line_submit_fn submit,
+    void *submit_context);
+
+/* Bind a prepared offscreen editor to its first rendered blank workspace.
+ * The caller must have performed boot_workspace_reset(console, framebuffer)
+ * just before calling. Reproduce the separating newline and paint the
+ * overwrite block exactly once; reject repeat activation atomically. */
+bool screen_editor_activate_prepared(struct screen_editor *editor);
+
 /* Register already-rendered counted text as one logical line without changing
  * any pixels. This lets earlier boot output participate in arrows and Enter.
  * Rejects overlap, unsupported rows/capacity and partial copies atomically. */
