@@ -17,7 +17,7 @@ enum { D4_SLOTS=16, D4_TEST_DECISIONS=20000 };
 
 /* Model one continuously ready supervisor and all four worker bands.
  * Selected workers reset age; blocked workers cannot age while blocked.
- * Reawakening a task starts at zero age and must not corrupt other tasks.
+ * Reawakening retains prior ready-time wait credit and must not corrupt other tasks.
  * Every 4th dispatch is reserved for the runnable supervisor. */
 static void four_bands_with_churn(void)
 {
@@ -43,7 +43,7 @@ static void four_bands_with_churn(void)
         size_t n=0;
         for(size_t i=0;i<D4_SLOTS;++i) {
             if(runnable[i]) ready[n++]=all[i];
-            else all[i].waiting_dispatches=0;
+            /* Do not age a blocked task or reset already-earned credit. */
         }
         uint32_t selected=UINT32_MAX;
         assert(kernel_priority_choose(ready,n,turn,&selected)==
@@ -54,8 +54,8 @@ static void four_bands_with_churn(void)
             assert(selected==KERNEL_PRIORITY_SUPERVISOR_SLOT);
         ++service[selected];
         for(size_t i=0;i<D4_SLOTS;++i) {
-            if(!runnable[i] || i==selected) all[i].waiting_dispatches=0;
-            else ++all[i].waiting_dispatches;
+            if(i==selected) all[i].waiting_dispatches=0;
+            else if(runnable[i]) ++all[i].waiting_dispatches;
             if(all[i].waiting_dispatches>longest_wait[i])
                 longest_wait[i]=all[i].waiting_dispatches;
         }
