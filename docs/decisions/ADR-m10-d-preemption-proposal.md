@@ -3,8 +3,9 @@
 Status: **OWNER APPROVED FOR ARCHITECTURE AND IMPLEMENTATION**, 2026-11-13.
 Merge, ISO deployment and physical hardware changes are NOT authorized.
 Design and implementation proceed in isolated reviewable checkpoints.
-Issue: #58. Branch is documentation-only; no source, ISO, system or
-network deployment is authorized by this proposal.
+Issue: #58. This documentation branch records the approved direction;
+source development is permitted in separate isolated branches, but no
+merge, ISO, system or network deployment is authorized.
 Baseline: M10-A/B/C accepted and deployed in QEMU; release source
 `8809c15f044f82d8e6c9afc8152980adff37d987`.
 Governing references: `AGENTS.md`,
@@ -122,11 +123,9 @@ preemptible interrupt handlers, software timers, BIOS/physical laptop
 testing, general driver thread-safety, physical media and any network
 configuration are outside M10-D.
 
-## Owner decision requested
+## Owner decision and remaining gate
 
-Approve **this staged, test-first architecture** or request changes
-before writing the D1/D2 implementation. Approval of this ADR does
-not itself authorize merges, ISO deployment or physical hardware changes.
+**Approved 2026-11-13**: staged D1–D5 implementation and testing on isolated Forge checkouts. A code review, complete test evidence and separate owner approval are still required before merging, ISO deployment or physical hardware changes. Exact policy parameters must be documented and tested before enabling release behavior.
 
 ## Change history
 
