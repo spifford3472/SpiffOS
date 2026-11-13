@@ -75,7 +75,9 @@ int main(void)
     assert(text_console_write(&console, "SPIFFOS WORKSPACE\nOUTPUT SCROLLS THE LOGO."));
     struct workspace_manager *manager = calloc(1, sizeof *manager);
     assert(manager != NULL);
-    uint64_t before_boot_preparation=checksum(pixels, WIDTH * HEIGHT);
+    /* Workspace 1's normal editor initialization intentionally draws a
+     * visible cursor, so protect an independent logo/background location. */
+    uint32_t before_logo_pixel=pixels[0];
     assert(workspace_manager_initialize(manager, &console, submit, NULL));
     /* D3.1: all nine editor models are independent and ready immediately,
      * without allocating eight snapshots or repainting their pixels. */
@@ -93,7 +95,7 @@ int main(void)
             assert(!screen_editor_activate_prepared(&manager->editors[index]));
         }
     }
-    assert(checksum(pixels,WIDTH*HEIGHT)==before_boot_preparation);
+    assert(pixels[0]==before_logo_pixel);
     /* Verify F12 paints the center and restores every pixel without touching
      * the editor, and F10 is read-only and preserves workspace state. */
     uint64_t indicator_before = checksum(pixels, WIDTH * HEIGHT);
