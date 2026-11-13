@@ -117,19 +117,28 @@ static bool d3_prepare_frame(size_t worker, void (*entry)(void))
 static bool d3_valid_frame(unsigned current, const uint64_t *frame)
 {
     if(frame==NULL || ((uintptr_t)frame & 7u)!=0 ||
-       frame[M10_D2_CS]!=d3_cs || frame[M10_D2_SS]!=d3_ss ||
-       (frame[M10_D2_RFLAGS]&UINT64_C(0x202))!=UINT64_C(0x202))
-        return false;
-    if(current==D3_BOOT) return true;
-    if(current>=D3_CONTEXTS) return false;
-    uintptr_t base=(uintptr_t)d3_stack[current-1];
-    uintptr_t ptr=(uintptr_t)frame;
-    uintptr_t top=base+X86_TASK_STACK_BYTES;
-    if(ptr<base+D3_CANARY_BYTES ||
-       ptr>top-M10_D2_FRAME_QWORDS*sizeof(uint64_t) ||
-       frame[M10_D2_RSP]<base+D3_CANARY_BYTES ||
-       frame[M10_D2_RSP]>top) return false;
-    return true;
+       current>=D3_CONTEXTS) return false;
+    /* A frame from a worker must occupy its own mapped stack. Check
+     * address arithmetic and the COMPLETE frame extent before dereferencing
+     * any hardware words. No other CPU can free these frames while D3 is
+     * active because all frame retirement is on the boot stack with IF=0. */
+    if(current!=D3_BOOT) {
+        uintptr_t base=(uintptr_t)d3_stack[current-1];
+        uintptr_t ptr=(uintptr_t)frame;
+        if(base==0 || base>UINTPTR_MAX-X86_TASK_STACK_BYTES)
+            return false;
+        uintptr_t top=base+X86_TASK_STACK_BYTES;
+        if(ptr<base+D3_CANARY_BYTES ||
+           ptr>top-M10_D2_FRAME_QWORDS*sizeof(uint64_t))
+            return false;
+        if(frame[M10_D2_RSP]<base+D3_CANARY_BYTES ||
+           frame[M10_D2_RSP]>top) return false;
+    }
+    /* The original boot frame comes only from the M9 interrupt-entry
+     * assembly, never from a user-supplied or untrusted pointer. */
+    return frame[M10_D2_CS]==d3_cs &&
+           frame[M10_D2_SS]==d3_ss &&
+           (frame[M10_D2_RFLAGS]&UINT64_C(0x202))==UINT64_C(0x202);
 }
 
 /* Called by test-only assembly AFTER the existing C IRQ0 handler has
