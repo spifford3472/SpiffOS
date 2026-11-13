@@ -87,6 +87,20 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
         !screen_editor_seed_line(&manager->editors[0], 14, second, sizeof second - 1))
         return false;
     manager->ready[0] = true;
+    /* Prepare every bounded workspace's logical identity at boot. Only
+     * workspace 1 has a painted editor; offscreen consoles are descriptive
+     * metadata and MUST NOT draw into the physical framebuffer here.
+     * A first F2–F9 activation still initializes its own editor and pixels
+     * transactionally after successful snapshot allocation. */
+    for (size_t i = 0; i < WORKSPACE_COUNT; ++i) {
+        if (i != 0) {
+            manager->consoles[i] = *boot_console;
+            manager->editors[i].initialized = false;
+            manager->ready[i] = false;
+            manager->snapshot_ready[i] = false;
+        }
+        manager->prepared[i] = true;
+    }
     return true;
 }
 
@@ -168,9 +182,30 @@ void workspace_manager_fade_indicator(struct workspace_manager *manager,
     }
 }
 
-/* F10 opens a dedicated read-only system screen. Repeated F10 is harmless;
- * the selected user workspace remains saved and can be restored by F1..F9. */
-bool workspace_manager_system(struct workspace_manager *manager)
+/* Render a decimal count without libc/sprintf, heap allocation or any
+ * writes outside the borrowed initialized system-view console. Only the
+ * foreground boot CPU calls this outside IRQ context. */
+static bool system_write_unsigned(struct text_console *console, uint64_t value)
+{
+    char reversed[21];
+    char digits[21];
+    size_t count=0;
+    do {
+        reversed[count++]=(char)('0'+(value%10u));
+        value/=10u;
+    } while(value!=0 && count<sizeof reversed-1);
+    for(size_t i=0;i<count;++i) digits[i]=reversed[count-1-i];
+    digits[count]='\0';
+    return text_console_write(console,digits);
+}
+
+/* F10 renders a bounded read-only diagnostic snapshot. Report only actual
+ * workspace metadata and timer observations supplied by the boot caller.
+ * A missing timer source is NOT zero ticks; it is shown as unavailable.
+ * Existing F10 calls remain supported through the compatibility wrapper.
+ * The view's drawing occurs only after the foreground pixels are preserved. */
+bool workspace_manager_system_diagnostics(struct workspace_manager *manager,
+    bool clock_present, uint64_t ticks)
 {
     if (manager == NULL || !snapshot_supported(manager->framebuffer)) return false;
     workspace_manager_hide_indicator(manager);
@@ -180,20 +215,47 @@ bool workspace_manager_system(struct workspace_manager *manager)
     manager->snapshot_ready[index] = true;
     struct text_console system_console = {0};
     const struct limine_framebuffer *fb = manager->framebuffer;
-    if (!text_console_initialize(&system_console, fb, 0, 0,
-        fb->width / TEXT_CELL_PIXELS, fb->height / TEXT_CELL_PIXELS) ||
-        !text_console_write(&system_console, "SPIFFOS SYSTEM SCREEN\n\n")) {
-        snapshot_transfer(fb, index, false);
-        return false;
+    size_t prepared=0,ready=0,snapshots=0;
+    for (size_t i=0;i<WORKSPACE_COUNT;++i) {
+        if(manager->prepared[i]) ++prepared;
+        if(manager->ready[i]) ++ready;
+        if(manager->snapshot_ready[i]) ++snapshots;
     }
-    char line[] = "ACTIVE WORKSPACE: 1\nF1-F9: WORKSPACES\nF10: SYSTEM SCREEN\nF12: SHOW WORKSPACE NUMBER";
-    line[18] = (char)('0' + manager->active_id);
-    if (!text_console_write(&system_console, line)) {
-        snapshot_transfer(fb, index, false);
+    bool displayed =
+        text_console_initialize(&system_console, fb, 0, 0,
+            fb->width / TEXT_CELL_PIXELS, fb->height / TEXT_CELL_PIXELS) &&
+        text_console_write(&system_console,
+            "SPIFFOS SYSTEM MONITOR (READ ONLY)\n\nACTIVE WORKSPACE: ") &&
+        system_write_unsigned(&system_console,manager->active_id) &&
+        text_console_write(&system_console," / 9\nPREPARED WORKSPACES: ") &&
+        system_write_unsigned(&system_console,prepared) &&
+        text_console_write(&system_console," / 9\nINITIALIZED EDITORS: ") &&
+        system_write_unsigned(&system_console,ready) &&
+        text_console_write(&system_console," / 9\nFRAMEBUFFER SNAPSHOTS: ") &&
+        system_write_unsigned(&system_console,snapshots) &&
+        text_console_write(&system_console," / 9\nIRQ0 TICKS: ") &&
+        (!clock_present ||
+            system_write_unsigned(&system_console,ticks)) &&
+        (clock_present ||
+            text_console_write(&system_console,"UNAVAILABLE")) &&
+        text_console_write(&system_console,
+            "\nTASK CPU LOAD: UNAVAILABLE\n"
+            "D3 PREEMPTION: DIAGNOSTIC TEST ONLY\n\n"
+            "F1-F9: WORKSPACES\nF10: SYSTEM SCREEN\n"
+            "F12: SHOW WORKSPACE NUMBER");
+    if (!displayed) {
+        (void)snapshot_transfer(fb,index,false);
         return false;
     }
     manager->system_visible = true;
     return true;
+}
+
+/* Retain the established API for older hosted tests; no live IRQ source
+ * is implied, so its tick field is explicitly unavailable. */
+bool workspace_manager_system(struct workspace_manager *manager)
+{
+    return workspace_manager_system_diagnostics(manager,false,0);
 }
 
 /* Prepare a new editor only after verifying snapshot bounds and target ID.
