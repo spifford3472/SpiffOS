@@ -524,9 +524,9 @@ build/m10-b-guest-smoke.o: src/kernel/m10-b-guest-smoke.c src/kernel/x86-task-co
 test-m10-b-host: build/m10-b-switch-host-test
 	./build/m10-b-switch-host-test
 
-build/m10-b-switch-host-test: tests/x86-task-switch-test.c src/kernel/x86-task-context.c src/kernel/x86-task-context.h src/kernel/x86-task-switch.S Makefile
+build/m10-b-switch-host-test: tests/x86-task-switch-test.c tests/x86-task-register-check.S src/kernel/x86-task-context.c src/kernel/x86-task-context.h src/kernel/x86-task-switch.S Makefile
 	mkdir -p build
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -O1 -g -mno-red-zone -fno-omit-frame-pointer -Isrc/kernel tests/x86-task-switch-test.c src/kernel/x86-task-context.c src/kernel/x86-task-switch.S -o $@
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -O1 -g -mno-red-zone -fno-omit-frame-pointer -Isrc/kernel tests/x86-task-switch-test.c tests/x86-task-register-check.S src/kernel/x86-task-context.c src/kernel/x86-task-switch.S -o $@
 
 # Pure task policy is linked only into the M10-B QEMU smoke candidate.
 build/kernel-task.o: src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
