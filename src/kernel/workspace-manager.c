@@ -181,9 +181,27 @@ void workspace_manager_fade_indicator(struct workspace_manager *manager,
     }
 }
 
+/* Format unsigned 64-bit diagnostic metrics without a libc dependency.
+ * The output buffer must have at least 21 bytes; no heap, IRQs or prints. */
+static bool diagnostics_u64(char output[21],uint64_t value)
+{
+    if(output==NULL) return false;
+    char reversed[20];
+    size_t length=0;
+    do {
+        reversed[length++]=(char)('0'+value%10u);
+        value/=10u;
+    } while(value!=0 && length<sizeof reversed);
+    for(size_t offset=0;offset<length;++offset)
+        output[offset]=reversed[length-1-offset];
+    output[length]='\0';
+    return true;
+}
+
 /* F10 opens a dedicated read-only system screen. Repeated F10 is harmless;
  * the selected user workspace remains saved and can be restored by F1..F9. */
-bool workspace_manager_system(struct workspace_manager *manager)
+bool workspace_manager_system_with_diagnostics(struct workspace_manager *manager,
+    const struct workspace_system_diagnostics *diagnostics)
 {
     if (manager == NULL || !snapshot_supported(manager->framebuffer)) return false;
     workspace_manager_hide_indicator(manager);
@@ -205,8 +223,65 @@ bool workspace_manager_system(struct workspace_manager *manager)
         snapshot_transfer(fb, index, false);
         return false;
     }
+    /* The diagnostics are an immutable boot-CPU snapshot. No caller or
+     * IRQ handler can mutate workspace ownership through this read-only
+     * screen; all fields are grounded in manager flags / sampled clocks. */
+    size_t ready_count=0,snapshot_count=0;
+    for(size_t i=0;i<WORKSPACE_COUNT;++i) {
+        if(manager->ready[i]) ++ready_count;
+        if(manager->snapshot_ready[i]) ++snapshot_count;
+    }
+    char ready[]="\nREADY WORKSPACES: 0/9\nCAPTURED SCREENS: 0/9\n";
+    ready[19]=(char)('0'+ready_count);
+    ready[41]=(char)('0'+snapshot_count);
+    if(!text_console_write(&system_console,ready)) {
+        (void)snapshot_transfer(fb,index,false);
+        return false;
+    }
+    if(diagnostics!=NULL) {
+        char number[21];
+        if(diagnostics->clock_available) {
+            (void)diagnostics_u64(number,diagnostics->uptime_ms);
+            if(!text_console_write(&system_console,"UPTIME (MS): ") ||
+               !text_console_write(&system_console,number) ||
+               !text_console_write(&system_console,"\n")) {
+                (void)snapshot_transfer(fb,index,false);
+                return false;
+            }
+        } else if(!text_console_write(&system_console,
+                                     "UPTIME: UNAVAILABLE\n")) {
+            (void)snapshot_transfer(fb,index,false);
+            return false;
+        }
+        if(diagnostics->scheduler_available) {
+            (void)diagnostics_u64(number,diagnostics->scheduler_ticks);
+            if(!text_console_write(&system_console,"IRQ0 SCHEDULER TICKS: ") ||
+               !text_console_write(&system_console,number) ||
+               !text_console_write(&system_console,"\n")) {
+                (void)snapshot_transfer(fb,index,false);
+                return false;
+            }
+        } else if(!text_console_write(&system_console,
+                                      "SCHEDULER CLOCK: UNAVAILABLE\n")) {
+            (void)snapshot_transfer(fb,index,false);
+            return false;
+        }
+        if(!text_console_write(&system_console,
+            diagnostics->diagnostic_preemption_build ?
+             "PREEMPTION: D3 DIAGNOSTIC ONLY\n" :
+             "PREEMPTION: NORMAL EDITOR NONPREEMPTIVE\n")) {
+            (void)snapshot_transfer(fb,index,false);
+            return false;
+        }
+    }
     manager->system_visible = true;
     return true;
+}
+
+/* Compatibility wrapper for existing screen tests and callers. */
+bool workspace_manager_system(struct workspace_manager *manager)
+{
+    return workspace_manager_system_with_diagnostics(manager,NULL);
 }
 
 /* Prepare a new editor only after verifying snapshot bounds and target ID.
