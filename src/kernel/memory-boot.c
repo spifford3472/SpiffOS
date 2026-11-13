@@ -893,7 +893,7 @@ bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
     return true;
 }
 
-#if defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST)
+#if defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 /* M10-B first owned-stack QEMU proof. Each 16 KiB stack must be made of
  * exactly four contiguous, individually M2-owned ordinary KERNEL frames.
  * Contiguity is NOT assumed from M2's allocation order: it is verified
