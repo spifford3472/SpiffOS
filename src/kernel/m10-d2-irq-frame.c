@@ -26,7 +26,13 @@ extern const char m10_d2_probe_spin_end[];
  * The index order matches the literal stack push order in x86-irq0.S,
  * reversed by the downward-growing stack. */
 static const uint64_t expected_gprs[M10_D2_RIP] = {
+#ifdef SPIFFOS_M10_D2_BAD_EXPECTED_TEST
+    /* Deliberately wrong R15 for disposable negative guest only. The
+     * real interrupt still saves and restores the correct CPU register. */
+    UINT64_C(0x1515151515151516), /* R15 mismatch injection */
+#else
     UINT64_C(0x1515151515151515), /* r15 */
+#endif
     UINT64_C(0x1414141414141414), /* r14 */
     UINT64_C(0x1313131313131313), /* r13 */
     UINT64_C(0x1212121212121212), /* r12 */
