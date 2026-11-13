@@ -592,7 +592,7 @@ See Intel SDM Volume 3A section 7.14.2 and
 The probe's assembly routine fills all 15 GPRs with different
 64-bit sentinels and spins without yielding while three real PIT0
 interrupts arrive. The read-only IRQ checker verifies every register,
-saved original stack, RIP within the spin loop, CS, SS and IF. The
+saved original stack, RIP within the spin loop, CS, SS and the exact full RFLAGS word. The assembly establishes a known comparison-derived flags value and snapshots it with PUSHFQ before entering the interruptible spin. The
 assembly routine checks callee-saved registers again after `IRETQ`.
 An intentionally wrong R15 in a separate test ISO must produce
 `SPIFFOS_M10_D2_FRAME_ERROR`; otherwise the test is invalid.
