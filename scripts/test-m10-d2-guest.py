@@ -67,6 +67,35 @@ def main():
                 f"PASS M10-D2 QEMU {mib}MiB: real IRQ0 frame, all GPRs, "
                 "saved RIP/CS/RFLAGS/RSP/SS and IRETQ", flush=True)
 
+        # In the same isolated temporary source, rebuild ALL objects with
+        # an intentionally wrong expected R15. This must fail closed before
+        # keyboard entry, never claim FRAME_OK or corrupt the installed ISO.
+        bad = subprocess.run(
+            ["make", "-B", "BOOT_TEST_FLAGS=-DSPIFFOS_M10_D2_IRQ_FRAME_TEST "
+             "-DSPIFFOS_M10_D2_BAD_EXPECTED_TEST", "iso"],
+            cwd=source, env=env, capture_output=True, timeout=120)
+        if bad.returncode:
+            raise RuntimeError(
+                "M10-D2 negative ISO compilation failed: " +
+                (bad.stdout + bad.stderr).decode(errors="replace")[-3500:])
+        for mib in (128, 256, 512):
+            run = subprocess.run(
+                [sys.executable, "scripts/qemu.py", "test",
+                 "--memory-mib", str(mib),
+                 "--wait-marker", "SPIFFOS_M10_D2_FRAME_ERROR",
+                 "--timeout", "18"],
+                cwd=source, capture_output=True, timeout=23)
+            serial = (source / "build/serial.log").read_bytes()
+            if (run.returncode or
+                    b"SPIFFOS_M10_D2_FRAME_ERROR" not in serial or
+                    b"SPIFFOS_M10_D2_FRAME_OK" in serial or
+                    b"SPIFFOS_KEYBOARD_READY" in serial):
+                raise RuntimeError(
+                    f"M10-D2 negative QEMU {mib}MiB did not reject: " +
+                    repr(serial[-2000:]))
+            print(f"PASS M10-D2 negative QEMU {mib}MiB: "
+                  "wrong register rejected before keyboard", flush=True)
+
 
 if __name__ == "__main__":
     main()
