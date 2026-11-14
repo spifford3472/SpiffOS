@@ -81,6 +81,33 @@ def main():
             print(f"PASS M10-D4 complete negative QEMU {mib}MiB: "
                   "disabled IRQ0 rejects preemption", flush=True)
 
+        # Damage a saved worker frame only in a separate diagnostic ISO.
+        # The IRQ-exit selector must refuse that frame and restore the
+        # surviving supervisor, not return through the corrupted CS.
+        image(src, env, "-DSPIFFOS_M10_D4_COMPLETE_TEST "
+                        "-DSPIFFOS_M10_D4_BAD_FRAME_TEST")
+        for mib in (128, 256, 512):
+            data = boot(src, mib,
+                        "SPIFFOS_M10_D4_COMPLETE_ERROR:D4_QUOTA_OR_RECOVERY")
+            if (b"SPIFFOS_M10_D4_COMPLETE_OK" in data or
+                    b"SPIFFOS_KEYBOARD_READY" in data or
+                    b"SPIFFOS_EXCEPTION:" in data):
+                raise RuntimeError(f"D4 bad frame not contained at {mib}MiB")
+            print(f"PASS M10-D4 complete frame-negative QEMU {mib}MiB: "
+                  "invalid interrupted worker frame rejected", flush=True)
+
+        image(src, env, "-DSPIFFOS_M10_D4_COMPLETE_TEST "
+                        "-DSPIFFOS_M10_D4_BAD_CANARY_TEST")
+        for mib in (128, 256, 512):
+            data = boot(src, mib,
+                        "SPIFFOS_M10_D4_COMPLETE_ERROR:D4_QUOTA_OR_RECOVERY")
+            if (b"SPIFFOS_M10_D4_COMPLETE_OK" in data or
+                    b"SPIFFOS_KEYBOARD_READY" in data or
+                    b"SPIFFOS_EXCEPTION:" in data):
+                raise RuntimeError(f"D4 corrupted guard accepted at {mib}MiB")
+            print(f"PASS M10-D4 complete guard-negative QEMU {mib}MiB: "
+                  "corrupt mapped-stack canary rejected", flush=True)
+
 
 if __name__ == "__main__":
     main()
