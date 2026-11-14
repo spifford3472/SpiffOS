@@ -32,7 +32,7 @@ bool kernel_task_resources_check(const struct kernel_task_resources *resources,
                 return false;
             continue;
         }
-        if (r->handle.slot!=i || r->quarantined && r->owned_locks != 0 ||
+        if (r->handle.slot!=i || (r->quarantined && r->owned_locks != 0) ||
             kernel_task_get(table,r->handle)==NULL ||
             kernel_task_get(table,r->handle)->reclaimed ||
             !kernel_task_stack_safe_to_release(&r->stack,UINTPTR_MAX))
