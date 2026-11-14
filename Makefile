@@ -15,6 +15,13 @@ ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
 M10B_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/kernel-task-cleanup.o build/kernel-task-mutex.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
 endif
 
+# D5.4 independently stacked three-worker cooperative synchronization proof.
+# Never linked into unflagged normal editor.
+M10D54_TEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D54_GUEST_TEST,$(BOOT_TEST_FLAGS)),)
+M10D54_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/kernel-task-cleanup.o build/kernel-priority-policy.o build/kernel-sync-d53.o build/kernel-dispatch-d54.o build/x86-task-context.o build/x86-task-switch.o build/m10-d54-guest-smoke.o
+endif
+
 # D2 is a separate interrupt-frame diagnostic, never in the released ISO.
 M10D2_TEST_OBJECTS :=
 ifneq ($(findstring -DSPIFFOS_M10_D2_IRQ_FRAME_TEST,$(BOOT_TEST_FLAGS)),)
@@ -171,7 +178,7 @@ build/m10-d54-dispatch-test: tests/m10-d54-dispatch-test.c src/kernel/kernel-dis
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d54-dispatch-test.c src/kernel/kernel-dispatch-d54.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
 
-test-m10-d54-acceptance: test-m10-d54-dispatch test-m10-d53-acceptance
+test-m10-d54-acceptance: test-m10-d54-dispatch test-m10-d54-guest test-m10-d53-acceptance
 	@echo SPIFFOS_M10_D54_ACCEPTANCE_OK
 
 # D5.3 bounded multiwaiter, donation and cancellation proof (test-only).
@@ -202,6 +209,22 @@ build/m10-d5-supervisor-queue-test: tests/m10-d5-supervisor-queue-test.c src/ker
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-supervisor-queue-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-cleanup.c -o $@
 
 # M10-B diagnostic-only real execution of registered mutex lock transfer.
+build/kernel-sync-d53.o: src/kernel/kernel-sync-d53.c src/kernel/kernel-sync-d53.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-sync-d53.c -o $@
+
+build/kernel-dispatch-d54.o: src/kernel/kernel-dispatch-d54.c src/kernel/kernel-dispatch-d54.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-dispatch-d54.c -o $@
+
+build/m10-d54-guest-smoke.o: src/kernel/m10-d54-guest-smoke.c src/kernel/kernel-dispatch-d54.h src/kernel/memory-boot.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d54-guest-smoke.c -o $@
+
+.PHONY: test-m10-d54-guest
+test-m10-d54-guest:
+	python3 scripts/test-m10-d54-guest.py
+
 build/kernel-task-mutex.o: src/kernel/kernel-task-mutex.c src/kernel/kernel-task-mutex.h src/kernel/kernel-task-resources.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/kernel-task-mutex.c -o $@
@@ -452,8 +475,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
