@@ -186,6 +186,19 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
 
+# D5.5c pure authoritative IRQ frame binding and hardware tick service tests.
+# No default kernel, D4 task controller, or editor preemption changes.
+.PHONY: test-m10-d55c-frame-tick test-m10-d55c-acceptance
+test-m10-d55c-frame-tick: build/m10-d55c-frame-tick-test
+	./build/m10-d55c-frame-tick-test
+
+build/m10-d55c-frame-tick-test: tests/m10-d55c-frame-tick-test.c src/kernel/m10-d55c-frame-owner.c src/kernel/m10-d55c-frame-owner.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d55c-frame-tick-test.c src/kernel/m10-d55c-frame-owner.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d55c-acceptance: test-m10-d55c-frame-tick test-m10-d55b-acceptance
+	@echo SPIFFOS_M10_D55C_ACCEPTANCE_OK
+
 # D5.5 safety admission and monotonic supervisor service watchdog are
 # hosted diagnostic-only: never linked into ordinary editor/kernel.
 .PHONY: test-m10-d55-safety test-m10-d55-acceptance
