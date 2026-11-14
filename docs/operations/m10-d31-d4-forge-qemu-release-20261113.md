@@ -185,3 +185,22 @@ F12 overlay, clean close; repeat keyboard test in D4 diagnostic
 workspace. Do not mark D4 owner-accepted or start D5 until
 that confirmation. No network configuration, OPNsense, or physical
 disk/media change occurred.
+
+
+## Owner interactive acceptance — 2026-11-13
+
+Following verified owner-run deployment and independent QEMU boot checks,
+the owner explicitly reported **"both work"** after launching and testing
+both the normal D3.1 SpiffOS image and the separate D4 diagnostic image.
+This records acceptance of the requested **two interactive QEMU builds**.
+No individual keyboard test transcript was supplied; this acceptance
+is the owner's explicit confirmation, not a claim of independently
+observed F1–F12 keystrokes.
+
+**M10-D3.1 and M10-D4 QEMU diagnostic milestones are ACCEPTED.**
+The D4 four-priority scheduler remains test-only, not a production
+preemptive editor or generalized ring-3 task system. The next
+separately scoped milestone is **M10-D5**: production scheduling
+architecture, process/task isolation, interrupt-state ownership,
+recovery, and safe release gates. Do not enable full production
+preemption or make physical-hardware changes under this acceptance.
