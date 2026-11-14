@@ -28,3 +28,41 @@ Alternatives rejected: reclaim inside task exit (use-after-free), trusting a boo
 ## Change history
 
 2026-11-13: owner explicitly elected next execution-aware cleanup checkpoint following D5.1. Documentation-first stacked isolated branch.
+
+
+## Validation record — isolated Forge proof, 2026-11-13
+
+Source changes and tests executed from the **disposable** Forge copy
+`/tmp/spiffos-d5-execution-reaper-test-20261113`, not the owner's
+accepted checkout. The local QWEN coding agent completed a tiny stack
+range helper suggestion, but coordinator review rejected it because
+`bottom + bytes` could overflow before the bounds check. The reviewed
+implementation checks overflow first, validates stack alignment/size,
+and rejects executing RSP within the retired stack. Codex was not used.
+
+- `make HOST_CC=gcc test-m10-d5-execution-reap`: **PASS** with GCC
+  ASan/UBSan, `SPIFFOS_M10_D5_EXECUTION_REAPER_OK`; 20,000
+  create/terminate/reap cycles and multiple invalid release cases.
+- `make HOST_CC=gcc test-m10-b-guest`: **PASS** in real QEMU at
+  128/256/512 MiB. The diagnostic terminates on a worker stack,
+  verifies attempted active-stack reap is rejected, switches to
+  surviving boot stack, and successfully releases exact owned backing
+  before marking descriptor reusable.
+- Full `make HOST_CC=gcc test-m10-d5-execution-acceptance` with
+  **process-scoped** Git safe.directory for the pinned Limine dependency:
+  **exit 0**, 262.61 seconds, final marker
+  `SPIFFOS_M10_D5_2A_ACCEPTANCE_OK`. All inherited D5.1/D4/D3/D2
+  markers were present. Log:
+  `/tmp/spiffos-d5-execution-reaper-acceptance.log`.
+- The normal unflagged kernel ELF after stripping debug information
+  hashes to
+  `82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`,
+  identical to the documented D4 ordinary kernel baseline. This is
+  not a claim about identical ISO metadata or provenance.
+- Exact-head GitHub Actions remains a separate mandatory gate;
+  no owner interactive acceptance, release merge or deployment claimed.
+
+Production follow-on gates: authoritative per-task backing registration,
+verified synchronization/wait ownership teardown, safe failure recovery
+for partially released frame groups, and a dispatcher-owned bounded
+reap queue before generally preemptive task execution.
