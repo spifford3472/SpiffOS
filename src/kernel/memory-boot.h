@@ -86,7 +86,7 @@ bool memory_boot_mmio_table_release(uint64_t physical);
 bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
                                   uint32_t **out_pages);
 
-#if defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
+#if defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
 /* Test-only four-page contiguous stack backing from ordinary M2/M3-owned
  * KERNEL frames. Exact ownership/contiguity is checked before publication.
  * Caller owns exclusive IF=0 interval, runs no stack switch during release,
