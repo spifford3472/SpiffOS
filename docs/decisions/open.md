@@ -328,3 +328,8 @@ Resource registry and lifecycle tests may run in isolation, but existing kernel 
 ## M10-D5.2c remaining integration blockers (2026-11-13)
 
 The isolated cleanup queue can rotate task entries blocked by lock/wait references and quarantine uncertain physical releases, but the real operating-system mutex, wait-queue and driver-owner paths do **not** yet use the new registered one-owner/waiter fixture. This fixture deliberately does not block/wake task execution, donate priority or create an ABI. Production scheduler integration, lock cancellation/owner-death semantics, actual task resource graph, recovery after partially freed frames and bounded supervisor CPU service remain OPEN. No general preemptive editor activation. See `ADR-m10-d5-supervisor-cleanup.md`.
+
+
+## M10-D5.2d execution and production acceptance gates (2026-11-13)
+
+The isolated D5.2d internal mutex tracks a real M10-A RUNNING waiter into BLOCKED, removes it from the ready queue and wakes it when the owner transfers the lock. This validates scheduler **metadata** and reference integration, not an execution-time cooperative yield or an IRQ-preemptive mutex. Production integration remains OPEN pending multiple waiters, priority inheritance, owner-death cancellation protocol, wake race/fault injection and global lock ordering/priority scheduling. The isolated M10-B QEMU fixture now proves actual cooperative two-worker mutex blocking and resumed context, but **does not** establish safe general IRQ-preemptive or Ring 3 operation. The normal editor remains nonpreemptive. See `ADR-m10-d5-mutex-block-wake.md`.

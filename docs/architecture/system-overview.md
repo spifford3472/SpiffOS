@@ -298,3 +298,8 @@ One static, generation-keyed record per authoritative kernel task slot tracks st
 ## M10-D5.2c supervisor reaper and synchronization reference proof (isolated)
 
 The authoritative M10-A task table and D5.2b generation-keyed resource registry now have a bounded cleanup FIFO that processes only on the external dispatcher or reserved supervisor stack, never in IRQ context. Registered outstanding locks/waiters retain a terminated task in queue; safe candidates retire using their exact registered stack owner; uncertain failures quarantine the task and leave backing unavailable for reuse without retry. A separate one-owner/one-waiter helper proves reference accounting and transfer but does not implement blocking, wake, priority inheritance or production mutex APIs. The M10-B QEMU diagnostic exercises the queue after switching to the boot stack; the normal editor remains unchanged. See `../decisions/ADR-m10-d5-supervisor-cleanup.md`.
+
+
+## M10-D5.2d authoritative mutex blocking/waking (isolated test-only)
+
+An internal one-owner/one-waiter mutex adapter now operates directly on the sole M10-A lifecycle table, not the separate D4 diagnostic controller. A RUNNING contender is registered as waiting and changes to BLOCKED (removed from CPU current ownership and ready FIFO); the owner transfers registered lock ownership and wakes that exact generation-tagged waiter into RUNNABLE when it releases. The new M10-B **test-only** QEMU fixture demonstrates actual cooperative context-switch and resumption across this one-owner/one-waiter lock handoff on independent stacks. The mutex's policy API itself does not switch stacks, preempt the editor or enable generalized production synchronization. See `../decisions/ADR-m10-d5-mutex-block-wake.md`.

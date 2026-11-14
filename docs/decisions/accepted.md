@@ -457,3 +457,8 @@ The owner chose the next D5.2b checkpoint after D5.2a. Implement a bounded gener
 ## M10-D5.2c owner direction — bounded supervisor cleanup proof (2026-11-13)
 
 Owner selected isolated implementation of the next M10-D5 cleanup checkpoint. Add a fixed-capacity supervisor-only FIFO of terminated generation-tagged tasks and verify a one-owner/one-waiter synchronization reference proof against the D5.2b registry. Keep D4 diagnostics separate; production mutex/wait integration and general editor preemption are explicitly **not** approved. No merge, accepted ISO deployment or physical media is authorized. See [D5.2c ADR](ADR-m10-d5-supervisor-cleanup.md).
+
+
+## M10-D5.2d owner direction — authoritative mutex blocking and waking (2026-11-13)
+
+The owner elected D5.2d isolated implementation of a small one-owner/one-waiter mutex that connects the M10-A lifecycle's actual RUNNING→BLOCKED→RUNNABLE state changes to D5.2b's generation-tagged lock/wait reference registry. No second scheduler, IRQ mutex operations, generic lock ABI, normal-editor preemption, merge or deployment is authorized. The cooperative dispatcher must still perform a real CPU context switch after a blocked task returns. See [D5.2d ADR](ADR-m10-d5-mutex-block-wake.md).
