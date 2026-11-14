@@ -49,6 +49,11 @@ enum kernel_task_result kernel_task_reap_owned(
     const struct kernel_task_record *record = kernel_task_get(table, handle);
     if (record == NULL)
         return KERNEL_TASK_BAD_HANDLE;
+    /* A separate ordinary RUNNING task is not a privileged reaper. The
+     * permanent external dispatcher or reserved supervisor owns teardown. */
+    if (table->current_slot != SIZE_MAX &&
+        table->current_slot != KERNEL_TASK_SUPERVISOR_SLOT)
+        return KERNEL_TASK_BAD_STATE;
     if (record->state != KERNEL_TASK_TERMINATED || record->reclaimed ||
         table->current_slot == (size_t)handle.slot ||
         !kernel_task_stack_safe_to_release(stack, actual_rsp))
