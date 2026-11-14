@@ -462,3 +462,8 @@ Owner selected isolated implementation of the next M10-D5 cleanup checkpoint. Ad
 ## M10-D5.2d owner direction — authoritative mutex blocking and waking (2026-11-13)
 
 The owner elected D5.2d isolated implementation of a small one-owner/one-waiter mutex that connects the M10-A lifecycle's actual RUNNING→BLOCKED→RUNNABLE state changes to D5.2b's generation-tagged lock/wait reference registry. No second scheduler, IRQ mutex operations, generic lock ABI, normal-editor preemption, merge or deployment is authorized. The cooperative dispatcher must still perform a real CPU context switch after a blocked task returns. See [D5.2d ADR](ADR-m10-d5-mutex-block-wake.md).
+
+
+## M10-D5.3 owner direction — bounded multiwaiter synchronization (2026-11-13)
+
+Owner approved continuing after D5.2d with isolated implementation/testing of bounded ranked locks, multiple waiter registration, transitive priority donation, explicit cancellation and fail-closed orphan detection. The M10-A task table remains the sole lifecycle/dispatch authority; a D5.3 sidecar may calculate effective priority but may **not** turn on general editor IRQ preemption or become another scheduler. No merge, deployment, physical disk or public ABI authorized. See [D5.3 ADR](ADR-m10-d53-bounded-synchronization.md).
