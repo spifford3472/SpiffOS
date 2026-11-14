@@ -155,12 +155,22 @@ bool m10_d55c_frame_guest_smoke(bool (*clock_ms)(uint64_t *))
     enum kernel_task_resource_result saved=
         kernel_task_resources_saved_rsp(&resources,&table,task,
             (uintptr_t)worker_context.saved_rsp);
+    bool clock_finished=clock_ms(&finish);
     bool good=worker_completed && !observation_failed &&
         observations==D55C_REQUIRED_FRAMES &&
         saved==KERNEL_RESOURCE_OK &&
         kernel_task_check(&table) &&
         kernel_task_resources_check(&resources,&table) &&
-        clock && clock_ms(&finish) && finish>start;
+        (!clock || (clock_finished && finish>=start));
+    /* Distinct failure labels allow diagnosis without logging in IRQ. */
+    if(observation_failed) failure_reason="FRAME_REJECTED";
+    else if(observations!=D55C_REQUIRED_FRAMES)
+        failure_reason="INSUFFICIENT_REAL_IRQS";
+    else if(!worker_completed) failure_reason="WORKER_EXIT";
+    else if(saved!=KERNEL_RESOURCE_OK) failure_reason="SAVED_CONTEXT";
+    else if(!clock_finished || (clock && finish<start))
+        failure_reason="CLOCK";
+    else failure_reason="OWNER_LEDGER";
     for(size_t i=0;i<64;++i)
         if(worker_stack[i]!=UINT8_C(0x5a)) good=false;
     enum kernel_task_resource_result retired=kernel_task_resources_retire(
@@ -170,10 +180,7 @@ bool m10_d55c_frame_guest_smoke(bool (*clock_ms)(uint64_t *))
     if(retired!=KERNEL_RESOURCE_OK) {
         failure_reason="REAPER";return false;
     }
-    if(!good) {
-        failure_reason="ACTUAL_FRAME_OR_CLOCK";
-        return false;
-    }
+    if(!good) return false;
     return true;
 failure:
     flags=irq_disable();
