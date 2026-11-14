@@ -1204,6 +1204,11 @@ void kmain(void)
     extern void m10_d4_complete_report(bool (*write)(const char *));
     m10_d4_complete_report(serial_write);
     (void)serial_write("SPIFFOS_M10_D4_COMPLETE_OK\r\n");
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    /* Dedicated non-yielding worker *service-completion* proof, not a
+     * general M10-A IRQ-preemptive scheduler activation. */
+    (void)serial_write("SPIFFOS_M10_D55C_BUDGET_OK\r\n");
+#endif
 #endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* Only the separate diagnostic build enters timer-based ring-0
