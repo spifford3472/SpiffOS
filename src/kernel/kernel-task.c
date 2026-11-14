@@ -203,6 +203,55 @@ enum kernel_task_result kernel_task_dispatch_selected(
     return KERNEL_TASK_OK;
 }
 
+/* Privileged IRQ0 handoff of two fully prevalidated task identities.
+ * Caller already verified real saved CPU frame/stack bounds, IF=0, no
+ * nested interrupt, no preempt-disabled depth and no registered lock refs.
+ * No saved frame pointers are consulted here; M10-A is the only mutator
+ * of task lifecycle and FIFO membership. Every rejection is immutable. */
+enum kernel_task_result kernel_task_irq_handoff(
+    struct kernel_task_table *table,
+    struct kernel_task_handle source,
+    struct kernel_task_handle destination,
+    struct kernel_task_handle *out)
+{
+    enum kernel_task_result result=preflight(table);
+    if(result!=KERNEL_TASK_OK) return result;
+    if(out==NULL) return KERNEL_TASK_INVALID;
+    if(!valid_handle(table,source) || !valid_handle(table,destination))
+        return KERNEL_TASK_BAD_HANDLE;
+    if(table->current_slot!=source.slot ||
+       table->tasks[source.slot].state!=KERNEL_TASK_RUNNING)
+        return KERNEL_TASK_BAD_STATE;
+    if(source.slot==destination.slot) {
+        *out=source;
+        return KERNEL_TASK_OK;
+    }
+    if(table->tasks[destination.slot].state!=KERNEL_TASK_RUNNABLE)
+        return KERNEL_TASK_BAD_STATE;
+    if(table->ready_count==0 || table->ready_count>=KERNEL_TASK_CAPACITY)
+        return KERNEL_TASK_CORRUPT;
+    bool found=false;
+    for(size_t i=0;i<table->ready_count;++i)
+        if(table->ready_queue[i]==destination.slot) {
+            found=true;
+            break;
+        }
+    if(!found) return KERNEL_TASK_CORRUPT;
+    /* One serialized transition with no callback or observable midpoint:
+     * remove destination, replace its slot with the outgoing source at
+     * the FIFO tail, then mark the incoming task as the sole RUNNING one.
+     * Proven capacity means neither operation can overflow the queue. */
+    remove_ready(table,destination.slot);
+    table->tasks[source.slot].state=KERNEL_TASK_RUNNABLE;
+    append_ready(table,source.slot);
+    table->tasks[destination.slot].state=KERNEL_TASK_RUNNING;
+    table->current_slot=destination.slot;
+    if(table->tasks[destination.slot].dispatches!=UINT64_MAX)
+        ++table->tasks[destination.slot].dispatches;
+    *out=destination;
+    return KERNEL_TASK_OK;
+}
+
 /* The caller remains responsible for switching stacks in future M10-B;
  * M10-A only changes which task is eligible to be dispatched next. */
 enum kernel_task_result kernel_task_yield(struct kernel_task_table *table,
