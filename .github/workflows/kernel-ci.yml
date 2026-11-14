@@ -65,7 +65,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -q '^test-m10-d55c-acceptance:' Makefile; then
+          if grep -q '^test-m10-d56-acceptance:' Makefile; then
+            target=test-m10-d56-acceptance
+            marker=SPIFFOS_M10_D56_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d55c-acceptance:' Makefile; then
             target=test-m10-d55c-acceptance
             marker=SPIFFOS_M10_D55C_ACCEPTANCE_OK
           elif grep -q '^test-m10-d55b-acceptance:' Makefile; then

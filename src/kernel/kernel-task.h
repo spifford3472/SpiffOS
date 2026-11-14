@@ -4,8 +4,9 @@
  * Dependencies: stdbool/stdint, no host OS services, heap or hardware.
  * Invariants: at most one RUNNING task, FIFO contains exactly RUNNABLE tasks,
  * each task gets one unique live handle; ordinary tasks cannot use slot 15.
- * IRQ/concurrency: caller serializes operations with interrupts disabled when
- * embedded in kernel; no operation is safe to call from IRQ context.
+ * IRQ/concurrency: caller serializes operations with interrupts disabled.
+ * Cooperative APIs are forbidden from IRQ; the privileged D5.6 handoff is
+ * the sole exception after trusted frame/owner/critical prevalidation.
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #ifndef SPIFFOS_KERNEL_TASK_H
 #define SPIFFOS_KERNEL_TASK_H
@@ -99,6 +100,21 @@ enum kernel_task_result kernel_task_dispatch(struct kernel_task_table *table,
 enum kernel_task_result kernel_task_dispatch_selected(
     struct kernel_task_table *table,
     struct kernel_task_handle selected,
+    struct kernel_task_handle *out);
+
+/* Privileged IRQ-exit handoff: only a trusted boot-CPU IRQ0 adapter after
+ * BOTH real source/destination saved frames, lock/preempt nesting and stack
+ * owners have been validated may call this. Changes *only* M10-A state.
+ * Prevalidates exact source RUNNING and destination RUNNABLE generations,
+ * queue capacity and membership, without intermediate invalid public states.
+ * Rejected request leaves table and output byte-identical. No allocations,
+ * callbacks, locks, frame access, EOIs, or nested interrupts; IF=0.
+ * A source==destination exact identity is an explicit OK no-op. Diagnostic
+ * before normal-kernel activation; reference ADR-m10-d56-irq-handoff.md. */
+enum kernel_task_result kernel_task_irq_handoff(
+    struct kernel_task_table *table,
+    struct kernel_task_handle source,
+    struct kernel_task_handle destination,
     struct kernel_task_handle *out);
 
 /* Current RUNNING -> RUNNABLE at FIFO tail; requires exact current handle.
