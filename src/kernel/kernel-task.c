@@ -4,8 +4,9 @@
  * Dependencies: kernel-task.h only; no heap, timer, interrupt or OS calls.
  * Invariants: ready queue iff RUNNABLE; exactly one RUNNING or none; no
  * duplicate queue slots; generations never silently wrap on reuse.
- * Concurrency: single CPU, all operations under caller-owned exclusion,
- * never in interrupt context.
+ * Concurrency: single CPU, caller-owned exclusion. All cooperative APIs
+ * reject IRQ callers by contract; the D5.6 privileged irq_handoff is the
+ * single exception, and requires trusted full-frame/critical prevalidation.
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #include "kernel-task.h"
 
