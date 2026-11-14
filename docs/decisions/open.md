@@ -308,3 +308,8 @@ FPU/SIMD context, CR3 switching, exception containment and guaranteed
 hardware realtime CPU budgets remain M10-D5/open architecture
 requirements; diagnostic code must not be silently enabled in the
 normal kernel. See `ADR-m10-d4-priority-supervisor-proof.md`.
+
+
+## M10-D5.1 production task reclamation checkpoint — 2026-11-13
+
+The owner authorized resolving the Forge QWEN access blocker and beginning the first D5.1 implementation, without extending merge or deployment authority. The existing bounded M10-A generation-tagged task table remains the sole candidate production lifecycle manager; the D4 diagnostic controller stays separate. Logical task termination now leaves descriptors unreclaimed until an explicit reaper confirmation. **This first implementation is metadata-only:** it does not establish a production reaper, detach/verify a physical execution stack, or enable normal-kernel IRQ preemption. Before activation, verify all saved contexts, waiter references, mutex owners and stack backing are retired by a surviving dispatcher, with QEMU tests. Ring 3, SIMD, task quotas and production lock graphs remain OPEN. See `ADR-m10-d5-production-task-model.md`.

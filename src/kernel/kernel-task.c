@@ -80,6 +80,7 @@ bool kernel_task_check(const struct kernel_task_table *table)
             (record->state == KERNEL_TASK_FREE && record->generation != 0) ||
             (record->state != KERNEL_TASK_FREE && record->generation == 0) ||
             (record->state == KERNEL_TASK_RUNNABLE) != queued[i] ||
+            (record->reclaimed && record->state != KERNEL_TASK_TERMINATED) ||
             (record->supervisor && i != KERNEL_TASK_SUPERVISOR_SLOT) ||
             (i == KERNEL_TASK_SUPERVISOR_SLOT &&
              record->state != KERNEL_TASK_FREE && !record->supervisor))
@@ -117,7 +118,7 @@ enum kernel_task_result kernel_task_create(struct kernel_task_table *table,
     for (size_t i = first; i < last; ++i) {
         struct kernel_task_record *record = &table->tasks[i];
         if (record->state != KERNEL_TASK_FREE &&
-            record->state != KERNEL_TASK_TERMINATED) continue;
+            !(record->state == KERNEL_TASK_TERMINATED && record->reclaimed)) continue;
         if (record->generation == UINT32_MAX) {
             exhausted_generation = true;
             continue;
@@ -230,6 +231,25 @@ enum kernel_task_result kernel_task_terminate(struct kernel_task_table *table,
     if (record->state == KERNEL_TASK_RUNNING)
         table->current_slot = SIZE_MAX;
     record->state = KERNEL_TASK_TERMINATED;
+    record->reclaimed = false;
+    return KERNEL_TASK_OK;
+}
+
+/* The descriptor remains reserved after logical exit. The verified owner
+ * must have completed detached-stack and resource cleanup BEFORE this call.
+ * No IRQ-context caller, allocation, free or context switching is permitted.
+ * Until an actual production reaper is integrated, this is a caller contract
+ * and deliberately does not claim to prove stack detachment by itself. */
+enum kernel_task_result kernel_task_reap(struct kernel_task_table *table,
+    struct kernel_task_handle handle)
+{
+    enum kernel_task_result status = preflight(table);
+    if (status != KERNEL_TASK_OK) return status;
+    if (!valid_handle(table, handle)) return KERNEL_TASK_BAD_HANDLE;
+    struct kernel_task_record *record = &table->tasks[handle.slot];
+    if (record->state != KERNEL_TASK_TERMINATED || record->reclaimed)
+        return KERNEL_TASK_BAD_STATE;
+    record->reclaimed = true;
     return KERNEL_TASK_OK;
 }
 

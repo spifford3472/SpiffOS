@@ -52,6 +52,8 @@ struct kernel_task_record {
     enum kernel_task_state state;
     uint32_t generation;
     bool supervisor;
+    /* Set only after a surviving reaper confirms all execution resources detached. */
+    bool reclaimed;
     uint64_t dispatches;
     uint64_t total_ticks;
 };
@@ -105,6 +107,16 @@ enum kernel_task_result kernel_task_wake(struct kernel_task_table *table,
 /* CREATED/RUNNABLE/RUNNING/BLOCKED -> TERMINATED; removing queue/current
  * references before exposing termination. Never frees a stack or descriptor. */
 enum kernel_task_result kernel_task_terminate(struct kernel_task_table *table,
+    struct kernel_task_handle handle);
+
+/* Mark a terminated descriptor reusable ONLY after the owning reaper has
+ * verified task execution moved to a surviving stack and detached all saved
+ * frames, wait registrations, locks and owned resources. This metadata-only
+ * API cannot perform or verify physical detachment; the caller must do so.
+ * Caller must serialize with interrupts disabled and never call from an IRQ.
+ * Rejects uninitialized tables, invalid handles and double reclamation
+ * without mutation. No memory is freed here. */
+enum kernel_task_result kernel_task_reap(struct kernel_task_table *table,
     struct kernel_task_handle handle);
 
 /* Read a valid live/terminated record by handle; caller does not own returned

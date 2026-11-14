@@ -705,3 +705,29 @@ observed scheduling opportunities, not hard realtime CPU quotas.
 Only the `SPIFFOS_M10_D4_COMPLETE_TEST` image includes these objects.
 No default SpiffOS image preempts editor tasks. See
 `docs/operations/m10-d4-completion-20261113.md` and the D4 ADR.
+
+
+## M10-D5.1 — Why a terminated task descriptor is not free
+
+The M10-A task table identifies tasks by a slot and a generation. A task can
+be marked TERMINATED while its former stack, saved interrupt frame, owned
+synchronization object, or wait registration is still retained. The table's
+`reclaimed` flag is therefore not an execution-context check: it is an
+**explicit acknowledgement from a separate verified reaper** that reclamation
+has already completed on a surviving stack.
+
+`kernel_task_terminate()` marks logical termination and leaves the slot
+reserved. `kernel_task_reap()` validates the handle and state and marks
+the terminated descriptor reusable, but does **not** free memory or verify
+stack detachment. The production dispatcher/reaper must independently prove
+those properties before calling it. `kernel_task_create()` skips terminated
+slots without that acknowledgement, then increments the generation on reuse.
+A stale handle is rejected. If the 32-bit generation reaches its maximum,
+the slot is permanently exhausted rather than wrapping.
+
+This initial D5.1 code is hosted-tested metadata only, not yet a production
+interrupt-safe scheduler or a stack-lifecycle implementation. The ordinary
+SpiffOS ISO remains without general task preemption. Run
+`make HOST_CC=gcc test-m10-d5-reap` for the 20,000-cycle sanitizer test
+and `make HOST_CC=gcc test-m10-d5-acceptance` for inherited D4 regressions.
+See [D5.1 task-model ADR](decisions/ADR-m10-d5-production-task-model.md).
