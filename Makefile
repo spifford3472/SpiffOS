@@ -161,6 +161,18 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
 
+# D5.3 bounded multiwaiter, donation and cancellation proof (test-only).
+.PHONY: test-m10-d53-sync test-m10-d53-acceptance
+test-m10-d53-sync: build/m10-d53-sync-test
+	./build/m10-d53-sync-test
+
+build/m10-d53-sync-test: tests/m10-d53-sync-test.c src/kernel/kernel-sync-d53.c src/kernel/kernel-sync-d53.h src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d53-sync-test.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+test-m10-d53-acceptance: test-m10-d53-sync test-m10-d5-mutex-acceptance
+	@echo SPIFFOS_M10_D53_ACCEPTANCE_OK
+
 build/m10-d5-mutex-block-wake-test: tests/m10-d5-mutex-block-wake-test.c src/kernel/kernel-task-mutex.c src/kernel/kernel-task-mutex.h src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-mutex-block-wake-test.c src/kernel/kernel-task-mutex.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
