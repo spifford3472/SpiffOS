@@ -429,3 +429,16 @@ The owner explicitly approved the M10-D staged design and isolated implementatio
 ## M10-D3.1 workspace initialization and diagnostics approval — 2026-11-13
 
 After accepting D3, the owner approved boot-time logical preparation of all nine workspaces and read-only debugging tools before proceeding to D4. Preserve lazy framebuffer snapshots and the working keyboard/editor and F1–F12 features. See [ADR-m10-d31-workspaces-debug-hub.md](ADR-m10-d31-workspaces-debug-hub.md). This is implementation approval, not automatic release approval.
+
+
+## M10-D4 completion implementation authorization — 2026-11-13
+
+The owner explicitly requested completing D4 after the passing D4
+checkpoint. The approved **implementation** scope is a test-only
+four-priority ring-0 IRQ scheduler with genuine worker block/wake
+state, measured supervisor dispatch bounds, one-waiter priority
+inheritance and independently validated task-frame quarantine/recovery.
+This authorizes D4 coding and QEMU regression work, not an automatic
+merge, physical install or production-editor preemption. See
+`ADR-m10-d4-priority-supervisor-proof.md` and
+`../operations/m10-d4-completion-20261113.md`.
