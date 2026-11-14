@@ -8,7 +8,7 @@
 #include "x86-task-context.h"
 #include "memory-boot.h"
 #include "kernel-task.h"
-#include "kernel-task-reaper.h"
+#include "kernel-task-resources.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -22,6 +22,7 @@ static volatile uint32_t task_step[TEST_STACKS];
 static volatile bool task_done[TEST_STACKS];
 static volatile bool task_failed;
 static struct kernel_task_table task_table;
+static struct kernel_task_resources resource_owners;
 static struct kernel_task_handle task_handles[TEST_STACKS];
 static const char *failure_reason = "UNSET";
 
@@ -67,16 +68,12 @@ static void guest_task_exit(size_t index)
      * No frame is released before switching to the surviving boot stack. */
     uintptr_t running_rsp;
     __asm__ volatile("mov %%rsp,%0" : "=r"(running_rsp) : : "memory");
-    struct kernel_task_stack_binding still_active = {
-        .bottom=(uintptr_t)task_stacks[index],
-        .bytes=X86_TASK_STACK_BYTES,
-        .saved_rsp=(uintptr_t)task_context[index].saved_rsp,
-        .owner_index=index
-    };
+    /* A worker cannot supply a forged stack binding: the ledger uses the
+     * exact pre-dispatch owner registered on the boot stack. */
     if(result==KERNEL_TASK_OK &&
-       kernel_task_reap_owned(&task_table,task_handles[index],
-           &still_active,running_rsp,
-           memory_boot_m10_task_stack_release)!=KERNEL_TASK_BAD_STATE)
+       kernel_task_resources_retire(&resource_owners,
+           &task_table,task_handles[index],running_rsp,
+           memory_boot_m10_task_stack_release)!=KERNEL_RESOURCE_BAD_STATE)
         task_failed=true;
     restore_irq(flags);
     if(result!=KERNEL_TASK_OK) task_failed=true;
@@ -151,7 +148,8 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     task_stacks[1]=(uint8_t *)owned1;
     bool success=false;
     flags=save_and_disable_irq();
-    bool policy_ready=kernel_task_init(&task_table);
+    bool policy_ready=kernel_task_init(&task_table) &&
+        kernel_task_resources_init(&resource_owners);
     for(size_t i=0;i<TEST_STACKS && policy_ready;++i)
         policy_ready=kernel_task_create(&task_table,false,
                          &task_handles[i])==KERNEL_TASK_OK &&
@@ -172,6 +170,26 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         failure_reason="CONTEXT_INIT";
         goto cleanup;
     }
+    /* Register complete immutable backing after context initialization
+     * but before allowing the first dispatch to execute on those stacks. */
+    flags=save_and_disable_irq();
+    bool registered=true;
+    for(size_t index=0;index<TEST_STACKS && registered;++index) {
+        struct kernel_task_stack_binding binding={
+            .bottom=(uintptr_t)task_stacks[index],
+            .bytes=X86_TASK_STACK_BYTES,
+            .saved_rsp=(uintptr_t)task_context[index].saved_rsp,
+            .owner_index=index
+        };
+        registered=kernel_task_resources_bind(
+            &resource_owners,&task_table,task_handles[index],&binding)==
+            KERNEL_RESOURCE_OK;
+    }
+    restore_irq(flags);
+    if(!registered) {
+        failure_reason="RESOURCE_BIND";
+        goto cleanup;
+    }
     uint64_t first_tick=0,last_tick=0;
     bool clock_available=read_clock_ms(&first_tick);
     /* The dispatcher, not a fixed test ordering, selects all 1026
@@ -187,7 +205,15 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             goto cleanup;
         }
         x86_task_switch(&boot_context,&task_context[selected.slot]);
-        if(task_failed || !kernel_task_check(&task_table)) {
+        /* The scheduler has regained its own boot stack. Record the actual
+         * saved cooperative context, never a task-provided stack pointer. */
+        flags=save_and_disable_irq();
+        enum kernel_task_resource_result saved=
+            kernel_task_resources_saved_rsp(&resource_owners,&task_table,
+                selected,(uintptr_t)task_context[selected.slot].saved_rsp);
+        restore_irq(flags);
+        if(saved!=KERNEL_RESOURCE_OK || task_failed ||
+           !kernel_task_resources_check(&resource_owners,&task_table)) {
             failure_reason="POLICY_OR_PROGRESS";
             goto cleanup;
         }
@@ -223,17 +249,14 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         flags=save_and_disable_irq();
         uintptr_t boot_rsp;
         __asm__ volatile("mov %%rsp,%0" : "=r"(boot_rsp) : : "memory");
-        struct kernel_task_stack_binding retired = {
-            .bottom=(uintptr_t)task_stacks[index],
-            .bytes=X86_TASK_STACK_BYTES,
-            .saved_rsp=(uintptr_t)task_context[index].saved_rsp,
-            .owner_index=index
-        };
-        enum kernel_task_result reaped=kernel_task_reap_owned(
-            &task_table,task_handles[index],&retired,boot_rsp,
-            memory_boot_m10_task_stack_release);
+        /* Registered binding is authoritative: a forged owner index or
+         * stale pointer cannot direct the physical frame release. */
+        enum kernel_task_resource_result reaped=
+            kernel_task_resources_retire(&resource_owners,
+                &task_table,task_handles[index],boot_rsp,
+                memory_boot_m10_task_stack_release);
         restore_irq(flags);
-        if(reaped!=KERNEL_TASK_OK) {
+        if(reaped!=KERNEL_RESOURCE_OK) {
             /* Never attempt a second free after uncertain release state. */
             failure_reason="EXECUTION_REAPER_REJECTED";
             return false;
