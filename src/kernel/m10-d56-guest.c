@@ -195,10 +195,37 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
         return incoming;
     }
     struct kernel_task_handle chosen={0};
-    if(kernel_task_irq_handoff(&tasks,handles[from],handles[to],
+    struct kernel_task_handle destination=handles[to];
+#ifdef SPIFFOS_M10_D56_BAD_GENERATION_TEST
+    /* A verified physical frame does not confer scheduler authority.
+     * Inject a stale target handle; M10-A must refuse without mutation,
+     * then move the valid source to the safe supervisor for diagnostics. */
+    if(from==0 && to==1 && !negative_rejected) {
+        struct kernel_task_handle stale=destination;
+        ++stale.generation;
+        size_t prior_slot=tasks.current_slot;
+        size_t prior_ready=tasks.ready_count;
+        enum kernel_task_result rejected=kernel_task_irq_handoff(
+            &tasks,handles[from],stale,&chosen);
+        if(rejected!=KERNEL_TASK_BAD_HANDLE ||
+           tasks.current_slot!=prior_slot || tasks.ready_count!=prior_ready) {
+            failed=true;reason="STALE_MUTATED";active=false;
+            return incoming;
+        }
+        negative_rejected=true;
+        failed=true;reason="STALE_HANDLE_DENIED";
+        to=D56_SUP_INDEX;
+        if(!frame_safe(to,saved_frames[to],KERNEL_TASK_RUNNABLE)) {
+            reason="NO_SAFE_SUPERVISOR";active=false;
+            return incoming;
+        }
+        destination=handles[to];
+    }
+#endif
+    if(kernel_task_irq_handoff(&tasks,handles[from],destination,
                               &chosen)!=KERNEL_TASK_OK ||
-       chosen.slot!=handles[to].slot ||
-       chosen.generation!=handles[to].generation) {
+       chosen.slot!=destination.slot ||
+       chosen.generation!=destination.generation) {
         failed=true;reason="M10_A_HANDOFF";
         active=false;
         return incoming;
@@ -396,5 +423,37 @@ fail_early:
         (void)memory_boot_m10_task_stack_release(i-1);
     exit_critical(rollback);
     return false;
+}
+/* Report only after successful return to surviving boot context. These
+ * measures are from real IRQ0 ticks and completed supervisor work. */
+static void report_number(bool (*write)(const char *),uint64_t value)
+{
+    char digits[21];
+    unsigned position=20;
+    digits[position]='\0';
+    do {
+        digits[--position]=(char)('0'+value%10u);
+        value/=10u;
+    } while(value!=0);
+    (void)write(&digits[position]);
+}
+
+/* Serial is strictly outside IRQ0; never inside a worker or lock mutation. */
+void m10_d56_report(bool (*write)(const char *))
+{
+    if(write==NULL || !returned_to_boot || failed) return;
+    (void)write("D56_WORKER0_TICKS:");
+    report_number(write,slices[0]);
+    (void)write("\r\nD56_WORKER1_TICKS:");
+    report_number(write,slices[1]);
+    (void)write("\r\nD56_SUPERVISOR_SERVICE_COMPLETIONS:");
+    report_number(write,service.service_completions);
+    (void)write("\r\nD56_MAX_UNSERVICED_IRQ_TICKS:");
+    report_number(write,service.max_observed_gap_ticks);
+    (void)write("\r\nD56_CRITICAL_SECTIONS:");
+    report_number(write,critical_cycles);
+    (void)write("\r\nD56_IRQ_SWITCHES:");
+    report_number(write,irq_switches);
+    (void)write("\r\n");
 }
 #endif
