@@ -88,8 +88,8 @@ enum kernel_task_mutex_result kernel_task_mutex_acquire(
         return KERNEL_MUTEX_OK;
     }
     if(lock->waiting || same_handle(lock->owner,current) ||
-       !usable(resources,table,lock->owner,KERNEL_TASK_RUNNABLE) &&
-       !usable(resources,table,lock->owner,KERNEL_TASK_RUNNING) ||
+       (!usable(resources,table,lock->owner,KERNEL_TASK_RUNNABLE) &&
+        !usable(resources,table,lock->owner,KERNEL_TASK_RUNNING)) ||
        resources->task[current.slot].registered_waiters==UINT_MAX ||
        resources->task[lock->owner.slot].owned_locks==0)
         return KERNEL_MUTEX_REJECTED;
