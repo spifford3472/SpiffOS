@@ -467,3 +467,8 @@ The owner elected D5.2d isolated implementation of a small one-owner/one-waiter 
 ## M10-D5.3 owner direction — bounded multiwaiter synchronization (2026-11-13)
 
 Owner approved continuing after D5.2d with isolated implementation/testing of bounded ranked locks, multiple waiter registration, transitive priority donation, explicit cancellation and fail-closed orphan detection. The M10-A task table remains the sole lifecycle/dispatch authority; a D5.3 sidecar may calculate effective priority but may **not** turn on general editor IRQ preemption or become another scheduler. No merge, deployment, physical disk or public ABI authorized. See [D5.3 ADR](ADR-m10-d53-bounded-synchronization.md).
+
+
+## M10-D5.4 owner direction — authoritative priority dispatch and real multiwaiter QEMU (2026-11-13)
+
+The owner elected to implement D5.4 after D5.3: effective-priority selection must feed the **single authoritative M10-A task dispatcher**, preserve the supervisor's reserved slot and bounded dispatch opportunities, and prove genuine multiwaiter CPU-context handoffs in disposable QEMU. This authorizes isolated development/testing only, not normal-editor IRQ preemption, merge, accepted ISO replacement or physical deployment. No parallel lifecycle scheduler; D4 remains diagnostic. See [D5.4 ADR](ADR-m10-d54-priority-dispatch.md).

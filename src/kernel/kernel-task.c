@@ -170,6 +170,39 @@ enum kernel_task_result kernel_task_dispatch(struct kernel_task_table *table,
     return KERNEL_TASK_OK;
 }
 
+/* The selected identity is validated in the SAME authoritative table
+ * as the original FIFO dispatcher. Policy clients cannot invent tasks
+ * or mutate the queue from outside M10-A. */
+enum kernel_task_result kernel_task_dispatch_selected(
+    struct kernel_task_table *table,
+    struct kernel_task_handle selected,
+    struct kernel_task_handle *out)
+{
+    enum kernel_task_result status=preflight(table);
+    if(status!=KERNEL_TASK_OK) return status;
+    if(out==NULL) return KERNEL_TASK_INVALID;
+    if(!valid_handle(table,selected)) return KERNEL_TASK_BAD_HANDLE;
+    if(table->current_slot!=SIZE_MAX ||
+       table->tasks[selected.slot].state!=KERNEL_TASK_RUNNABLE)
+        return KERNEL_TASK_BAD_STATE;
+    bool found=false;
+    for(size_t i=0;i<table->ready_count;++i) {
+        if(table->ready_queue[i]==selected.slot &&
+           table->tasks[selected.slot].generation==selected.generation) {
+            found=true;
+            break;
+        }
+    }
+    if(!found) return KERNEL_TASK_CORRUPT;
+    remove_ready(table,selected.slot);
+    table->tasks[selected.slot].state=KERNEL_TASK_RUNNING;
+    if(table->tasks[selected.slot].dispatches!=UINT64_MAX)
+        ++table->tasks[selected.slot].dispatches;
+    table->current_slot=selected.slot;
+    *out=selected;
+    return KERNEL_TASK_OK;
+}
+
 /* The caller remains responsible for switching stacks in future M10-B;
  * M10-A only changes which task is eligible to be dispatched next. */
 enum kernel_task_result kernel_task_yield(struct kernel_task_table *table,
