@@ -99,6 +99,13 @@ static void exit_critical(uint64_t previous_flags)
 #endif
     if(critical_depth==0) failed=true;
     else --critical_depth;
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    /* On supervisor termination M10-A has no running task. Disarm the
+     * IRQ selector BEFORE restoring IF, eliminating a dangling-owner
+     * window while cooperative switch returns to the boot dispatcher. */
+    if(active && tasks.current_slot==SIZE_MAX &&
+       d57_guard.depth==0) active=false;
+#endif
     if((previous_flags&UINT64_C(0x200))!=0)
         __asm__ volatile("sti":::"memory");
 }
@@ -353,6 +360,15 @@ __attribute__((noreturn)) static void supervisor_run(void)
         if(!d55c_tick_service_completed(&service,true,true,ticks)) {
             failed=true;reason="SERVICE_COMPLETION";
         }
+#if defined(SPIFFOS_M10_D57_IRQ_TEST) && defined(SPIFFOS_M10_D57_BAD_GRAPH_TEST)
+        /* Negative injection happens in a supervisor-owned IF=0 safe
+         * point, never in the IRQ handler. The next IRQ must refuse
+         * read-only selection of this corrupt D5.3 generation graph. */
+        if(!negative_rejected && slices[0]>=2) {
+            ++d57_sync.profiles[handles[1].slot].handle.generation;
+            negative_rejected=true;
+        }
+#endif
         exit_critical(prior);
         __asm__ volatile("pause":::"memory");
     }
