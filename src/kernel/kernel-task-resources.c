@@ -87,7 +87,8 @@ enum kernel_task_resource_result kernel_task_resources_bind(
     const struct kernel_task_record *task=kernel_task_get(table,handle);
     if(task==NULL) return KERNEL_RESOURCE_BAD_HANDLE;
     if(handle.slot>=KERNEL_TASK_CAPACITY || resources->task[handle.slot].installed ||
-       task->state!=KERNEL_TASK_CREATED)
+       (task->state!=KERNEL_TASK_CREATED &&
+        task->state!=KERNEL_TASK_RUNNABLE))
         return KERNEL_RESOURCE_BAD_STATE;
     if(!kernel_task_stack_safe_to_release(binding,UINTPTR_MAX))
         return KERNEL_RESOURCE_INVALID;
