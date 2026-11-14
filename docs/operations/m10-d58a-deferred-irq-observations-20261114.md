@@ -31,3 +31,7 @@ No owner QEMU ISO installation, physical media, network, OPNsense, host boot or 
 ## Change history
 
 2026-11-14: first docs-first D5.8a implementation and hosted/real-QEMU evidence; full integration intentionally OPEN.
+
+## Final inherited regression verification — 2026-11-14
+
+The isolated Forge command `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=/home/geoff/projects/spiffos/.local-dev/limine make HOST_CC=gcc test-m10-d57-acceptance` completed with **exit code 0**. Evidence log: `/tmp/spiffos-d58-inherited-acceptance.log` and exit-status file `/tmp/spiffos-d58-inherited-exit.txt`. The run includes D2–D5.7 hosted and QEMU regressions plus M9 memory, keyboard/editor/workspaces, IRQ0, APIC and exception scenarios, finishing with `SPIFFOS_M10_D57_ACCEPTANCE_OK`. Separately, `test-m10-d58-notify` and `test-m10-d58-guest` both passed on the final D5.8a source, and the unflagged ELF was byte-identical to D4. The combined `test-m10-d58-acceptance` and exact-head GitHub CI are still independent release gates; a draft PR may be opened for those checks, but no merge or ISO deployment is permitted.
