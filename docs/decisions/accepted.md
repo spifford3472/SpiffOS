@@ -442,3 +442,8 @@ This authorizes D4 coding and QEMU regression work, not an automatic
 merge, physical install or production-editor preemption. See
 `ADR-m10-d4-priority-supervisor-proof.md` and
 `../operations/m10-d4-completion-20261113.md`.
+
+
+## M10-D5.2a isolated execution-reaper proof — owner direction 2026-11-13
+
+The owner elected to proceed with an execution-aware cleanup boundary after D5.1. This authorizes **isolated implementation/testing only** of a supervisor/dispatcher-only reaper adapter and M10-B real-QEMU proof. It does not grant automatic merge, deployment, Ring 3 support, general IRQ scheduler activation or physical hardware boot. Keep the prior D5.1 descriptor lifecycle, D4 diagnostic isolation and supervisor reserve intact. See [ADR-m10-d5-execution-aware-reaper](ADR-m10-d5-execution-aware-reaper.md).

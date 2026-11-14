@@ -313,3 +313,8 @@ normal kernel. See `ADR-m10-d4-priority-supervisor-proof.md`.
 ## M10-D5.1 production task reclamation checkpoint — 2026-11-13
 
 The owner authorized resolving the Forge QWEN access blocker and beginning the first D5.1 implementation, without extending merge or deployment authority. The existing bounded M10-A generation-tagged task table remains the sole candidate production lifecycle manager; the D4 diagnostic controller stays separate. Logical task termination now leaves descriptors unreclaimed until an explicit reaper confirmation. **This first implementation is metadata-only:** it does not establish a production reaper, detach/verify a physical execution stack, or enable normal-kernel IRQ preemption. Before activation, verify all saved contexts, waiter references, mutex owners and stack backing are retired by a surviving dispatcher, with QEMU tests. Ring 3, SIMD, task quotas and production lock graphs remain OPEN. See `ADR-m10-d5-production-task-model.md`.
+
+
+## M10-D5.2a execution-aware cleanup remaining gates — 2026-11-13
+
+The isolated reaper adapter checks a terminated generation-tagged task, owner stack bounds, saved RSP and real current boot-stack RSP, then releases owner-indexed backing before descriptor reuse. The M10-B diagnostic is its first real execution integration. **Production reaper integration remains OPEN** pending verified wait/lock ownership retirement, bounded cleanup queue, all-or-nothing memory-owner release semantics, authentic CPU context and separate supervisor authority controls. No full production scheduler/editor preemption is enabled. See `ADR-m10-d5-execution-aware-reaper.md`.
