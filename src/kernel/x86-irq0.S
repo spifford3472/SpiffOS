@@ -11,6 +11,9 @@
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 .extern m10_d3_irq_select
 #endif
+#ifdef SPIFFOS_M10_D4_COMPLETE_TEST
+.extern m10_d4_complete_irq_select
+#endif
 
 .global x86_irq0_entry
 .type x86_irq0_entry,@function
@@ -51,6 +54,13 @@ x86_irq0_entry:
      * IF remains cleared until IRETQ restores the chosen task's RFLAGS. */
     movq %r12,%rdi
     call m10_d3_irq_select
+    movq %rax,%r12
+#endif
+#ifdef SPIFFOS_M10_D4_COMPLETE_TEST
+    /* Separate four-worker completion fixture. The real C tick and LAPIC
+     * EOI have already finished. Select one validated saved IRQ frame. */
+    movq %r12,%rdi
+    call m10_d4_complete_irq_select
     movq %rax,%r12
 #endif
     movq %r12,%rsp
