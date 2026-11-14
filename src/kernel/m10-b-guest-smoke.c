@@ -8,6 +8,7 @@
 #include "x86-task-context.h"
 #include "memory-boot.h"
 #include "kernel-task.h"
+#include "kernel-task-reaper.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -61,6 +62,22 @@ static void guest_task_exit(size_t index)
     uint64_t flags=save_and_disable_irq();
     enum kernel_task_result result=kernel_task_terminate(
         &task_table,task_handles[index]);
+    /* A TERMINATED task is still running on its own 16KiB stack.
+     * Verify that even a privileged reaper request MUST reject self-free.
+     * No frame is released before switching to the surviving boot stack. */
+    uintptr_t running_rsp;
+    __asm__ volatile("mov %%rsp,%0" : "=r"(running_rsp) : : "memory");
+    struct kernel_task_stack_binding still_active = {
+        .bottom=(uintptr_t)task_stacks[index],
+        .bytes=X86_TASK_STACK_BYTES,
+        .saved_rsp=(uintptr_t)task_context[index].saved_rsp,
+        .owner_index=index
+    };
+    if(result==KERNEL_TASK_OK &&
+       kernel_task_reap_owned(&task_table,task_handles[index],
+           &still_active,running_rsp,
+           memory_boot_m10_task_stack_release)!=KERNEL_TASK_BAD_STATE)
+        task_failed=true;
     restore_irq(flags);
     if(result!=KERNEL_TASK_OK) task_failed=true;
 }
@@ -198,9 +215,35 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
                 goto cleanup;
             }
     success=true;
+    /* All task exits have returned to the surviving boot stack. The actual
+     * RSP is read HERE and cannot be supplied by the terminated task.
+     * The memory service releases its exact owner backing before D5.1
+     * marks that generation-tagged descriptor reusable. */
+    for(size_t index=0;index<TEST_STACKS;++index) {
+        flags=save_and_disable_irq();
+        uintptr_t boot_rsp;
+        __asm__ volatile("mov %%rsp,%0" : "=r"(boot_rsp) : : "memory");
+        struct kernel_task_stack_binding retired = {
+            .bottom=(uintptr_t)task_stacks[index],
+            .bytes=X86_TASK_STACK_BYTES,
+            .saved_rsp=(uintptr_t)task_context[index].saved_rsp,
+            .owner_index=index
+        };
+        enum kernel_task_result reaped=kernel_task_reap_owned(
+            &task_table,task_handles[index],&retired,boot_rsp,
+            memory_boot_m10_task_stack_release);
+        restore_irq(flags);
+        if(reaped!=KERNEL_TASK_OK) {
+            /* Never attempt a second free after uncertain release state. */
+            failure_reason="EXECUTION_REAPER_REJECTED";
+            return false;
+        }
+    }
+    return true;
 cleanup:
-    /* Task exit has already returned to the boot stack. Releasing either
-     * frame group while executing on it would be a use-after-free. */
+    /* Diagnostic error before normal exit: task execution has returned to
+     * the permanent boot stack, so release backing without publishing a
+     * reclaimed descriptor. No context can be dispatched after failure. */
     flags=save_and_disable_irq();
     bool released1=memory_boot_m10_task_stack_release(1);
     bool released0=memory_boot_m10_task_stack_release(0);
