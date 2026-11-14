@@ -57,7 +57,7 @@ static void worker_yield(size_t i)
 }
 
 /* Worker exit preserves its still-allocated stack until supervisor reaps. */
-static void worker_exit(size_t i)
+__attribute__((noreturn)) static void worker_exit(size_t i)
 {
     uint64_t flags=irq_off();
     if(kernel_task_terminate(&tasks,ids[i])!=KERNEL_TASK_OK) failed=true;
