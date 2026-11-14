@@ -6,6 +6,7 @@ References: AGENTS.md and ADR-m10-d56-irq-handoff.md.
 """
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -55,14 +56,34 @@ def main():
                     b"SPIFFOS_M10_D56_IRQ_ERROR" in serial or
                     b"SPIFFOS_EXCEPTION:" in serial):
                 raise RuntimeError(f"D56 QEMU {mib}MiB wrong boot {serial[-1800:]!r}")
-            print(f"PASS D56 QEMU {mib}MiB: two real nonyielding M10-A "
-                  "IRQ-preempted workers, supervisor completion, "
-                  "off-stack reclaim, editor restored",flush=True)
+            def metric(name):
+                match=re.search(rb"(?m)^"+name.encode()+
+                    rb":([0-9]+)\r?$",serial)
+                if match is None:
+                    raise RuntimeError(f"D56 {mib}MiB missing {name}")
+                return int(match.group(1))
+            worker0=metric("D56_WORKER0_TICKS")
+            worker1=metric("D56_WORKER1_TICKS")
+            completed=metric("D56_SUPERVISOR_SERVICE_COMPLETIONS")
+            max_gap=metric("D56_MAX_UNSERVICED_IRQ_TICKS")
+            sections=metric("D56_CRITICAL_SECTIONS")
+            switches=metric("D56_IRQ_SWITCHES")
+            if (min(worker0,worker1)<12 or completed<12 or
+                    max_gap>8 or sections==0 or switches<12):
+                raise RuntimeError(f"D56 {mib}MiB invalid counters: "
+                    f"{worker0=} {worker1=} {completed=} {max_gap=} "
+                    f"{sections=} {switches=}")
+            print(f"PASS D56 QEMU {mib}MiB: two M10-A nonyielding workers "
+                  f"({worker0}/{worker1} IRQ slices), completed supervisor "
+                  f"service={completed}, max gap={max_gap} IRQ ticks, "
+                  "off-stack reclaim and editor",flush=True)
         for name,flags,expected in (
             ("frame",base+" -DSPIFFOS_M10_D56_BAD_TARGET_TEST",
              "SPIFFOS_M10_D56_IRQ_ERROR:TARGET_FRAME_DENIED"),
             ("critical",base+" -DSPIFFOS_M10_D56_BAD_CRITICAL_TEST",
              "SPIFFOS_M10_D56_IRQ_ERROR:CRITICAL_DENIED"),
+            ("generation",base+" -DSPIFFOS_M10_D56_BAD_GENERATION_TEST",
+             "SPIFFOS_M10_D56_IRQ_ERROR:STALE_HANDLE_DENIED"),
         ):
             image(src,env,flags)
             for mib in (128,256,512):
