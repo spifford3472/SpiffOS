@@ -71,10 +71,44 @@ static void fairness(void)
     assert(table.decision_sequence==20000);
 }
 
+/* Low-priority lock owner inherits a blocked Time-sensitive waiter's
+ * effective priority until the owner releases the one-waiter lock.
+ * The lock then wakes the exact waiter; unrelated task states persist. */
+static void priority_inversion(void)
+{
+    struct d4_task_control table={0};
+    struct d4_task_lock lock={0};
+    assert(d4_task_init(&table) && d4_task_lock_init(&lock));
+    assert(d4_task_lock_acquire(&table,&lock,0)==D4_TASK_OK);
+    assert(lock.owner==0);
+    assert(d4_task_lock_acquire(&table,&lock,3)==D4_TASK_WAITING);
+    assert(table.worker[3].status==D4_TASK_BLOCKED);
+    assert(table.worker[0].priority==KERNEL_PRIORITY_TIME_SENSITIVE);
+    assert(d4_task_lock_acquire(&table,&lock,2)==D4_TASK_BAD_STATE);
+    assert(d4_task_lock_release(&table,&lock,2)==D4_TASK_BAD_CALLER);
+    assert(d4_task_check(&table));
+    uint64_t low_before=table.worker[0].dispatch_count;
+    for(unsigned tick=0;tick<40;++tick) {
+        uint32_t selected=UINT32_MAX;
+        assert(d4_task_choose(&table,&selected)==D4_TASK_OK);
+        assert(selected!=3);
+        assert(d4_task_note_dispatch(&table,selected)==D4_TASK_OK);
+    }
+    assert(table.worker[0].dispatch_count>low_before);
+    assert(d4_task_lock_release(&table,&lock,0)==D4_TASK_OK);
+    assert(table.worker[0].priority==KERNEL_PRIORITY_BACKGROUND);
+    assert(lock.owner==3 && lock.waiter==UINT32_MAX);
+    assert(table.worker[3].status==D4_TASK_READY);
+    assert(d4_task_lock_release(&table,&lock,3)==D4_TASK_OK);
+    assert(lock.owner==UINT32_MAX);
+    assert(d4_task_check(&table));
+}
+
 int main(void)
 {
     state_transitions();
     fairness();
+    priority_inversion();
     puts("SPIFFOS_M10_D4_TASK_CONTROL_OK");
     return 0;
 }
