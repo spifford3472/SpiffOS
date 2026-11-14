@@ -50,3 +50,60 @@ kernel-mode execution handoff for this one-owner/one-waiter internal
 mutex, not IRQ-driven preemptive mutex safety, Ring 3, general priority
 inheritance or multiple-waiter cancellation. The complete inherited
 suite and final SHA are separate gates recorded below after execution.
+
+
+## Final isolated implementation and regression ledger — 2026-11-13
+
+Branch `feat/m10-d5-mutex-block-wake`, draft stacked PR #75, based on
+D5.2c PR #74, D5.2b #73, D5.2a #72 and D5.1 #71.
+
+- New internal `src/kernel/kernel-task-mutex.[ch]`: full generation-tagged
+  one-owner/one-waiter M10-A mutex with lock/wait owner references, exact
+  RUNNING→BLOCKED scheduler transition, FIFO wake/transfer, and fail-closed
+  rejection of stale, recursive, wrong owner, terminal waiter and owner-death
+  operations. One boot CPU, caller-held IF=0; no memory allocation or IRQ
+  entrypoint. No ordinary kernel linkage.
+- New `tests/m10-d5-mutex-block-wake-test.c`: GCC ASan/UBSan hosted
+  20,000 contested block/wake/transfer/terminated-and-reaped cycles, explicit
+  generation-safe saved-ref cleanup, invalid-call nonmutation and terminated
+  owner/waiter negatives. `make HOST_CC=gcc
+  test-m10-d5-mutex-block-wake`: **PASS** marker
+  `SPIFFOS_M10_D5_MUTEX_BLOCK_WAKE_OK`.
+- Real M10-B diagnostic fixture now proves **four actual cooperative CPU
+  stack transfers** including blocked-waiter switch-away and subsequent
+  saved-C-continuation resume after owner wakes and transfers mutex:
+  `make HOST_CC=gcc test-m10-b-guest` **PASS** 128/256/512 MiB.
+  Subsequent original 1,026 round-robin transfers and off-stack task
+  cleanup still pass. The normal editor remains nonpreemptive.
+- Local QWEN `qwen3-coder:30b` completed a bounded full-generation handle
+  equality suggestion in 28.55 seconds. Coordinator reviewed/integrated
+  equivalent logic and authored integration/tests. Initial `-Werror`
+  precedence warning was fixed by explicit grouping before sanitizer
+  acceptance. Codex not used.
+- Full inherited Forge regression **exit 0**, runtime **267.01 seconds**:
+  `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory
+  GIT_CONFIG_VALUE_0=/home/geoff/projects/spiffos/.local-dev/limine
+  make HOST_CC=gcc test-m10-d5-mutex-acceptance` from
+  `/tmp/spiffos-d52d-real-switch-20261113`, final log
+  `/tmp/spiffos-d52d-final-acceptance.log`. Includes
+  `SPIFFOS_M10_D5_2D_ACCEPTANCE_OK`,
+  `SPIFFOS_M10_D5_2C_ACCEPTANCE_OK`,
+  `SPIFFOS_M10_D5_2B_ACCEPTANCE_OK`,
+  `SPIFFOS_M10_D5_2A_ACCEPTANCE_OK`,
+  `SPIFFOS_M10_D5_1_ACCEPTANCE_OK`, D4/D3/D2 markers, and M9
+  keyboard/editor/workspace, 100Hz IRQ0, exceptions #UD/#DF, MMIO/APIC,
+  positive and negative QEMU scenarios.
+- Normal unflagged stripped kernel ELF SHA-256:
+  `82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`,
+  identical to D4 ordinary executable baseline. The disposable normal ISO
+  SHA-256 is `6f12d08f0f0ef047e6c83879496afeb9c1c41746e5dc7e3f9b0539b9db586922`;
+  not an owner deployment or assertion of byte-identical ISO provenance.
+- All testing used disposable Forge source, isolated OVMF, QEMU
+  `-net none`, pinned Limine read-only dependency, and no physical disks.
+  Owner's main Forge checkout was inspected and remained unchanged.
+
+Remaining gating: exact final-head GitHub Actions result, owner review
+before merge/deployment, multiwaiter contention/cancellation, inheritance,
+nested lock ordering, all-or-nothing allocator rollback and generalized
+production scheduler reentrancy. The cooperative proof does not authorize
+ordinary editor IRQ preemption, Ring 3 or physical media.
