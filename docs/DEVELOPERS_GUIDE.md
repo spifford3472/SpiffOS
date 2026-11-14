@@ -731,3 +731,10 @@ SpiffOS ISO remains without general task preemption. Run
 `make HOST_CC=gcc test-m10-d5-reap` for the 20,000-cycle sanitizer test
 and `make HOST_CC=gcc test-m10-d5-acceptance` for inherited D4 regressions.
 See [D5.1 task-model ADR](decisions/ADR-m10-d5-production-task-model.md).
+
+
+## M10-D5.2a — Releasing a task's stack from a surviving stack
+
+Marking a task TERMINATED removes it from scheduling, but the CPU may still be executing instructions on that task's 16 KiB stack. Calling a memory-owner release there would let the CPU overwrite already-freed backing. The M10-B diagnostic now deliberately attempts a self-reap and requires that it **fail without freeing anything**. It then returns via the existing cooperative switch to the permanent boot stack; the dispatcher reads its actual RSP, validates the retired task's saved RSP and stack bounds, and calls `kernel_task_reap_owned` under interrupt exclusion. Only a successful exact-owner backing release permits `kernel_task_reap` to make the descriptor reusable.
+
+The range checker guards integer overflow before adding stack length and rejects malformed or overlapping ranges. The release callback belongs to trusted kernel memory code, not a user task. Tests cover 20,000 retirements, release refusal, stale generations, rejected self-free, and ordinary-task privilege confusion. Run `make HOST_CC=gcc test-m10-d5-execution-acceptance` in an isolated checkout. This still does not prove general production lock/wait resource cleanup or enable ordinary editor preemption. See [execution-reaper ADR](decisions/ADR-m10-d5-execution-aware-reaper.md).
