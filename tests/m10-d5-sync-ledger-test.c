@@ -10,6 +10,14 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Simulated physical owner completion; the ledger, not raw task metadata,
+ * controls generation reuse in this test. */
+static bool release_owner(size_t owner)
+{
+    (void)owner;
+    return true;
+}
+
 static struct kernel_task_handle create(
     struct kernel_task_table *t,struct kernel_task_resources *r,size_t owner)
 {
@@ -94,10 +102,10 @@ static void repeated(void)
         assert(kernel_sync_proof_acquire(&lock,&r,&t,h)==KERNEL_SYNC_OK);
         assert(kernel_sync_proof_release(&lock,&r,&t,h)==KERNEL_SYNC_OK);
         assert(kernel_task_terminate(&t,h)==KERNEL_TASK_OK);
-        /* This proof does not own physical backing. For this hosted-only
-         * metadata stress, the trusted owner confirms release separately. */
-        assert(kernel_task_reap(&t,h)==KERNEL_TASK_OK);
-        r.task[h.slot]=(struct kernel_task_resource_record){0};
+        /* The trusted dispatcher releases exact registered backing rather
+         * than bypassing the resource ledger's authoritative reaper gate. */
+        assert(kernel_task_resources_retire(&r,&t,h,
+            (uintptr_t)0x400000u,release_owner)==KERNEL_RESOURCE_OK);
         old=h;
     }
     assert(kernel_task_resources_check(&r,&t));
