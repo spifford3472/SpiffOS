@@ -1204,6 +1204,11 @@ void kmain(void)
     extern void m10_d4_complete_report(bool (*write)(const char *));
     m10_d4_complete_report(serial_write);
     (void)serial_write("SPIFFOS_M10_D4_COMPLETE_OK\r\n");
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    /* Dedicated non-yielding worker *service-completion* proof, not a
+     * general M10-A IRQ-preemptive scheduler activation. */
+    (void)serial_write("SPIFFOS_M10_D55C_BUDGET_OK\r\n");
+#endif
 #endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* Only the separate diagnostic build enters timer-based ring-0
@@ -1222,6 +1227,19 @@ void kmain(void)
 #else
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
 #endif
+#endif
+#ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
+    /* D5.5c: real CPU IRQ0 frame from an actual M10-A-owned task stack.
+     * No IRQ-time task switch and no ordinary editor preemption. */
+    extern bool m10_d55c_frame_guest_smoke(bool (*clock_ms)(uint64_t *));
+    if(!m10_d55c_frame_guest_smoke(kernel_timer_boot_now_ms)) {
+        extern const char *m10_d55c_frame_guest_failure_reason(void);
+        (void)serial_write("SPIFFOS_M10_D55C_FRAME_ERROR:");
+        (void)serial_write(m10_d55c_frame_guest_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D55C_FRAME_OK\r\n");
 #endif
 #ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
     /* D5.5b reuses the real assembly sentinel and immutable IRQ0 frame.

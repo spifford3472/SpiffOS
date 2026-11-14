@@ -482,3 +482,8 @@ Following D5.4's passing exact-head CI, the owner adopted the recommendation to 
 ## M10-D5.5b hardware-observed IRQ0 frame proof — 2026-11-14
 
 Owner elected the next isolated execution-safety checkpoint after D5.5. D5.5b may add **test-only** x86 IRQ0 real saved-frame observation, independent live IF sampling, exact assembly-sentinel RIP/RSP and full GPR/segment cross-validation, with positive and negative real QEMU checks. The observer never changes the interrupt frame, scheduler, EOI or ordinary editor. This permits no merge, ISO replacement, physical deploy or ordinary editor preemption. See [D5.5b ADR](ADR-m10-d55b-x86-evidence.md).
+
+
+## M10-D5.5c isolated exact-frame ownership and hardware-tick service proof (2026-11-14)
+
+Owner chose M10-D5.5c following D5.5b: implement isolated, read-only verification of a 20-qword IRQ frame against exact authoritative M10-A task generation and D5.2b stack owner, plus hardware-tick-based supervisor service completion checks with non-yielding worker validation in QEMU. This authorizes tests and draft PR only. Do **not** enable normal editor IRQ preemption, merge stacked drafts, deploy an ISO or access physical disks. The QEMU budget fixture deliberately reuses D4's diagnostic controller; **separately**, a single real M10-A-owned worker is interrupted by IRQ0 and its authentic frame is read-only checked against the exact RUNNING generation and registered physical stack, then safely reclaimed. No IRQ-time task dispatch is authorized. See [D5.5c ADR](ADR-m10-d55c-task-frame-budget.md).

@@ -12,6 +12,9 @@
 #include "m10-d2-irq-frame.h"
 #include "memory-boot.h"
 #include "x86-task-context.h"
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+#include "m10-d55c-frame-owner.h"
+#endif
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -20,6 +23,11 @@
 enum { D4_SUP_INDEX=D4_TASK_WORKERS, D4_TOTAL=D4_TASK_WORKERS+1,
        D4_STACK_CANARY=64, D4_MIN_SLICES=12, D4_MAX_TICKS=700 };
 static struct d4_task_control state;
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+/* Observed IRQ ticks belong to this D4 diagnostic only; no new scheduler.
+ * Only a genuinely executed supervisor loop iteration records service. */
+static struct d55c_tick_service d55c_watch;
+#endif
 static struct d4_task_lock inversion_lock;
 static volatile bool low_owns_lock,high_waited,low_released_lock,
                      high_released_lock;
@@ -194,6 +202,12 @@ uint64_t *m10_d4_complete_irq_select(uint64_t *incoming)
     }
     frame[index]=incoming;
     ++ticks;
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    /* A true hardware IRQ0 tick advances even when workers never yield.
+     * The monitor never equates an IRQ dispatch with supervisor service. */
+    if(!d55c_tick_observe(&d55c_watch,true,ticks))
+        failed=true;
+#endif
     ++slices[index];
     if(ticks>=D4_MAX_TICKS || !d4_task_check(&state))
         failed=true;
@@ -301,6 +315,12 @@ static void supervisor_service(void)
             failed=true;
         else ++recovery_events;
     }
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    /* Record service only AFTER the full privileged supervisor body has
+     * actually executed, not merely when IRQ selection targets its frame. */
+    if(!d55c_tick_service_completed(&d55c_watch,true,true,ticks))
+        failed=true;
+#endif
     irq_restore(before);
 }
 
@@ -315,6 +335,18 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
     if(!(entry&UINT64_C(0x200))) {
         failure_reason="IRQ0_NOT_ENABLED";return false;
     }
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    /* A physical-time deadline is not claimed. D4 ticks are 100Hz
+     * QEMU observations; a strict >8-tick gap is diagnostic failure.
+     * The negative fixture deliberately tightens it to 1 tick. */
+#ifdef SPIFFOS_M10_D55C_BAD_BUDGET_TEST
+    if(!d55c_tick_init(&d55c_watch,0,1)) {
+#else
+    if(!d55c_tick_init(&d55c_watch,0,8)) {
+#endif
+        failure_reason="SERVICE_MONITOR_INIT";irq_restore(entry);return false;
+    }
+#endif
     if(!d4_task_init(&state) ||
        !d4_task_lock_init(&inversion_lock) ||
        !memory_boot_m10_task_stack_failure_probe()) {
@@ -372,6 +404,11 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
         quarantine_events>0 && recovery_events>0 &&
         quarantine_rejected_bad_frame &&
         clock_ms(&end) && end>begin;
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    valid=valid && !d55c_watch.faulted &&
+        d55c_watch.service_completions>=D4_MIN_SLICES &&
+        d55c_watch.max_observed_gap_ticks<=d55c_watch.deadline_ticks;
+#endif
 #ifdef SPIFFOS_M10_D4_BAD_CANARY_TEST
     /* Inject guard corruption AFTER leaving worker stacks and masking IRQs.
      * Fail closed on owner-guard mismatch, but still release backing. */
@@ -428,6 +465,13 @@ void m10_d4_complete_report(bool (*write)(const char *))
         (void)metric_number(write,slices[i]);
         (void)write("\r\n");
     }
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    (void)write("D55C_VERIFIED_SUPERVISOR_SERVICE_COMPLETIONS:");
+    (void)metric_number(write,d55c_watch.service_completions);
+    (void)write("\r\nD55C_MAX_OBSERVED_UNSERVICED_TICKS:");
+    (void)metric_number(write,d55c_watch.max_observed_gap_ticks);
+    (void)write("\r\n");
+#endif
     (void)write("D4_SUPERVISOR_DISPATCHES:");
     (void)metric_number(write,state.supervisor_dispatches);
     (void)write("\r\nD4_SUPERVISOR_MAX_GAP_TICKS:");
