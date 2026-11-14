@@ -32,6 +32,7 @@ static uint64_t *frame[D4_TOTAL];
 static uint8_t *stack[D4_TASK_WORKERS];
 static uint64_t cs_value,ss_value;
 static uint32_t supervisor_max_gap, supervisor_since;
+static uint64_t maximum_ready_wait[D4_TASK_WORKERS],elapsed_ms;
 static uint32_t blocked_ticks, wake_events, quarantine_events, recovery_events;
 static bool quarantine_rejected_bad_frame;
 static const char *failure_reason="UNSET";
@@ -242,6 +243,10 @@ uint64_t *m10_d4_complete_irq_select(uint64_t *incoming)
         failed=true;active=false;running=D4_TASK_SUPERVISOR;
         return frame[D4_SUP_INDEX];
     }
+    for(unsigned i=0;i<D4_TASK_WORKERS;++i)
+        if(state.worker[i].status==D4_TASK_READY &&
+           state.worker[i].waiting_dispatches>maximum_ready_wait[i])
+            maximum_ready_wait[i]=state.worker[i].waiting_dispatches;
     if(selected!=current) ++switches;
     running=selected;
     return frame[target];
@@ -378,6 +383,7 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
         for(size_t j=0;j<D4_STACK_CANARY;++j)
             if(stack[i][j]!=UINT8_C(0xa7)) valid=false;
     }
+    if(valid) elapsed_ms=end-begin;
     if(!valid && failure_reason[0]=='U')
         failure_reason="D4_QUOTA_OR_RECOVERY";
     bool clean=true;
@@ -388,5 +394,58 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
         failure_reason="STACK_RELEASE";return false;
     }
     return valid;
+}
+/* Minimal decimal encoding avoids libc/printf in this freestanding kernel.
+ * This is called only AFTER D4 has ended and all worker stacks are freed;
+ * never from IRQ context or a worker's saved stack. */
+static bool metric_number(bool (*write)(const char *),uint64_t n)
+{
+    char digits[21];
+    unsigned start=20;
+    digits[start]='\0';
+    do {
+        digits[--start]=(char)('0'+n%10u);
+        n/=10u;
+    } while(n!=0);
+    return write(&digits[start]);
+}
+
+/* Publish exact diagnostic metrics via the caller's existing boot serial
+ * sink. Each value was counted from actual 100Hz IRQ dispatches or measured
+ * by the monotonic timer; these are bounded test observations, not hard
+ * physical-machine realtime guarantees. */
+void m10_d4_complete_report(bool (*write)(const char *))
+{
+    if(write==NULL || !done || failed) return;
+    static const char *const worker_labels[D4_TASK_WORKERS]={
+        "D4_WORKER_BACKGROUND_SLICES:",
+        "D4_WORKER_NORMAL_SLICES:",
+        "D4_WORKER_INTERACTIVE_SLICES:",
+        "D4_WORKER_TIME_SENSITIVE_SLICES:"
+    };
+    for(unsigned i=0;i<D4_TASK_WORKERS;++i) {
+        (void)write(worker_labels[i]);
+        (void)metric_number(write,slices[i]);
+        (void)write("\r\n");
+    }
+    (void)write("D4_SUPERVISOR_DISPATCHES:");
+    (void)metric_number(write,state.supervisor_dispatches);
+    (void)write("\r\nD4_SUPERVISOR_MAX_GAP_TICKS:");
+    (void)metric_number(write,supervisor_max_gap);
+    (void)write("\r\nD4_TOTAL_IRQ_TICKS:");
+    (void)metric_number(write,ticks);
+    (void)write("\r\nD4_ELAPSED_MS:");
+    (void)metric_number(write,elapsed_ms);
+    (void)write("\r\nD4_BLOCKED_TICKS:");
+    (void)metric_number(write,blocked_ticks);
+    (void)write("\r\nD4_WAKE_EVENTS:");
+    (void)metric_number(write,wake_events);
+    (void)write("\r\nD4_QUARANTINE_EVENTS:");
+    (void)metric_number(write,quarantine_events);
+    (void)write("\r\nD4_VALIDATED_RECOVERY_EVENTS:");
+    (void)metric_number(write,recovery_events);
+    (void)write("\r\nD4_PRIORITY_INHERITANCE_OK:");
+    (void)metric_number(write,low_released_lock&&high_released_lock ? 1u:0u);
+    (void)write("\r\n");
 }
 #endif
