@@ -48,8 +48,9 @@ struct kernel_priority_candidate {
  * based; every fourth dispatch is reserved for the supervisor if runnable.
  * Otherwise use saturating score = wait_age + priority*8, ties resolved by
  * greater wait age and then lower slot. Every continually ready candidate
- * eventually outranks newly requeued CPU hogs. No IRQ-context calls allowed;
- * caller owns serialization and validates task membership separately.
+ * eventually outranks newly requeued CPU hogs. A D5.7 diagnostic may
+ * call this pure read-only function at a verified boot-CPU IRQ exit with IF=0;
+ * caller owns candidate serialization and authentic frame membership.
  */
 enum kernel_priority_result kernel_priority_choose(
     const struct kernel_priority_candidate *candidates, size_t count,
