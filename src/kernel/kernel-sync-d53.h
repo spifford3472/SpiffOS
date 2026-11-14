@@ -4,7 +4,8 @@
  * Dependencies: authoritative M10-A task table and D5.2b resource ledger.
  * Invariants: one wait per task; ascending lock ranks; all refs registered;
  * never automatically free a terminated owner's lock or switch CPU stacks.
- * Concurrency: single boot CPU, caller holds IF=0; never called in IRQ.
+ * Concurrency: one boot CPU, IF=0; mutations never called in IRQ.
+ * D5.7 uses bounded check/effective read-only at verified IRQ exit.
  * References: ADR-m10-d53-bounded-synchronization.md, AGENTS.md. */
 #ifndef SPIFFOS_KERNEL_SYNC_D53_H
 #define SPIFFOS_KERNEL_SYNC_D53_H

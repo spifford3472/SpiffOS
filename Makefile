@@ -46,6 +46,13 @@ ifneq ($(findstring -DSPIFFOS_M10_D56_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
 M10D56_IRQ_OBJECTS := build/kernel-task.o build/kernel-task-resources.o build/kernel-task-reaper.o build/m10-d55c-frame-owner.o build/x86-task-context.o build/x86-task-switch.o build/m10-d56-guest.o
 endif
 
+# D5.7 extends ONLY the flagged D5.6 IRQ guest with read-only
+# D5.3 transitive donated-priority selection and exact preempt guard.
+M10D57_IRQ_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D57_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+M10D57_IRQ_OBJECTS := build/m10-d57-safety.o build/kernel-sync-d53.o build/kernel-priority-policy.o
+endif
+
 # D2 is a separate interrupt-frame diagnostic, never in the released ISO.
 M10D2_TEST_OBJECTS :=
 ifneq ($(filter -DSPIFFOS_M10_D2_IRQ_FRAME_TEST -DSPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST,$(BOOT_TEST_FLAGS)),)
@@ -124,6 +131,14 @@ build/x86-irq0.o: src/kernel/x86-irq0.S Makefile
 build/m10-d2-irq-frame.o: src/kernel/m10-d2-irq-frame.c src/kernel/m10-d2-irq-frame.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/m10-d2-irq-frame.c -o $@
+
+build/m10-d57-safety.o: src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d57-safety.c -o $@
+
+.PHONY: test-m10-d57-guest
+test-m10-d57-guest:
+	python3 scripts/test-m10-d57-guest.py
 
 build/m10-d56-guest.o: src/kernel/m10-d56-guest.c src/kernel/kernel-task.h src/kernel/m10-d55c-frame-owner.h Makefile
 	mkdir -p build
@@ -233,6 +248,19 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 .PHONY: test-m10-d5-mutex-block-wake test-m10-d5-mutex-acceptance
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
+
+# D5.7 hosted sanitizer proves fail-closed generation-tagged guard,
+# transitive D5.3 donation and supervisor reservation before IRQ enabling.
+.PHONY: test-m10-d57-safety test-m10-d57-acceptance
+test-m10-d57-safety: build/m10-d57-safety-test
+	./build/m10-d57-safety-test
+
+build/m10-d57-safety-test: tests/m10-d57-safety-test.c src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d57-safety-test.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c -o $@
+
+test-m10-d57-acceptance: test-m10-d57-safety test-m10-d57-guest test-m10-d56-acceptance
+	@echo SPIFFOS_M10_D57_ACCEPTANCE_OK
 
 # M10-D5.6 privileged M10-A IRQ transaction test, hosted only so far.
 .PHONY: test-m10-d56-handoff test-m10-d56-acceptance
@@ -579,8 +607,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)

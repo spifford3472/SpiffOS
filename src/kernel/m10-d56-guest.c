@@ -14,13 +14,21 @@
 #include "m10-d2-irq-frame.h"
 #include "x86-task-context.h"
 #include "memory-boot.h"
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+#include "m10-d57-safety.h"
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
 enum { D56_WORKERS=2, D56_STACKS=3, D56_SUP_INDEX=2,
-       D56_CANARY=64, D56_STOP_TICKS=120,
+       D56_CANARY=64,
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+       D56_STOP_TICKS=220,
+#else
+       D56_STOP_TICKS=120,
+#endif
        D56_MAX_SERVICE_GAP=8, D56_MIN_WORKER_TICKS=12 };
 
 static struct kernel_task_table tasks;
@@ -31,12 +39,22 @@ static uint8_t *stacks[D56_STACKS];
 static uint64_t *saved_frames[D56_STACKS];
 static uint64_t expected_cs,expected_ss;
 static struct d55c_tick_service service;
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+/* The D5.3 graph is a bounded read-only IRQ input, never a second
+ * scheduler or mutex mutator. Guard cookies are owned by current CPU. */
+static struct d53_sync d57_sync;
+static struct d57_irq_policy d57_policy;
+static struct d57_preempt_guard d57_guard;
+static uint32_t d57_guard_cookies[D57_MAX_GUARD_DEPTH];
+#endif
 static volatile uint64_t iterations[D56_WORKERS];
 static volatile uint32_t slices[D56_STACKS],ticks,irq_switches;
 static volatile uint32_t critical_depth,critical_cycles;
 static volatile bool active,done,failed,returned_to_boot;
 static bool negative_rejected;
 static const char *reason="UNSET";
+/* Static, nonallocating mapping needed by guard before function definition. */
+static unsigned index_of_slot(size_t slot);
 
 /* Diagnostic reason is read only on the non-interrupted boot context. */
 const char *m10_d56_failure_reason(void) {return reason;}
@@ -49,14 +67,65 @@ static uint64_t enter_critical(void)
     uint64_t flags;
     __asm__ volatile("pushfq; popq %0; cli":"=r"(flags)::"memory");
     ++critical_depth;
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    if(active) {
+        const unsigned current=index_of_slot(tasks.current_slot);
+        uint32_t cookie=0;
+        if(current>=D56_STACKS ||
+           tasks.tasks[handles[current].slot].generation!=
+               handles[current].generation ||
+           tasks.tasks[handles[current].slot].state!=KERNEL_TASK_RUNNING ||
+           !d57_guard_enter(&d57_guard,handles[current],false,
+               true,&cookie) ||
+           d57_guard.depth==0 || d57_guard.depth>D57_MAX_GUARD_DEPTH) {
+            failed=true;reason="GUARD_ENTER";
+        } else d57_guard_cookies[d57_guard.depth-1]=cookie;
+    }
+#endif
     return flags;
 }
 
 /* LIFO matched critical exit, with fail-closed underflow detection. */
 static void exit_critical(uint64_t previous_flags)
 {
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    if(active) {
+        /* Verify the owner against the authoritative M10-A record, not
+         * just the guard's own stored identity. The one legal exception is
+         * the terminating reserved supervisor: M10-A clears current_slot
+         * on exit, while this IF=0 critical region still needs its final
+         * LIFO pop before returning to the boot stack. */
+        struct kernel_task_handle owner={0};
+        if(tasks.current_slot!=SIZE_MAX) {
+            const unsigned current=index_of_slot(tasks.current_slot);
+            if(current<D56_STACKS &&
+               tasks.tasks[handles[current].slot].state==
+                   KERNEL_TASK_RUNNING &&
+               tasks.tasks[handles[current].slot].generation==
+                   handles[current].generation)
+                owner=handles[current];
+        } else if(d57_guard.owner.slot==handles[D56_SUP_INDEX].slot &&
+                  d57_guard.owner.generation==
+                      handles[D56_SUP_INDEX].generation &&
+                  tasks.tasks[handles[D56_SUP_INDEX].slot].state==
+                      KERNEL_TASK_TERMINATED)
+            owner=handles[D56_SUP_INDEX];
+        if(d57_guard.depth==0 ||
+           !d57_guard_exit(&d57_guard,owner,false,true,
+               d57_guard_cookies[d57_guard.depth-1])) {
+            failed=true;reason="GUARD_EXIT";
+        }
+    }
+#endif
     if(critical_depth==0) failed=true;
     else --critical_depth;
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    /* On supervisor termination M10-A has no running task. Disarm the
+     * IRQ selector BEFORE restoring IF, eliminating a dangling-owner
+     * window while cooperative switch returns to the boot dispatcher. */
+    if(active && tasks.current_slot==SIZE_MAX &&
+       d57_guard.depth==0) active=false;
+#endif
     if((previous_flags&UINT64_C(0x200))!=0)
         __asm__ volatile("sti":::"memory");
 }
@@ -146,6 +215,18 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
         /* Unknown source is never used for a speculative task handoff. */
         return incoming;
     }
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    /* Trusted RFLAGS comes from a frame that incoming_safe already
+     * validated on this exact M10-A generation-owned stack. */
+    uint64_t live_flags=0;
+    __asm__ volatile("pushfq; popq %0":"=r"(live_flags)::"memory");
+    if(!d57_guard_may_switch(&d57_guard,true,
+        (incoming[M10_D2_RFLAGS]&UINT64_C(0x200))!=0,
+        (live_flags&UINT64_C(0x200))==0)) {
+        failed=true;reason="GUARD_IRQ_DENIED";active=false;
+        return incoming;
+    }
+#endif
     saved_frames[from]=incoming;
     if(ticks!=UINT32_MAX) ++ticks;
     if(slices[from]!=UINT32_MAX) ++slices[from];
@@ -156,9 +237,18 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
     /* The only candidate authority is M10-A's own FIFO ready queue.
      * Rotation through supervisor gives service within three real ticks. */
     unsigned to=D56_STACKS;
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    if(!done && !failed && tasks.ready_count!=0) {
+        struct kernel_task_handle selected={0};
+        if(d57_select(&d57_policy,&d57_sync,&owners,&tasks,&selected))
+            to=index_of_slot(selected.slot);
+        else {failed=true;reason="PRIORITY_GRAPH";to=D56_SUP_INDEX;}
+    } else to=D56_SUP_INDEX;
+#else
     if(!done && !failed && tasks.ready_count!=0)
         to=index_of_slot(tasks.ready_queue[0]);
     else to=D56_SUP_INDEX;
+#endif
 
 #ifdef SPIFFOS_M10_D56_BAD_TARGET_TEST
     /* Explicit negative changes the EXPECTED target frame's CS, never
@@ -230,6 +320,13 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
         active=false;
         return incoming;
     }
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    if(!d57_note_handoff(&d57_policy,&tasks,chosen)) {
+        /* CPU frame already changed authoritatively. Return the verified
+         * chosen frame and let the supervisor terminate diagnostically. */
+        failed=true;reason="PRIORITY_BOOKKEEPING";
+    }
+#endif
     if(irq_switches!=UINT32_MAX) ++irq_switches;
     return saved_frames[to];
 }
@@ -269,13 +366,29 @@ __attribute__((noreturn)) static void supervisor_run(void)
     /* Enable the IRQ selector ONLY after cooperative first-entry has
      * established the actual supervisor-owned stack and exact handle. */
     const uint64_t entry=enter_critical();
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    /* Guard startup must complete while selector is still inactive,
+     * so no interval exists where a bootstrap critical owner is forged. */
+    exit_critical(entry);
+    active=true;
+#else
     active=true;
     exit_critical(entry);
+#endif
     while(!done && !failed) {
         const uint64_t prior=enter_critical();
         if(!d55c_tick_service_completed(&service,true,true,ticks)) {
             failed=true;reason="SERVICE_COMPLETION";
         }
+#if defined(SPIFFOS_M10_D57_IRQ_TEST) && defined(SPIFFOS_M10_D57_BAD_GRAPH_TEST)
+        /* Negative injection happens in a supervisor-owned IF=0 safe
+         * point, never in the IRQ handler. The next IRQ must refuse
+         * read-only selection of this corrupt D5.3 generation graph. */
+        if(!negative_rejected && slices[0]>=2) {
+            ++d57_sync.profiles[handles[1].slot].handle.generation;
+            negative_rejected=true;
+        }
+#endif
         exit_critical(prior);
         __asm__ volatile("pause":::"memory");
     }
@@ -330,7 +443,12 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
     exit_critical(entry);
     if(prepared!=D56_STACKS) {reason="STACK_ALLOC";goto fail_early;}
     if(!kernel_task_init(&tasks) || !kernel_task_resources_init(&owners) ||
-       !d55c_tick_init(&service,0,D56_MAX_SERVICE_GAP)) {
+       !d55c_tick_init(&service,0,D56_MAX_SERVICE_GAP)
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+       || !d53_init(&d57_sync) || !d57_policy_init(&d57_policy) ||
+       !d57_guard_init(&d57_guard)
+#endif
+       ) {
         reason="INIT";goto fail_early;
     }
     uint16_t cs=0,ss=0;
@@ -368,6 +486,15 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         ready=kernel_task_resources_bind(&owners,&tasks,handles[i],
             &binding)==KERNEL_RESOURCE_OK;
     }
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+    /* Enroll true M10-A generations outside IRQ after successful owner
+     * binding; the IRQ may only observe D5.3 effective classes. */
+    if(ready) ready=d53_enroll(&d57_sync,&owners,&tasks,handles[0],
+            KERNEL_PRIORITY_INTERACTIVE)==D53_OK &&
+        d53_enroll(&d57_sync,&owners,&tasks,handles[1],
+            KERNEL_PRIORITY_TIME_SENSITIVE)==D53_OK &&
+        d53_check(&d57_sync,&owners,&tasks);
+#endif
     struct kernel_task_handle dispatched={0};
     if(ready) ready=kernel_task_dispatch(&tasks,&dispatched)==KERNEL_TASK_OK &&
         dispatched.slot==handles[D56_SUP_INDEX].slot;
@@ -392,6 +519,11 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         service.service_completions>=D56_MIN_WORKER_TICKS &&
         service.max_observed_gap_ticks<=D56_MAX_SERVICE_GAP &&
         critical_cycles!=0 &&
+#ifdef SPIFFOS_M10_D57_IRQ_TEST
+        !d57_guard.faulted && d57_guard.depth==0 &&
+        d57_policy.decisions>0 &&
+        d53_check(&d57_sync,&owners,&tasks) &&
+#endif
         kernel_task_check(&tasks) &&
         kernel_task_resources_check(&owners,&tasks);
     for(unsigned i=0;i<D56_WORKERS;++i)
