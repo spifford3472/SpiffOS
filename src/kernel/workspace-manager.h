@@ -16,6 +16,8 @@ enum { WORKSPACE_COUNT = 9, WORKSPACE_MAX_WIDTH = 1280,
 struct workspace_manager {
     struct screen_editor editors[WORKSPACE_COUNT];
     struct text_console consoles[WORKSPACE_COUNT];
+    /* Boot-prepared identity is distinct from a rendered/usable editor. */
+    bool prepared[WORKSPACE_COUNT];
     bool ready[WORKSPACE_COUNT];
     bool snapshot_ready[WORKSPACE_COUNT];
     size_t active_id;
@@ -29,6 +31,10 @@ struct workspace_manager {
 bool workspace_manager_initialize(struct workspace_manager *manager,
     const struct text_console *boot_console,
     logical_line_submit_fn submit, void *submit_context);
+/* Render read-only boot monitor; false clock_present means 'unavailable'.
+ * Tick count is a sampled monotonic count, not a fabricated CPU load. */
+bool workspace_manager_system_diagnostics(struct workspace_manager *manager,
+    bool clock_present, uint64_t ticks);
 /* Switch to 1..9, preserving all visible pixels and editor state.
  * On unsupported framebuffer dimensions or bad ID, leaves active view intact. */
 /* Toggle read-only system view, preserving current user pixels and editor. */

@@ -910,7 +910,14 @@ static void keyboard_run(struct text_console *console)
                     indicator_timed = false;
                 }
                 if (event.type == KEYBOARD_EVENT_SYSTEM) {
-                    (void)serial_write(workspace_manager_system(&boot_workspaces) ?
+                    /* F10 takes a read-only tick snapshot on the boot CPU,
+                     * outside IRQ context. Missing first-tick evidence is
+                     * displayed as UNAVAILABLE, never as zero uptime. */
+                    uint64_t debug_ticks=0;
+                    bool clock_available=
+                        kernel_scheduler_clock_boot_read_ticks(&debug_ticks);
+                    (void)serial_write(workspace_manager_system_diagnostics(
+                        &boot_workspaces,clock_available,debug_ticks) ?
                         "EVENT:SYSTEM_OK\r\n" : "EVENT:SYSTEM_UNAVAILABLE\r\n");
                     continue;
                 }
