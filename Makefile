@@ -234,6 +234,19 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
 
+# D5.7 hosted sanitizer proves fail-closed generation-tagged guard,
+# transitive D5.3 donation and supervisor reservation before IRQ enabling.
+.PHONY: test-m10-d57-safety test-m10-d57-acceptance
+test-m10-d57-safety: build/m10-d57-safety-test
+	./build/m10-d57-safety-test
+
+build/m10-d57-safety-test: tests/m10-d57-safety-test.c src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d57-safety-test.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c -o $@
+
+test-m10-d57-acceptance: test-m10-d57-safety test-m10-d56-acceptance
+	@echo SPIFFOS_M10_D57_ACCEPTANCE_OK
+
 # M10-D5.6 privileged M10-A IRQ transaction test, hosted only so far.
 .PHONY: test-m10-d56-handoff test-m10-d56-acceptance
 test-m10-d56-handoff: build/m10-d56-irq-handoff-test
