@@ -76,6 +76,10 @@ static void blocked_and_quarantine(void)
     assert(kernel_task_create(&table,false,&h2)==KERNEL_TASK_OK);
     /* Reject both overlapping backing and duplicate owner tokens. */
     assert(kernel_task_resources_bind(&resources,&table,h2,&duplicate)==KERNEL_RESOURCE_BAD_STATE);
+    /* A distinct memory-owner token cannot claim overlapping backing. */
+    duplicate.owner_index=8;
+    assert(kernel_task_resources_bind(&resources,&table,h2,&duplicate)==KERNEL_RESOURCE_BAD_STATE);
+    duplicate.owner_index=7;
     duplicate.bottom += 0x10000u;
     duplicate.saved_rsp += 0x10000u;
     assert(kernel_task_resources_bind(&resources,&table,h2,&duplicate)==KERNEL_RESOURCE_BAD_STATE);
