@@ -57,12 +57,12 @@ static void rejection_cases(void)
     assert(kernel_task_init(&table));
     struct kernel_task_handle id = terminated(&table);
     struct kernel_task_stack_binding stack = {
-        .bottom = UINTPTR_C(0x100000),
+        .bottom = (uintptr_t)0x100000,
         .bytes = 16384,
-        .saved_rsp = UINTPTR_C(0x103fe0),
+        .saved_rsp = (uintptr_t)0x103fe0,
         .owner_index = 7
     };
-    uintptr_t dispatcher_rsp = UINTPTR_C(0x200000);
+    uintptr_t dispatcher_rsp = (uintptr_t)0x200000;
     assert(kernel_task_stack_safe_to_release(&stack, dispatcher_rsp));
     should_reject(&table, id, &stack, stack.bottom + 128,
                   KERNEL_TASK_BAD_STATE); /* self-free */
@@ -73,8 +73,8 @@ static void rejection_cases(void)
     stack.bottom = UINTPTR_MAX - 4095;
     should_reject(&table, id, &stack, dispatcher_rsp,
                   KERNEL_TASK_BAD_STATE);
-    stack.bottom = UINTPTR_C(0x100000);
-    stack.saved_rsp = UINTPTR_C(0x103fe0);
+    stack.bottom = (uintptr_t)0x100000;
+    stack.saved_rsp = (uintptr_t)0x103fe0;
     stack.bytes = 64;
     should_reject(&table, id, &stack, dispatcher_rsp,
                   KERNEL_TASK_BAD_STATE);
@@ -82,7 +82,7 @@ static void rejection_cases(void)
     stack.saved_rsp = stack.bottom + 3;
     should_reject(&table, id, &stack, dispatcher_rsp,
                   KERNEL_TASK_BAD_STATE);
-    stack.saved_rsp = UINTPTR_C(0x103fe0);
+    stack.saved_rsp = (uintptr_t)0x103fe0;
     refuse = true;
     should_reject(&table, id, &stack, dispatcher_rsp,
                   KERNEL_TASK_BAD_STATE);
@@ -108,13 +108,13 @@ static void stress_reclamation(void)
     for (unsigned i = 0; i < 20000; ++i) {
         struct kernel_task_handle id = terminated(&table);
         struct kernel_task_stack_binding stack = {
-            .bottom = UINTPTR_C(0x400000),
+            .bottom = (uintptr_t)0x400000,
             .bytes = 16384,
-            .saved_rsp = UINTPTR_C(0x403fe0),
+            .saved_rsp = (uintptr_t)0x403fe0,
             .owner_index = i % 2
         };
         assert(kernel_task_reap_owned(&table, id, &stack,
-                   UINTPTR_C(0x500000), release_stack) == KERNEL_TASK_OK);
+                   (uintptr_t)0x500000, release_stack) == KERNEL_TASK_OK);
         assert(kernel_task_check(&table));
     }
     assert(releases - start_releases == 20000);
