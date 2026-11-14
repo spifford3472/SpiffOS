@@ -283,3 +283,8 @@ owner and bounded single-waiter priority inheritance. A controlled
 saved-frame corruption is rejected before recovery. Normal editor
 execution remains nonpreemptive; full process scheduling belongs to
 M10-D5. See `../decisions/ADR-m10-d4-priority-supervisor-proof.md`.
+
+
+## M10-D5.2a task cleanup boundary (development only)
+
+A bounded kernel-task-reaper adapter supplements the authoritative M10-A/D5.1 task table without replacing D4's diagnostic controller. Only the permanent dispatcher or supervisor may invoke memory-owner release after verifying task termination, stack range, saved context bounds and an actually observed caller RSP outside that stack. A successful release precedes `kernel_task_reap` and generation-tagged descriptor reuse. The first real-QEMU integration is the **test-only M10-B cooperative switch fixture**. The normal editor remains unpreempted; resource graph cleanup and true production reaper queues are deferred. See `../decisions/ADR-m10-d5-execution-aware-reaper.md`.
