@@ -101,6 +101,17 @@ static void blocked_and_quarantine(void)
     assert(kernel_task_resources_ref(&r2,&t2,h3,KERNEL_RESOURCE_WAITER,true)==KERNEL_RESOURCE_OK);
     assert(kernel_task_resources_ref(&r2,&t2,h3,KERNEL_RESOURCE_WAITER,false)==KERNEL_RESOURCE_OK);
     terminate_task(&t2,h3);
+    /* Even a correct off-stack address does not authorize teardown while
+     * some unrelated ordinary task is the current CPU execution owner. */
+    struct kernel_task_handle other, running;
+    assert(kernel_task_create(&t2,false,&other)==KERNEL_TASK_OK);
+    assert(kernel_task_make_runnable(&t2,other)==KERNEL_TASK_OK);
+    assert(kernel_task_dispatch(&t2,&running)==KERNEL_TASK_OK);
+    unsigned prior=attempted;
+    assert(kernel_task_resources_retire(&r2,&t2,h3,(uintptr_t)0x400000u,
+        release_owner)==KERNEL_RESOURCE_BAD_STATE);
+    assert(attempted==prior);
+    assert(kernel_task_yield(&t2,other)==KERNEL_TASK_OK);
     assert(kernel_task_resources_retire(&r2,&t2,h3,
         r2.task[h3.slot].stack.bottom+64u,release_owner)==KERNEL_RESOURCE_BAD_STATE);
     assert(attempted==releases_before);
