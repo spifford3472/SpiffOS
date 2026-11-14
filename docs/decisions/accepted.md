@@ -447,3 +447,8 @@ merge, physical install or production-editor preemption. See
 ## M10-D5.2a isolated execution-reaper proof — owner direction 2026-11-13
 
 The owner elected to proceed with an execution-aware cleanup boundary after D5.1. This authorizes **isolated implementation/testing only** of a supervisor/dispatcher-only reaper adapter and M10-B real-QEMU proof. It does not grant automatic merge, deployment, Ring 3 support, general IRQ scheduler activation or physical hardware boot. Keep the prior D5.1 descriptor lifecycle, D4 diagnostic isolation and supervisor reserve intact. See [ADR-m10-d5-execution-aware-reaper](ADR-m10-d5-execution-aware-reaper.md).
+
+
+## M10-D5.2b owner direction — isolated resource ownership, 2026-11-13
+
+The owner chose the next D5.2b checkpoint after D5.2a. Implement a bounded generation-tagged task resource registry and fail-closed cleanup gate, with tested lock/wait reference interlocks and quarantine after memory-owner failure. This is **development/testing authorization only**, stacked on PRs #71/#72; it does not authorize merge, deployment, general editor preemption, new process ABI or physical disk changes. See [D5.2b ADR](ADR-m10-d5-resource-ownership.md).
