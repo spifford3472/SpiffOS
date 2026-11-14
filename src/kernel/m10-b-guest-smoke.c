@@ -9,6 +9,7 @@
 #include "memory-boot.h"
 #include "kernel-task.h"
 #include "kernel-task-cleanup.h"
+#include "kernel-task-mutex.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -24,6 +25,8 @@ static volatile bool task_failed;
 static struct kernel_task_table task_table;
 static struct kernel_task_resources resource_owners;
 static struct kernel_task_cleanup_queue cleanup_queue;
+static struct kernel_task_mutex test_mutex;
+static volatile uint32_t mutex_stage[TEST_STACKS];
 static struct kernel_task_handle task_handles[TEST_STACKS];
 static const char *failure_reason = "UNSET";
 
@@ -85,6 +88,24 @@ static void guest_task_exit(size_t index)
 __attribute__((noreturn))
 static void task_one(void)
 {
+    /* The owner takes the mutex, yields to a real independent worker and
+     * later releases it after that worker has actually blocked on its stack. */
+    uint64_t mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result got=kernel_task_mutex_acquire(
+        &test_mutex,&resource_owners,&task_table,task_handles[0]);
+    restore_irq(mutex_flags);
+    if(got!=KERNEL_MUTEX_OK) task_failed=true;
+    mutex_stage[0]=1;
+    guest_task_yield(0);
+    x86_task_switch(&task_context[0],&boot_context);
+    mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result released=kernel_task_mutex_release(
+        &test_mutex,&resource_owners,&task_table,task_handles[0]);
+    restore_irq(mutex_flags);
+    if(released!=KERNEL_MUTEX_OK) task_failed=true;
+    mutex_stage[0]=2;
+    guest_task_yield(0);
+    x86_task_switch(&task_context[0],&boot_context);
     for(uint32_t i=0;i<TEST_ROUNDS;++i) {
         if(task_step[0]!=i) task_failed=true;
         task_step[0]=i+1;
@@ -101,6 +122,24 @@ static void task_one(void)
 __attribute__((noreturn))
 static void task_two(void)
 {
+    /* Contention changes this RUNNING task to BLOCKED before switching its
+     * actual execution stack back to the permanent dispatcher. Its saved
+     * C continuation resumes only after owner has transferred and woken it. */
+    uint64_t mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result blocked=kernel_task_mutex_acquire(
+        &test_mutex,&resource_owners,&task_table,task_handles[1]);
+    restore_irq(mutex_flags);
+    if(blocked!=KERNEL_MUTEX_BLOCKED) task_failed=true;
+    mutex_stage[1]=1;
+    x86_task_switch(&task_context[1],&boot_context);
+    mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result released=kernel_task_mutex_release(
+        &test_mutex,&resource_owners,&task_table,task_handles[1]);
+    restore_irq(mutex_flags);
+    if(released!=KERNEL_MUTEX_OK) task_failed=true;
+    mutex_stage[1]=2;
+    guest_task_yield(1);
+    x86_task_switch(&task_context[1],&boot_context);
     for(uint32_t i=0;i<TEST_ROUNDS;++i) {
         if(task_step[1]!=i) task_failed=true;
         task_step[1]=i+1;
@@ -151,7 +190,8 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     flags=save_and_disable_irq();
     bool policy_ready=kernel_task_init(&task_table) &&
         kernel_task_resources_init(&resource_owners) &&
-        kernel_task_cleanup_init(&cleanup_queue);
+        kernel_task_cleanup_init(&cleanup_queue) &&
+        kernel_task_mutex_init(&test_mutex);
     for(size_t i=0;i<TEST_STACKS && policy_ready;++i)
         policy_ready=kernel_task_create(&task_table,false,
                          &task_handles[i])==KERNEL_TASK_OK &&
@@ -190,6 +230,43 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     restore_irq(flags);
     if(!registered) {
         failure_reason="RESOURCE_BIND";
+        goto cleanup;
+    }
+    /* Four real CPU context handoffs: owner acquire/yield, waiter
+     * RUNNING->BLOCKED and switch away, owner transfer/wake, waiter resumes
+     * saved instruction stream and unlocks. Ready FIFO must return to the
+     * same two-worker ordering before the inherited 1026-turn churn. */
+    for(size_t turn=0;turn<4;++turn) {
+        struct kernel_task_handle selected={0};
+        flags=save_and_disable_irq();
+        enum kernel_task_result chosen=kernel_task_dispatch(
+            &task_table,&selected);
+        restore_irq(flags);
+        if(chosen!=KERNEL_TASK_OK || selected.slot!=(turn%2)) {
+            failure_reason="MUTEX_DISPATCH";
+            goto cleanup;
+        }
+        x86_task_switch(&boot_context,&task_context[selected.slot]);
+        flags=save_and_disable_irq();
+        enum kernel_task_resource_result saved=
+            kernel_task_resources_saved_rsp(&resource_owners,&task_table,
+                selected,(uintptr_t)task_context[selected.slot].saved_rsp);
+        bool valid=kernel_task_resources_check(&resource_owners,&task_table) &&
+            kernel_task_check(&task_table);
+        restore_irq(flags);
+        if(saved!=KERNEL_RESOURCE_OK || !valid || task_failed ||
+           mutex_stage[selected.slot]!=(turn/2)+1 ||
+           (turn==1 && task_table.tasks[1].state!=KERNEL_TASK_BLOCKED) ||
+           (turn==2 && task_table.tasks[1].state!=KERNEL_TASK_RUNNABLE)) {
+            failure_reason="MUTEX_HANDOFF";
+            goto cleanup;
+        }
+    }
+    if(test_mutex.owned || test_mutex.waiting ||
+       resource_owners.task[0].owned_locks ||
+       resource_owners.task[1].owned_locks ||
+       resource_owners.task[1].registered_waiters) {
+        failure_reason="MUTEX_REFS";
         goto cleanup;
     }
     uint64_t first_tick=0,last_tick=0;
