@@ -8,6 +8,7 @@ ADR-m10-d4-priority-supervisor-proof.md.
 """
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -67,9 +68,41 @@ def main():
                     b"SPIFFOS_M10_D4_COMPLETE_ERROR" in data):
                 raise RuntimeError(
                     f"D4 full QEMU {mib}MiB invalid boot: {data[-1900:]!r}")
-            print(f"PASS M10-D4 complete QEMU {mib}MiB: four priority "
-                  "workers, real block/wake and supervisor checked-frame "
-                  "recovery, owned-stack release, keyboard ready", flush=True)
+            # Parse actual post-IRQ diagnostic records, not a mere
+            # success marker. Counts are measured real IRQ scheduling
+            # opportunities, distinct from a guaranteed hard CPU budget.
+            def metric(name):
+                match = re.search(rb"(?m)^" + name.encode() +
+                                  rb":([0-9]+)\\r?$", data)
+                if match is None:
+                    raise RuntimeError(f"D4 {mib}MiB missing metric {name}")
+                return int(match.group(1))
+
+            worker_names = (
+                "D4_WORKER_BACKGROUND_SLICES",
+                "D4_WORKER_NORMAL_SLICES",
+                "D4_WORKER_INTERACTIVE_SLICES",
+                "D4_WORKER_TIME_SENSITIVE_SLICES",
+            )
+            workers = [metric(name) for name in worker_names]
+            sup = metric("D4_SUPERVISOR_DISPATCHES")
+            gap = metric("D4_SUPERVISOR_MAX_GAP_TICKS")
+            ticks = metric("D4_TOTAL_IRQ_TICKS")
+            elapsed = metric("D4_ELAPSED_MS")
+            if (min(workers) < 12 or sup < 12 or gap > 4 or
+                    ticks <= 48 or ticks >= 700 or elapsed <= 0 or
+                    metric("D4_BLOCKED_TICKS") < 5 or
+                    metric("D4_WAKE_EVENTS") < 1 or
+                    metric("D4_QUARANTINE_EVENTS") < 1 or
+                    metric("D4_VALIDATED_RECOVERY_EVENTS") < 1 or
+                    metric("D4_PRIORITY_INHERITANCE_OK") != 1):
+                raise RuntimeError(
+                    f"D4 {mib}MiB quota fail workers={workers} sup={sup} "
+                    f"gap={gap} ticks={ticks} elapsed={elapsed}")
+            print(f"PASS M10-D4 complete QEMU {mib}MiB: "
+                  f"workers={workers}, supervisor={sup}, "
+                  f"max_gap={gap} ticks, elapsed={elapsed}ms, "
+                  "block/wake, inversion and frame recovery", flush=True)
         image(src, env, "-DSPIFFOS_M10_D4_COMPLETE_TEST "
                         "-DSPIFFOS_IRQ0_DISABLED_TEST")
         for mib in (128, 256, 512):
