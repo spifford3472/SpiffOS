@@ -128,6 +128,19 @@ test-m10-d4-state: build/m10-d4-task-state-test
 test-m10-d4-complete-guest:
 	python3 scripts/test-m10-d4-complete-guest.py
 
+# M10-D5.1 metadata-only task reclamation gate. This never links into the
+# ordinary kernel image; the full D4 acceptance suite remains mandatory.
+.PHONY: test-m10-d5-reap test-m10-d5-acceptance
+test-m10-d5-reap: build/m10-d5-task-reap-test
+	./build/m10-d5-task-reap-test
+
+build/m10-d5-task-reap-test: tests/m10-d5-task-reap-test.c src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-task-reap-test.c src/kernel/kernel-task.c -o $@
+
+test-m10-d5-acceptance: test-m10-d5-reap test-m10-d4-complete-acceptance
+	@echo SPIFFOS_M10_D5_1_ACCEPTANCE_OK
+
 .PHONY: test-m10-d4-complete-acceptance
 test-m10-d4-complete-acceptance: test-m10-d4-state test-m10-d4-complete-guest test-m10-d4-acceptance
 	@echo SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK
