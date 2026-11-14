@@ -293,3 +293,18 @@ See `ADR-m10-d-preemption-proposal.md` and
 ## M10-D3.1 debug visibility and D4 open gates — 2026-11-13
 
 The owner approved D3.1 then D4 development. Workspace metadata may be prepared at boot but inactive editor painting remains lazy; any nonpainting editor initializer and F10 diagnostics must be tested. Real four-priority preemptive scheduling, anti-starvation and supervisor recovery under CPU load remain M10-D4 acceptance gates. See [ADR-m10-d31-workspaces-debug-hub.md](ADR-m10-d31-workspaces-debug-hub.md).
+
+
+## M10-D4 diagnostic acceptance versus D5 production — 2026-11-13
+
+The owner authorized completing the D4 test-only milestone.
+Four worker priorities, real task blocking and supervisor wake,
+bounded boot-supervisor dispatch quota, single-waiter priority
+inheritance and fail-closed task-frame recovery are implemented
+in the isolated D4 completion branch and require the full
+integration acceptance suite. The **production** task execution API,
+ring3 user task isolation, SMP, multiple waiters/nested locks,
+FPU/SIMD context, CR3 switching, exception containment and guaranteed
+hardware realtime CPU budgets remain M10-D5/open architecture
+requirements; diagnostic code must not be silently enabled in the
+normal kernel. See `ADR-m10-d4-priority-supervisor-proof.md`.

@@ -271,3 +271,15 @@ The first LAPIC/IOAPIC-delivered PIT0 interrupt now has bounded test-only 100/20
 ## M10-D3.1 planned boot preparation and system diagnostics — 2026-11-13
 
 All nine workspace identities/metadata are prepared at boot; the physical framebuffer and per-workspace snapshots remain lazily painted/allocated for memory efficiency. An F10 read-only monitor can report only verified diagnostic values. See [ADR-m10-d31-workspaces-debug-hub.md](../decisions/ADR-m10-d31-workspaces-debug-hub.md). D4 priority/supervisor integration remains a separate test milestone.
+
+
+## M10-D4 diagnostic architecture boundary — 2026-11-13
+
+M10-D4 completion is a distinct QEMU-only boot CPU diagnostic with
+four independently stacked ring-0 workers (Background, Normal,
+Interactive, Time-sensitive), preemptive IRQ-exit full-frame handoff
+and an always-ready supervisor. It incorporates a fixed task-state
+owner and bounded single-waiter priority inheritance. A controlled
+saved-frame corruption is rejected before recovery. Normal editor
+execution remains nonpreemptive; full process scheduling belongs to
+M10-D5. See `../decisions/ADR-m10-d4-priority-supervisor-proof.md`.

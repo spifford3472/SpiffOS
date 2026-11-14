@@ -1187,6 +1187,24 @@ void kmain(void)
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
+#ifdef SPIFFOS_M10_D4_COMPLETE_TEST
+    /* Owner-approved D4 QEMU-only: four real priority workers, timed
+     * preemptive block/wake and validated supervisor frame recovery.
+     * The production editor remains nonpreemptive in normal builds. */
+    extern bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *));
+    extern const char *m10_d4_complete_failure_reason(void);
+    if(!m10_d4_complete_guest_smoke(kernel_timer_boot_now_ms)) {
+        (void)serial_write("SPIFFOS_M10_D4_COMPLETE_ERROR:");
+        (void)serial_write(m10_d4_complete_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    /* Exact counters are written only after IRQ handoff stops and all
+     * worker stacks have been released on the surviving boot stack. */
+    extern void m10_d4_complete_report(bool (*write)(const char *));
+    m10_d4_complete_report(serial_write);
+    (void)serial_write("SPIFFOS_M10_D4_COMPLETE_OK\r\n");
+#endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* Only the separate diagnostic build enters timer-based ring-0
      * task handoff, before the ordinary keyboard/editor environment.

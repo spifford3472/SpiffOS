@@ -658,3 +658,50 @@ Interactive-class live dispatch, priority inversion constraints,
 supervisor error recovery and verified CPU budgets. The ordinary
 SpiffOS editor and F10 are never preempted by D4 diagnostic flags.
 See `docs/decisions/ADR-m10-d4-priority-supervisor-proof.md`.
+
+
+## M10-D4 completion: actual task blocking and bounded priority inheritance
+
+The earlier D4 checkpoint could choose between two CPU-bound workers,
+but its blocked/woken pattern was just a synthetic ready-list filter.
+The **separate D4 completion test** replaces that model with a real,
+bounded state owner in `m10-d4-task-control.[ch]`. Four worker states
+can be READY, BLOCKED or QUARANTINED, and an always-reserved supervisor
+on slot 15 is not allowed to block. Each worker is assigned a distinct
+priority class: Background, Normal, Interactive, Time-sensitive.
+Blocked tasks retain previously earned *runnable-time* wait credit
+but do not accrue new credit while blocked.
+
+The live guest in `m10-d4-complete-guest.c` has four independently
+owned 16KiB frame-backed stacks, real 100Hz PIT0 IRQ saves and 20-word
+IRETQ returns. Background worker blocks itself with interrupts masked,
+and the original boot-stack supervisor wakes it; worker3 (Time-sensitive)
+also blocks on a real one-waiter lock owned by Background. On contention,
+Background temporarily inherits Time-sensitive priority. Releasing the
+lock restores its base priority and transfers ownership to exactly the
+blocked waiter. Only one owner and one waiter are supported; arbitrary
+mutex graphs and ring3 lock authorization are future features.
+
+The supervisor can quarantine an **inactive** worker, but cannot wake
+a quarantined task without independently checking the saved frame's
+ownership, bounds, CS, SS and flags. To prove this, the guest deliberately
+corrupts a saved frame, refuses unsafe recovery, then restores and
+validates the existing owned frame before allowing that task to resume.
+Fatal hardware CPU exceptions still halt; this is NOT a general #PF
+recovery system.
+
+For regression testing, run
+`make HOST_CC=gcc test-m10-d4-complete-acceptance` on an isolated
+D4 completion checkout. This includes GCC ASan/UBSan state and
+inheritance tests, 12 four-worker QEMU cases (three positive plus
+three each IRQ-disabled, corrupt-frame and corrupt-canary negatives),
+the previous D4 test fixture, D3/D2/D1 and M9/M10 functional regression
+suite. The diagnostic serial output includes genuine worker slice
+counts, supervisor dispatch count and maximum gap in **PIT ticks**
+(approximately 10ms each in QEMU), total elapsed timer time and
+block/wakeup/validated-recovery counts. These are experimentally
+observed scheduling opportunities, not hard realtime CPU quotas.
+
+Only the `SPIFFOS_M10_D4_COMPLETE_TEST` image includes these objects.
+No default SpiffOS image preempts editor tasks. See
+`docs/operations/m10-d4-completion-20261113.md` and the D4 ADR.
