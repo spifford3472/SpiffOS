@@ -50,3 +50,44 @@ No new product policy is needed to add isolated metadata tests under the existin
 ## History
 
 2026-11-13: documentation-first D5.1 proposal based on current GitHub decisions and Forge inspection. QWEN execution from the available restricted Forge remote account is not yet available; no local or QEMU tests claimed for this proposal.
+
+
+## D5.1 implementation checkpoint (unmerged)
+
+The feature branch implements the metadata-only reclamation gate using
+`kernel_task_record.reclaimed` and `kernel_task_reap()` in
+`src/kernel/kernel-task.{h,c}`. The existing M10-A lifecycle test now
+checks that an unreaped terminated slot is unavailable and that double-reap
+and stale-generation operations are rejected without mutation. A new
+`tests/m10-d5-task-reap-test.c` exercises 20,000 create/dispatch/
+terminate/reap cycles under ASan/UBSan, supervisor slot reservation,
+no-capacity and corruption checks. Makefile and CI select the D5.1 test
+plus the inherited D4 complete acceptance suite.
+
+**Scope limitation:** the metadata API trusts that the external reaper has
+actually detached stack and synchronization resources. It must not be used
+as a standalone production task-exit implementation. No task can currently
+prove physical stack release through this metadata API.
+
+### Forge access/QWEN record
+
+The restricted remote account `rt-remote` has read access to the accepted
+SpiffOS checkout but not write permission to the owner's checkout.
+Local Ollama `http://127.0.0.1:11434` exposes `qwen3-coder:30b`,
+reachable without sudo or any permission change. A narrowly scoped D5.1
+QWEN request containing existing header/C code timed out after 180 seconds
+without output (no QWEN patch to review). To avoid silently handing the
+whole feature to Codex, the coordinator prepared and hosted-tested a small
+direct fallback patch in `/tmp/spiffos-d5-rtremote-20261113` and committed
+it on the development branch. No production permission, owner ISO,
+physical boot media, OPNsense or networking changes were made.
+
+### Validation ledger
+
+- Baseline M10-A test on isolated Forge: `SPIFFOS_M10_A_POLICY_OK`.
+- Modified M10-A hosted GCC ASan/UBSan: `SPIFFOS_M10_A_POLICY_OK`.
+- New D5.1 hosted GCC ASan/UBSan: `SPIFFOS_M10_D5_REAP_OK`.
+- Complete D4 inherited acceptance: verification required on exact feature
+  branch before review; do not claim PASS until final log/exit captured.
+- GitHub CI: must be green on exact head SHA before any merge.
+- Owner release approval remains required separately.
