@@ -119,3 +119,46 @@ with the previous rollback retained. Discarding this review branch
 or its temporary QEMU tests completely rolls back D4 experiments.
 Do not install a D4 diagnostic or ordinary ISO without a verified
 owner-controlled merge and release approval.
+
+
+## Final full-acceptance evidence — 2026-11-13
+
+Full complete-scope regression executed on isolated Forge at exact
+tested C/ASM/Makefile/test source SHA
+`bda20abc5fa6d781c74d061d25b85efc87d36b69`:
+
+```sh
+make HOST_CC=gcc test-m10-d4-complete-acceptance
+```
+
+**PASS**, exit status 0, runtime **262.79 seconds**,
+log `/tmp/spiffos-d4-complete-full-acceptance.log`.
+Required terminal markers:
+
+- `SPIFFOS_M10_D4_TASK_CONTROL_OK`
+- `SPIFFOS_M10_D4_HOST_PRIORITY_CHURN_OK`
+- `SPIFFOS_M10_D2_ACCEPTANCE_OK`
+- `SPIFFOS_M10_D3_ACCEPTANCE_OK`
+- `SPIFFOS_M10_D4_CHECKPOINT_OK`
+- `SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK`
+
+All 12 full-completion guests, 9 earlier D4 guests, D3/D2
+positive/negative and M9/M10 legacy regressions passed at their
+respective 128/256/512 MiB memory sizes.
+Detailed full-completion positive metrics by RAM size were
+reproducible: 12/15/27/165 slices (Background/Normal/Interactive/
+Time-sensitive), 73 supervisor dispatches, worst actual supervisor
+dispatch gap 3 ticks and 2930ms measured elapsed timer time.
+IRQ0-disabled, corrupted saved-frame and corrupted canary cases
+all rejected without claiming success or entering the editor.
+The D4 state test additionally proves a real single-waiter priority
+donation and exact ownership transfer under hosted sanitizers.
+
+**Runtime isolation:** independent unflagged ISO rebuilds from the
+initial D4 checkpoint and completed D4 source produced byte-identical
+debug-stripped kernel ELFs with SHA-256
+`82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`.
+All subsequent branch edits after the tested code checkpoint update
+documentation only; verify this in GitHub diff before merging.
+No merge, owner ISO installation, infrastructure or physical media
+change was performed.
