@@ -1228,6 +1228,19 @@ void kmain(void)
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
 #endif
 #endif
+#ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
+    /* D5.5c: real CPU IRQ0 frame from an actual M10-A-owned task stack.
+     * No IRQ-time task switch and no ordinary editor preemption. */
+    extern bool m10_d55c_frame_guest_smoke(bool (*clock_ms)(uint64_t *));
+    if(!m10_d55c_frame_guest_smoke(kernel_timer_boot_now_ms)) {
+        extern const char *m10_d55c_frame_guest_failure_reason(void);
+        (void)serial_write("SPIFFOS_M10_D55C_FRAME_ERROR:");
+        (void)serial_write(m10_d55c_frame_guest_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D55C_FRAME_OK\r\n");
+#endif
 #ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
     /* D5.5b reuses the real assembly sentinel and immutable IRQ0 frame.
      * It proves only observed diagnostic CPU state, not scheduler authority. */
