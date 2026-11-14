@@ -239,6 +239,11 @@ __attribute__((noreturn)) static void worker_one(void) {worker_run(1);}
  * completed work, never mere opportunities chosen by the IRQ scheduler. */
 __attribute__((noreturn)) static void supervisor_run(void)
 {
+    /* Enable the IRQ selector ONLY after cooperative first-entry has
+     * established the actual supervisor-owned stack and exact handle. */
+    const uint64_t entry=enter_critical();
+    active=true;
+    exit_critical(entry);
     while(!done && !failed) {
         const uint64_t prior=enter_critical();
         if(!d55c_tick_service_completed(&service,true,true,ticks)) {
@@ -344,13 +349,8 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
     /* Switching from boot to supervisor must be atomic relative to IRQ0.
      * Cooperative task_switch does not change IF, so the first IRQ after
      * this call can occur only after supervisor has begun executing. */
-    const uint64_t launch=enter_critical();
-    active=true;
-    /* Restoring IF just before switching leaves a small boot-stack window,
-     * so instead arrange a pending transition for IRQ observer to ignore
-     * until supervisor is actually on its own stack. */
-    active=false;
-    exit_critical(launch);
+    /* IRQ selector remains inactive while still on bootstrap stack.
+     * Supervisor enables it only after the cooperative stack handoff. */
     x86_task_switch(&boot_context,&supervisor_context);
     /* Supervisor is now TERMINATED and switched completely off its stack. */
     active=false;
