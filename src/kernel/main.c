@@ -194,19 +194,6 @@ static bool console_scroll_demo(struct text_console *console)
 
 #endif
 
-#ifdef SPIFFOS_M10_D54_GUEST_TEST
-    /* Isolated D5.4 three-stack multiwaiter test: no normal editor
-     * preemption, no IRQ stack switch, no non-test kernel linkage. */
-    extern bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *));
-    if(!m10_d54_guest_smoke(kernel_timer_boot_now_ms)) {
-        extern const char *m10_d54_guest_failure_reason(void);
-        (void)serial_write("SPIFFOS_M10_D54_GUEST_ERROR:");
-        (void)serial_write(m10_d54_guest_failure_reason());
-        (void)serial_write("\r\n");
-        halt_forever();
-    }
-    (void)serial_write("SPIFFOS_M10_D54_GUEST_OK\r\n");
-#endif
 #ifndef SPIFFOS_SCROLL_TEST
 /* Adapt the existing x86 port helpers to the keyboard transport callbacks.
  * Context is unused; ring 0 startup CPU only, synchronous hardware access. */
@@ -1264,6 +1251,20 @@ void kmain(void)
     }
     (void)serial_write("SPIFFOS_M10_B_SWITCH_OK\r\n");
 #endif
+#ifdef SPIFFOS_M10_D54_GUEST_TEST
+    /* Isolated D5.4 three-stack multiwaiter test: no normal editor
+     * preemption, no IRQ stack switch, no non-test kernel linkage. */
+    extern bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *));
+    if(!m10_d54_guest_smoke(kernel_timer_boot_now_ms)) {
+        extern const char *m10_d54_guest_failure_reason(void);
+        (void)serial_write("SPIFFOS_M10_D54_GUEST_ERROR:");
+        (void)serial_write(m10_d54_guest_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D54_GUEST_OK\r\n");
+#endif
+
 #ifndef SPIFFOS_SCROLL_TEST
     if (console.initialized) {
         keyboard_run(&console);
