@@ -229,6 +229,12 @@ static void supervisor_service(void)
             failed=true;
         else ++quarantine_events;
     }
+#ifdef SPIFFOS_M10_D4_BAD_FRAME_TEST
+    /* Diagnostic negative: damage an inactive, retained worker frame.
+     * IRQ-exit selector MUST refuse it and return to the safe supervisor. */
+    if(state.worker[3].dispatch_count>=2 && frame[3]!=NULL)
+        frame[3][M10_D2_CS]=0;
+#endif
     if(quarantine_events>0 && recovery_events==0 &&
        state.supervisor_dispatches>=14 &&
        state.worker[2].status==D4_TASK_QUARANTINED) {
@@ -313,6 +319,11 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
         quarantine_events>0 && recovery_events>0 &&
         quarantine_rejected_bad_frame &&
         clock_ms(&end) && end>begin;
+#ifdef SPIFFOS_M10_D4_BAD_CANARY_TEST
+    /* Inject guard corruption AFTER leaving worker stacks and masking IRQs.
+     * Fail closed on owner-guard mismatch, but still release backing. */
+    stack[0][0]=0;
+#endif
     for(unsigned i=0;i<D4_TASK_WORKERS;++i) {
         if(slices[i]<D4_MIN_SLICES || iterations[i]==0)
             valid=false;
