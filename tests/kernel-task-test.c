@@ -79,6 +79,14 @@ static void exhaustion(void)
     unchanged(&table,&before);
     assert(kernel_task_terminate(&table,normal[0])==KERNEL_TASK_OK);
     struct kernel_task_handle replacement;
+    before=table;
+    assert(kernel_task_create(&table,false,&replacement)==KERNEL_TASK_NO_CAPACITY);
+    unchanged(&table,&before);
+    /* Simulate verified external reaper completion, then release slot. */
+    assert(kernel_task_reap(&table,normal[0])==KERNEL_TASK_OK);
+    before=table;
+    assert(kernel_task_reap(&table,normal[0])==KERNEL_TASK_BAD_STATE);
+    unchanged(&table,&before);
     assert(kernel_task_create(&table,false,&replacement)==KERNEL_TASK_OK);
     assert(replacement.slot==normal[0].slot);
     assert(replacement.generation!=normal[0].generation);
@@ -87,6 +95,9 @@ static void exhaustion(void)
     unchanged(&table,&before);
     assert(kernel_task_get(&table,normal[0])==NULL);
     assert(kernel_task_get(&table,replacement)!=NULL);
+    before=table;
+    assert(kernel_task_reap(&table,normal[0])==KERNEL_TASK_BAD_HANDLE);
+    unchanged(&table,&before);
 }
 
 /* Check all documented illegal state transitions and queue corruption. */
@@ -100,6 +111,9 @@ static void invalid_and_corrupt(void)
     assert(kernel_task_wake(&table,a)==KERNEL_TASK_BAD_STATE);
     unchanged(&table,&before);
     assert(kernel_task_yield(&table,a)==KERNEL_TASK_BAD_STATE);
+    unchanged(&table,&before);
+    before=table;
+    assert(kernel_task_reap(&table,a)==KERNEL_TASK_BAD_STATE);
     unchanged(&table,&before);
     assert(kernel_task_make_runnable(&table,a)==KERNEL_TASK_OK);
     before=table;
@@ -132,6 +146,7 @@ static void generation_boundary(void)
     for(size_t i=0;i<KERNEL_TASK_SUPERVISOR_SLOT;++i) {
         table.tasks[i].state=KERNEL_TASK_TERMINATED;
         table.tasks[i].generation=UINT32_MAX;
+        table.tasks[i].reclaimed=true;
     }
     assert(kernel_task_check(&table));
     struct kernel_task_handle sentinel={99,100};
