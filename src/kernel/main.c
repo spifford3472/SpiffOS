@@ -1223,6 +1223,18 @@ void kmain(void)
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
 #endif
 #endif
+#ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
+    /* D5.5b reuses the real assembly sentinel and immutable IRQ0 frame.
+     * It proves only observed diagnostic CPU state, not scheduler authority. */
+    extern void m10_d2_probe_run(void);
+    extern bool m10_d55b_evidence_passed(void);
+    m10_d2_probe_run();
+    if(!m10_d55b_evidence_passed()) {
+        (void)serial_write("SPIFFOS_M10_D55B_EVIDENCE_ERROR\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D55B_EVIDENCE_OK\r\n");
+#endif
 #ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
     /* D2 intentionally runs before normal keyboard polling, when the
      * real IRQ0 route is active. Test-only CPU sentinel cannot yield;
