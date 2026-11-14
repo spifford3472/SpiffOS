@@ -625,3 +625,36 @@ instead of inventing an uptime of zero. Task CPU percentage is also
 UNAVAILABLE until D4 provides verified scheduler accounting. This
 monitor is read-only and restores the previous workspace screen on
 F1–F9. See `docs/decisions/ADR-m10-d31-workspaces-debug-hub.md`.
+
+
+## M10-D4 experimental priority handoff and supervisor reservation
+
+D4 tests exercise the exact M10-D3 real IRQ0 handoff with the **pure
+D1 priority selector** linked only under the special
+`SPIFFOS_M10_D4_PRIORITY_TEST` build flag. The 100 Hz IRQ path still
+accounts ticks and emits exactly one LAPIC EOI before the selector runs.
+A bounded ready snapshot maps the permanent boot-stack supervisor to
+reserved slot 15, CPU-hog worker A to Time-sensitive slot 0, and
+CPU-hog worker B to Background slot 1. The pure selector uses
+`waiting_dispatches + priority*8` with saturation and a supervisor
+reservation every fourth dispatch when runnable.
+
+The hosted `make HOST_CC=gcc test-m10-d4-host` runs all four
+priority classes, readiness churn, no-starvation checks and bad
+snapshot rejection. The live `make test-m10-d4-guest` uses QEMU
+128/256/512MiB to check both workers, supervisor, 16KiB independently
+owned stacks, clean boot-stack cleanup and fails closed when IRQ0
+is absent or a worker stack guard is corrupt. The test scheduler
+also temporarily marks Background blocked, then wakes it: its
+*ready-time* waiting credit is retained across blocks but does not
+increase while blocked. Resetting this credit at every wake caused
+a real QEMU starvation regression under repeated short runnable
+windows; retaining it fixes the test without changing the normal
+runtime path.
+
+This is a **diagnostic-only stepping stone** to a real task subsystem:
+we still need to integrate actual task runnable/blocked state,
+Interactive-class live dispatch, priority inversion constraints,
+supervisor error recovery and verified CPU budgets. The ordinary
+SpiffOS editor and F10 are never preempted by D4 diagnostic flags.
+See `docs/decisions/ADR-m10-d4-priority-supervisor-proof.md`.

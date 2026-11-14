@@ -13,11 +13,14 @@
 #include "memory-boot.h"
 #include "m10-d2-irq-frame.h"
 #include "x86-task-context.h"
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+#include "kernel-priority-policy.h"
+#endif
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef SPIFFOS_M10_D3_PREEMPT_TEST
+#if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 enum {
     D3_BOOT=0, D3_WORKER_A=1, D3_WORKER_B=2,
     D3_CONTEXTS=3, D3_WORKERS=2, D3_REQUIRED_SLICES=12,
@@ -31,6 +34,17 @@ static uint64_t *d3_frame[D3_CONTEXTS];
 static uint8_t *d3_stack[D3_WORKERS];
 static uint64_t d3_cs, d3_ss;
 static const char *d3_failure="UNSET";
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+/* Dispatcher boot uses D1's reserved supervisor slot 15; the two
+ * physical workers stay in their existing 16KiB owner-backed stacks. */
+static uint64_t d4_wait[D3_CONTEXTS];
+static uint64_t d4_dispatch_count;
+static uint32_t d4_supervisor_awards;
+static uint32_t d4_background_max_wait;
+static uint32_t d4_blocked_dispatches;
+static uint32_t d4_wakeup_events;
+static bool d4_background_was_ready=true;
+#endif
 
 /* Owned static string is valid indefinitely, including after task cleanup.
  * Called only on the boot stack, never from an interrupt. */
@@ -175,6 +189,68 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
         return d3_frame[D3_BOOT];
     }
     unsigned next=(current+1u)%D3_CONTEXTS;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* A bounded three-candidate snapshot feeds the D1 pure, hosted-tested
+     * selector after the one IRQ0 EOI. This is test-only: the normal M9
+     * interrupt path and editor never invoke a scheduler here. */
+    /* Synthetic readiness window: the Background worker is temporarily
+     * blocked for the first 8 dispatches of each 32-dispatch cycle. The
+     * worker's saved frame remains retained; waking restores eligibility
+     * without writing its execution stack. This is NOT a real block API. */
+    bool background_ready=(d4_dispatch_count%32u)>=8u;
+    if(!background_ready) {
+        ++d4_blocked_dispatches;
+        /* Retain the runnable-time waiting debt across a short block.
+         * A worker repeatedly ready for <24 dispatches must not lose
+         * all aging credit every time it temporarily becomes blocked. */
+    } else if(!d4_background_was_ready) {
+        ++d4_wakeup_events;
+    }
+    d4_background_was_ready=background_ready;
+    struct kernel_priority_candidate candidates[D3_CONTEXTS]={
+        {.slot=KERNEL_PRIORITY_SUPERVISOR_SLOT,
+         .priority=KERNEL_PRIORITY_NORMAL,
+         .waiting_dispatches=d4_wait[D3_BOOT],.supervisor=true},
+        {.slot=0,.priority=KERNEL_PRIORITY_TIME_SENSITIVE,
+         .waiting_dispatches=d4_wait[D3_WORKER_A]},
+        {.slot=1,.priority=KERNEL_PRIORITY_BACKGROUND,
+         .waiting_dispatches=d4_wait[D3_WORKER_B]}
+    };
+    size_t candidate_count=background_ready ? D3_CONTEXTS : D3_CONTEXTS-1;
+    uint32_t selected=UINT32_MAX;
+    enum kernel_priority_result outcome=kernel_priority_choose(
+        candidates,candidate_count,d4_dispatch_count,&selected);
+    if(outcome!=KERNEL_PRIORITY_OK ||
+       (selected!=0 && selected!=1 &&
+        selected!=KERNEL_PRIORITY_SUPERVISOR_SLOT)) {
+        d3_failed=true;
+        d3_active=false;
+        d3_running=D3_BOOT;
+        return d3_frame[D3_BOOT];
+    }
+    next=selected==KERNEL_PRIORITY_SUPERVISOR_SLOT ? D3_BOOT :
+        selected==0 ? D3_WORKER_A : D3_WORKER_B;
+    if(d4_dispatch_count%KERNEL_PRIORITY_SUPERVISOR_INTERVAL==
+           KERNEL_PRIORITY_SUPERVISOR_INTERVAL-1) {
+        if(next!=D3_BOOT) d3_failed=true;
+        else ++d4_supervisor_awards;
+    }
+    ++d4_dispatch_count;
+    for(size_t i=0;i<D3_CONTEXTS;++i) {
+        if(i==(size_t)next) d4_wait[i]=0;
+        else if(i==D3_WORKER_B && !background_ready) {
+            /* No aging while blocked, but do not erase prior wait debt. */
+        }
+        else if(d4_wait[i]!=UINT64_MAX) ++d4_wait[i];
+    }
+    if(d4_wait[D3_WORKER_B]>d4_background_max_wait)
+        d4_background_max_wait=(uint32_t)d4_wait[D3_WORKER_B];
+    if(d3_failed) {
+        d3_active=false;
+        d3_running=D3_BOOT;
+        return d3_frame[D3_BOOT];
+    }
+#endif
     if(d3_frame[next]==NULL ||
        !d3_valid_frame(next,d3_frame[next])) {
         d3_failed=true;
@@ -251,6 +327,15 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
         d3_slices[D3_WORKER_B]>=D3_REQUIRED_SLICES &&
         d3_iterations[0]!=0 && d3_iterations[1]!=0 &&
         clock_ms(&end_ms) && end_ms>start_ms;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* With a 100Hz IRQ and both CPU hogs continuously runnable, D1's
+     * supervisor reservation must yield actual boot-stack CPU service.
+     * This is dispatch-count evidence, not general realtime latency. */
+    valid=valid && d4_supervisor_awards>=D3_REQUIRED_SLICES &&
+        d4_dispatch_count>=D3_REQUIRED_SLICES*2u &&
+        d4_background_max_wait<80u &&
+        d4_blocked_dispatches>=8u && d4_wakeup_events>=1u;
+#endif
 #ifdef SPIFFOS_M10_D3_BAD_CANARY_TEST
     /* Negative guest only: corrupt a guard AFTER the IRQ selector is
      * disabled and execution has returned to the surviving boot stack.
@@ -264,6 +349,20 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
     bool released_a=memory_boot_m10_task_stack_release(0);
     d3_irq_restore(end_flags);
     if(!released_a || !released_b) { d3_failure="STACK_RELEASE"; return false; }
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* Assign a specific boot-side failure reason so failed IRQ stress
+     * tests are diagnosable without ever logging in interrupt context. */
+    if(d4_supervisor_awards<D3_REQUIRED_SLICES)
+        d3_failure="D4_SUPERVISOR_QUOTA";
+    else if(d4_dispatch_count<D3_REQUIRED_SLICES*2u)
+        d3_failure="D4_DISPATCH_COUNT";
+    else if(d4_background_max_wait>=80u)
+        d3_failure="D4_BACKGROUND_WAIT";
+    else if(d4_blocked_dispatches<8u)
+        d3_failure="D4_NO_BLOCK_EVENT";
+    else if(d4_wakeup_events<1u)
+        d3_failure="D4_NO_WAKE_EVENT";
+#endif
     if(!valid && d3_failure[0]=='U') d3_failure="PREEMPTION_PROGRESS";
     return valid;
 }
