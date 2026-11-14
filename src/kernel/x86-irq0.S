@@ -11,6 +11,9 @@
 #ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
 .extern m10_d55b_observe_irq
 #endif
+#ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
+.extern m10_d55c_frame_irq_observe
+#endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 .extern m10_d3_irq_select
 #endif
@@ -43,6 +46,13 @@ x86_irq0_entry:
     movq %rsp,%r12
     andq $-16,%rsp
     call x86_irq0_handler
+#ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
+    /* D5.5c read-only observation of REAL worker IRQ0 frame, bound to
+     * exact M10-A current task plus D5.2b stack. No task state edits,
+     * scheduling or additional EOI inside the interrupt. */
+    movq %r12,%rdi
+    call m10_d55c_frame_irq_observe
+#endif
 #ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
     /* D5.5b-only: real entry R12 points to the immutable saved frame.
      * Observer checks live IF=0 and CPU-saved fields; never changes R12,
