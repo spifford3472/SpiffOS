@@ -30,3 +30,65 @@ Adding a second scheduler: rejected. Trusting only D5.2a caller-provided stack p
 ### Change history
 
 2026-11-13: owner accepted proposed D5.2b development; documentation-first stacked branch. Tests and implementation outcomes to be recorded after verification.
+
+
+## Verified implementation and test record — 2026-11-13
+
+Branch `feat/m10-d5-resource-ownership-gate` is stacked on D5.2a PR
+#72; opened as draft PR #73. Implemented `kernel-task-resources.[ch]`,
+a 16-entry ledger bound to authoritative generation-tagged M10-A task
+handles, with immutable backing and owner identity, mutable
+dispatcher-saved RSP, bounded lock/wait reference interlocks and
+nonretrying quarantine. The real M10-B QEMU test now registers each
+stack before first dispatch, refreshes saved RSP after returning to the
+boot context, rejects active-stack release and retires via its
+registered exact-owner binding. No ordinary kernel image links this
+new module. The open production mutex and wait APIs **do not yet**
+register references, so a general production reaper is not claimed.
+
+QWEN local `qwen3-coder:30b` completed a narrow counter-adjustment
+helper suggestion in 29.56 seconds. It proposed standard `UINT_MAX`
+overflow and zero underflow checks with no mutation on refusal. The
+coordinator integrated equivalent reviewed checks into the single
+bounded owner registry and wrote test/model/QEMU integration code;
+Codex was not used. Initial hosted GCC `-Werror` caught an ambiguous
+operator-precedence expression; fixed explicitly and retested. No
+owner checkout permissions or Git global settings were changed.
+
+**Forge source-isolated acceptance:**
+`/tmp/spiffos-d52b-20261113` copied from the isolated D5.2a
+worktree, with the D5.2b GitHub branch edits applied. Hosted command:
+`make HOST_CC=gcc test-m10-d5-resource-ownership`
+returned **PASS**, `SPIFFOS_M10_D5_RESOURCE_OWNERSHIP_OK`,
+with ASan/UBSan and 20,000 create/register/reap cycles, stale and
+duplicate owner identities, overlapping stack addresses, blocked
+lock/wait cleanup, active-stack denial, ordinary-task denial, reference
+counter failures, quarantine and no retry. M10-B real QEMU:
+`make HOST_CC=gcc test-m10-b-guest` returned **PASS** at
+128/256/512 MiB.
+
+Full inherited regression with a process-local Git safe.directory for
+the pinned read-only Limine dependency:
+`make HOST_CC=gcc test-m10-d5-resource-acceptance` returned
+**exit code 0 in 262.85 seconds**. Log:
+`/tmp/spiffos-d52b-acceptance.log`. The markers
+`SPIFFOS_M10_D5_2B_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D5_2A_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D5_1_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D4_CHECKPOINT_OK`,
+`SPIFFOS_M10_D3_ACCEPTANCE_OK` and
+`SPIFFOS_M10_D2_ACCEPTANCE_OK` were all present, including
+keyboard/editor, IRQ0, exception, APIC/MMIO, negative, and all three
+QEMU memory-size regressions.
+
+Unflagged default kernel ELF stripped-debug SHA-256:
+`82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`,
+matching documented D4 normal baseline. This proves executable
+isolation, not byte-identical ISO provenance. The owner's accepted
+ISO and rollback files were not replaced or used as development outputs.
+
+**Unresolved acceptance:** exact final PR-head GitHub Actions CI and
+owner signoff before merge/deploy. D5.2b does not resolve actual
+production mutex/wait registration, partial-release recovery, deferred
+quarantine remediation or supervisor's bounded cleanup queue.
