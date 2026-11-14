@@ -472,3 +472,8 @@ Owner approved continuing after D5.2d with isolated implementation/testing of bo
 ## M10-D5.4 owner direction — authoritative priority dispatch and real multiwaiter QEMU (2026-11-13)
 
 The owner elected to implement D5.4 after D5.3: effective-priority selection must feed the **single authoritative M10-A task dispatcher**, preserve the supervisor's reserved slot and bounded dispatch opportunities, and prove genuine multiwaiter CPU-context handoffs in disposable QEMU. This authorizes isolated development/testing only, not normal-editor IRQ preemption, merge, accepted ISO replacement or physical deployment. No parallel lifecycle scheduler; D4 remains diagnostic. See [D5.4 ADR](ADR-m10-d54-priority-dispatch.md).
+
+
+## M10-D5.5 owner direction — preemption safety boundaries (2026-11-13)
+
+Following D5.4's passing exact-head CI, the owner adopted the recommendation to address execution-safety boundaries **before** enabling general SpiffOS preemption. D5.5 begins as an isolated, fail-closed safety-admission and supervisor-service-deadline proof: validate task generation, CPU entry/context provenance, interrupts/critical-section exclusion, registered stack ownership, and latched missed-service diagnostics. This direction does **not** authorize normal editor preemption, Ring 3, automatic orphan recovery, merge, accepted ISO replacement or physical deployment. Any future hardware enforcement must provide trusted snapshots; the new policy alone cannot authenticate CPU state. See [D5.5 ADR](ADR-m10-d55-preemption-safety.md).
