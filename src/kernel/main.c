@@ -1228,6 +1228,19 @@ void kmain(void)
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
 #endif
 #endif
+#ifdef SPIFFOS_M10_D56_IRQ_TEST
+    /* Real non-yielding M10-A worker preemption, reserved owned-stack
+     * supervisor and verified IRQ0 frames; isolated diagnostic only. */
+    extern bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *));
+    extern const char *m10_d56_failure_reason(void);
+    if(!m10_d56_guest_smoke(kernel_timer_boot_now_ms)) {
+        (void)serial_write("SPIFFOS_M10_D56_IRQ_ERROR:");
+        (void)serial_write(m10_d56_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    (void)serial_write("SPIFFOS_M10_D56_IRQ_OK\r\n");
+#endif
 #ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
     /* D5.5c: real CPU IRQ0 frame from an actual M10-A-owned task stack.
      * No IRQ-time task switch and no ordinary editor preemption. */
