@@ -156,6 +156,18 @@ test-m10-d5-supervisor-queue: build/m10-d5-supervisor-queue-test
 test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 	./build/m10-d5-sync-ledger-test
 
+# D5.2d authoritative task block/wake mutex proof, not default kernel.
+.PHONY: test-m10-d5-mutex-block-wake test-m10-d5-mutex-acceptance
+test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
+	./build/m10-d5-mutex-block-wake-test
+
+build/m10-d5-mutex-block-wake-test: tests/m10-d5-mutex-block-wake-test.c src/kernel/kernel-task-mutex.c src/kernel/kernel-task-mutex.h src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-mutex-block-wake-test.c src/kernel/kernel-task-mutex.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+test-m10-d5-mutex-acceptance: test-m10-d5-mutex-block-wake test-m10-d5-supervisor-acceptance
+	@echo SPIFFOS_M10_D5_2D_ACCEPTANCE_OK
+
 build/m10-d5-sync-ledger-test: tests/m10-d5-sync-ledger-test.c src/kernel/kernel-task-sync-proof.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-sync-ledger-test.c src/kernel/kernel-task-sync-proof.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
