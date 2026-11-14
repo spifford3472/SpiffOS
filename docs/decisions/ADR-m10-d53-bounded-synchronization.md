@@ -29,3 +29,5 @@ Hosted GCC ASan/UBSan: at least 20,000 cycles with multiple waiters, fair tie-br
 ## History
 
 2026-11-13: owner requested D5.3 implementation following D5.2d. Documentation first; recorded bounds and safety choices prior to source changes.
+
+**Integration caveat:** The D5.3 sidecar assumes exclusive control over registered lock/wait counts for its participating task registry. The D5.2d legacy fixture cannot concurrently operate on the same registry; doing so would defeat its counter equality proof. A shared object-identity ledger or a single canonical mutex provider must be established before general production integration.
