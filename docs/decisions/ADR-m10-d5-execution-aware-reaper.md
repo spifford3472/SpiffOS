@@ -14,7 +14,7 @@ The interface deliberately has **no arbitrary user-facing callback or process AB
 
 ### Failure atomicity caveat
 
-A failed release must leave the descriptor unreaped. If release has succeeded but marking the descriptor reclaimed unexpectedly fails, the descriptor remains unreusable, and recovery requires supervisor investigation; NEVER return a reusable descriptor with live stack backing. This adapter must check table state and callback validity before releasing. The release adapter must have well-defined all-or-nothing semantics.
+A failed release must leave the descriptor unreaped. If release has succeeded but marking the descriptor reclaimed unexpectedly fails, the descriptor remains unreusable, and recovery requires supervisor investigation; NEVER return a reusable descriptor with live stack backing. This adapter must check table state and callback validity before releasing. A future production release adapter must have well-defined all-or-nothing semantics. The current M10-B test memory owner releases individual kernel frames and may encounter an unexpected partial-release failure. On that path it poisons its allocator, reports failure, and the reaper refuses to recycle the descriptor; this is fail-closed containment, **not a claim of transactional rollback**. Production task reuse remains gated until an independently verified recovery architecture can handle this case.
 
 ### Tests and rollout
 
