@@ -29,3 +29,24 @@ No general kernel mutex/wait manager is currently integrated. D4 single-waiter p
 ## Change history
 
 2026-11-13: owner explicitly elected next checkpoint. Documentation-first stacked architecture record; validation to be added after actual tests.
+
+
+## Implementation and validation record — 2026-11-13
+
+Implemented in isolated branch `feat/m10-d5-supervisor-cleanup-queue`, draft PR #74, stacked on D5.2b PR #73 and earlier PRs. `kernel-task-cleanup.[ch]` adds a fixed FIFO carrying exact `(slot,generation)` identifiers. Every queued identity is checked before any release callback. The reserved supervisor slot 15 is never enqueued; a blocked ordinary task rotates at most once per bounded service visit, while eligible tasks are released by the D5.2b registered owner on the surviving boot stack. A release callback failure removes only the retryable work item, retains a quarantined registry binding, and forbids automatic retry. This module has **no IRQ entrypoint or ordinary editor linkage**.
+
+`kernel-task-sync-proof.[ch]` is a hosted-only one-owner/one-waiter ledger client. It uses D5.2b reference updates for lock ownership, waiter registration and ownership transfer and rejects terminated owners. It is **not** the D4 priority-inheritance controller, does not block/wake actual tasks, and does not confer production mutex safety. Any owner with outstanding references remains unreclaimable until a separately verified recovery protocol resolves them. The existing memory allocator's partial failure remains quarantined, not transactionally rolled back.
+
+The Forge QWEN local coding agent was used first for a tiny handle-equality helper, completed in 46.49 seconds. Coordinator reviewed and integrated equivalent full-generation comparisons and handled queue/synchronization implementations and tests. Codex not used. The first real QEMU build exposed a compiler-generated `memset` call from whole-structure FIFO initialization, unavailable in the freestanding kernel link; replaced by explicit scalar/array initialization. Added a full 15-ordinary-task capacity case; its first run exposed a **test-order-only** assumption about a global release counter; fixed to assert relative increments and reran both sanitizer gates.
+
+### Actual isolated Forge tests
+
+Disposable checkout: `/tmp/spiffos-d52c-20261113`; the owner checkout, accepted ISO and rollback files were not modified. Process-only Git safe.directory allowed read-only inspection of pinned Limine. The QEMU command used no network and isolated OVMF variables, and touched no physical disk.
+
+- `make HOST_CC=gcc test-m10-d5-supervisor-queue`: **PASS** with GCC ASan/UBSan, marker `SPIFFOS_M10_D5_SUPERVISOR_QUEUE_OK`, 20,000 queued retirement cycles and full ordinary-slot, blocked, stale, ordinary-task, active-stack, quarantine and no-retry cases.
+- `make HOST_CC=gcc test-m10-d5-sync-ledger`: **PASS**, marker `SPIFFOS_M10_D5_SYNC_LEDGER_OK`, 20,000 registered transfer/retirement cycles, contested owner/waiter, terminal owner and invalid caller negatives.
+- `make HOST_CC=gcc test-m10-b-guest`: **PASS** in real QEMU at 128, 256 and 512 MiB; task stack released by bounded dispatcher queue after returning to permanent boot stack.
+- Full `make HOST_CC=gcc test-m10-d5-supervisor-acceptance`: **exit 0**, runtime **263.07 seconds**, log `/tmp/spiffos-d52c-acceptance.log`. Markers `SPIFFOS_M10_D5_2C_ACCEPTANCE_OK`, `SPIFFOS_M10_D5_2B_ACCEPTANCE_OK`, `SPIFFOS_M10_D5_2A_ACCEPTANCE_OK`, `SPIFFOS_M10_D5_1_ACCEPTANCE_OK`, `SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK`, `SPIFFOS_M10_D4_CHECKPOINT_OK`, `SPIFFOS_M10_D3_ACCEPTANCE_OK`, `SPIFFOS_M10_D2_ACCEPTANCE_OK` all present. Existing keyboard/editor/F1–F12, PIT0/IRQ0, fault handling, memory, APIC/MMIO positive and negative regressions passed.
+- Ordinary unflagged kernel ELF after stripping debug information: SHA-256 `82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`, matching prior D4 normal executable baseline. The disposable normal ISO hashed `fafb6028c669b4f8deae886fe7c954f05387798694a1ce5d1398eebeef1271f8`; this is a disposable artifact only, not evidence of bit-for-bit owner ISO equivalence.
+
+The exact final PR-head GitHub Actions result remains a separate gate. No source merge, production ISO deployment, USB/physical test or generalized preemption authorized. Future work requires a real authoritative synchronization implementation with task wake/block transitions, reference cancellation and scheduler integration before production lifecycle can be enabled.
