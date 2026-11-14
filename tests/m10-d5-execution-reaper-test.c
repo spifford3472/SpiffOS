@@ -87,6 +87,15 @@ static void rejection_cases(void)
     should_reject(&table, id, &stack, dispatcher_rsp,
                   KERNEL_TASK_BAD_STATE);
     refuse = false;
+    /* Another ordinary task owning the CPU cannot act as dispatcher. */
+    struct kernel_task_handle other, running;
+    assert(kernel_task_create(&table, false, &other) == KERNEL_TASK_OK);
+    assert(kernel_task_make_runnable(&table, other) == KERNEL_TASK_OK);
+    assert(kernel_task_dispatch(&table, &running) == KERNEL_TASK_OK);
+    assert(running.slot == other.slot);
+    should_reject(&table, id, &stack, dispatcher_rsp,
+                  KERNEL_TASK_BAD_STATE);
+    assert(kernel_task_yield(&table, other) == KERNEL_TASK_OK);
     assert(kernel_task_reap_owned(&table, id, &stack, dispatcher_rsp,
                                   release_stack) == KERNEL_TASK_OK);
     assert(releases == 1 && last_owner == 7);
