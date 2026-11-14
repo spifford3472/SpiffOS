@@ -73,7 +73,7 @@ def main():
             # opportunities, distinct from a guaranteed hard CPU budget.
             def metric(name):
                 match = re.search(rb"(?m)^" + name.encode() +
-                                  rb":([0-9]+)\\r?$", data)
+                                  rb":([0-9]+)\r?$", data)
                 if match is None:
                     raise RuntimeError(f"D4 {mib}MiB missing metric {name}")
                 return int(match.group(1))
