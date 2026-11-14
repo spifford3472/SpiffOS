@@ -26,3 +26,27 @@ Replacing M10-A with D4 controller duplicates lifecycle authority. Blocking via 
 ## Change history
 
 2026-11-13: owner selected D5.2d as next milestone. Documentation-first stacked branch. Test evidence recorded after execution.
+
+
+## Verified real M10-B execution extension
+
+The existing QEMU M10-B fixture now includes a four-dispatch mutex
+sequence **before** its inherited 1,026 context-transfer churn. A
+separately stacked owner acquires and voluntarily switches to the
+bootstrap dispatcher; the other worker contends and changes from
+RUNNING to BLOCKED before saving its actual x86 execution context.
+The surviving dispatcher selects the owner (the blocked waiter is absent
+from FIFO), the owner releases and transfers ownership/wakes the exact
+generation-tagged waiter, and the waiter resumes at its saved instruction
+following the suspended `x86_task_switch`, releases the mutex and yields.
+The guest checks the exact four stages, kernel task/resource invariants,
+waiter state transitions and zero outstanding references, then retains
+the original round-robin, editor and IRQ0 tests.
+
+Real QEMU `make HOST_CC=gcc test-m10-b-guest` **PASS** at 128, 256 and
+512 MiB in disposable source
+`/tmp/spiffos-d52d-real-switch-20261113`. This proves a *cooperative*
+kernel-mode execution handoff for this one-owner/one-waiter internal
+mutex, not IRQ-driven preemptive mutex safety, Ring 3, general priority
+inheritance or multiple-waiter cancellation. The complete inherited
+suite and final SHA are separate gates recorded below after execution.
