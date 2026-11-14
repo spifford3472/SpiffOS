@@ -71,7 +71,7 @@ def main():
                   f"gap={gap} ticks, total IRQs={ticks}",flush=True)
         build(src,env,flags+" -DSPIFFOS_M10_D55C_BAD_BUDGET_TEST")
         for mib in (128,256,512):
-            data=boot(src,mib,"SPIFFOS_M10_D4_COMPLETE_ERROR")
+            data=boot(src,mib,"SPIFFOS_M10_D4_COMPLETE_ERROR:D4_QUOTA_OR_RECOVERY")
             if (b"SPIFFOS_M10_D55C_BUDGET_OK" in data or
                     b"SPIFFOS_KEYBOARD_READY" in data or
                     b"SPIFFOS_EXCEPTION:" in data):
