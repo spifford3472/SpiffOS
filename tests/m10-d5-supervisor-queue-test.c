@@ -65,9 +65,11 @@ static void queue_fairness(void)
     assert(kernel_task_cleanup_enqueue(&queue,&resources,&table,blocked)==KERNEL_CLEANUP_INVALID);
     assert(kernel_task_cleanup_enqueue(&queue,&resources,&table,eligible)==KERNEL_CLEANUP_OK);
     unsigned before=attempted;
+    unsigned before_released=released;
     assert(kernel_task_cleanup_service(&queue,&resources,&table,
         (uintptr_t)0x400000u,release_owner)==KERNEL_CLEANUP_OK);
-    assert(attempted==before+1 && released==1 && queue.count==1);
+    assert(attempted==before+1 && released==before_released+1 &&
+           queue.count==1);
     assert(queue.entries[0].slot==blocked.slot);
     assert(kernel_task_cleanup_service(&queue,&resources,&table,
         (uintptr_t)0x400000u,release_owner)==KERNEL_CLEANUP_BLOCKED);
