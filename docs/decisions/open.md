@@ -318,3 +318,8 @@ The owner authorized resolving the Forge QWEN access blocker and beginning the f
 ## M10-D5.2a execution-aware cleanup remaining gates — 2026-11-13
 
 The isolated reaper adapter checks a terminated generation-tagged task, owner stack bounds, saved RSP and real current boot-stack RSP, then releases owner-indexed backing before descriptor reuse. The M10-B diagnostic is its first real execution integration. **Production reaper integration remains OPEN** pending verified wait/lock ownership retirement, bounded cleanup queue, all-or-nothing memory-owner release semantics, authentic CPU context and separate supervisor authority controls. No full production scheduler/editor preemption is enabled. See `ADR-m10-d5-execution-aware-reaper.md`.
+
+
+## M10-D5.2b open production integration gates — 2026-11-13
+
+Resource registry and lifecycle tests may run in isolation, but existing kernel synchronization objects do not yet register their waiters and owners with it. Real mutex/wait registration, verified atomic stack-owner release or quarantine recovery, bounded supervisor reaper queue, and task/driver reference lifecycle remain OPEN before allowing general production task termination. No production editor preemption is authorized. See `ADR-m10-d5-resource-ownership.md`.
