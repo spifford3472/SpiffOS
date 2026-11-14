@@ -91,3 +91,41 @@ physical boot media, OPNsense or networking changes were made.
   branch before review; do not claim PASS until final log/exit captured.
 - GitHub CI: must be green on exact head SHA before any merge.
 - Owner release approval remains required separately.
+
+
+### Verified isolated Forge acceptance — 2026-11-13
+
+The first end-to-end command failed solely because the `rt-remote` account
+could not run `git rev-parse` against Geoff-owned pinned Limine at
+`/home/geoff/projects/spiffos/.local-dev/limine` (Git dubious ownership).
+The pinned dependency itself was read-only verified at commit
+`7a9013f305de0bea1f6310e76e7baba30499fef0`. No global Git config,
+permission, ownership, deployment image or host policy was changed.
+
+The repeat run used a *process-scoped*, exact-path Git trust entry:
+`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=/home/geoff/projects/spiffos/.local-dev/limine make HOST_CC=gcc test-m10-d5-acceptance`
+from disposable workspace
+`/tmp/spiffos-d5-rtremote-20261113/full`, with result **exit 0**
+(runtime 255.56s). Log:
+`/tmp/spiffos-d5-rtremote-20261113/full-acceptance-retry.log`.
+Verified markers:
+`SPIFFOS_M10_D5_REAP_OK`,
+`SPIFFOS_M10_D2_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D3_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D4_CHECKPOINT_OK`,
+`SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK`,
+`SPIFFOS_M10_D5_1_ACCEPTANCE_OK`.
+This includes 128/256/512 MiB real QEMU tests and inherited keyboard,
+editor, IRQ0, frame, memory, APIC, MMIO and exception regression checks.
+New D5 test and modified M10-A test also independently passed hosted
+ASan/UBSan; the D5 stress test exercises 20,000 create/reap cycles.
+
+The new unflagged kernel's debug-stripped ELF SHA-256 is
+`82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`,
+matching the prior D4 documented ordinary-kernel baseline. The retained
+Forge owner checkout's build kernel ELF does not match that checksum after
+debug stripping; do not conflate that artifact with the released normal ISO.
+
+These results apply to the isolated source copy and current source-level
+change set, not an owner-deployed ISO. GitHub PR-head CI remains a separate
+mandatory gate. No merge or production deployment authorized.
