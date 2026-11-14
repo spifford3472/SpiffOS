@@ -161,6 +161,19 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
 
+# D5.4 authoritative priority selection, supervisor dispatch and real-QEMU
+# bounded multiwaiter integration (diagnostic only, not normal editor).
+.PHONY: test-m10-d54-dispatch test-m10-d54-acceptance
+test-m10-d54-dispatch: build/m10-d54-dispatch-test
+	./build/m10-d54-dispatch-test
+
+build/m10-d54-dispatch-test: tests/m10-d54-dispatch-test.c src/kernel/kernel-dispatch-d54.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d54-dispatch-test.c src/kernel/kernel-dispatch-d54.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d54-acceptance: test-m10-d54-dispatch test-m10-d53-acceptance
+	@echo SPIFFOS_M10_D54_ACCEPTANCE_OK
+
 # D5.3 bounded multiwaiter, donation and cancellation proof (test-only).
 .PHONY: test-m10-d53-sync test-m10-d53-acceptance
 test-m10-d53-sync: build/m10-d53-sync-test
