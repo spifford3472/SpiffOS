@@ -277,12 +277,6 @@ static void supervisor_service(void)
         irq_restore(before);
         return;
     }
-#ifdef SPIFFOS_M10_D55C_TICK_TEST
-    /* This is an actually executed supervisor loop on the surviving boot
-     * stack, after the IRQ selection has returned via IRETQ. */
-    if(!d55c_tick_service_completed(&d55c_watch,
-            true,true,ticks)) failed=true;
-#endif
     if(worker_blocked_once && state.worker[0].status==D4_TASK_BLOCKED &&
        blocked_ticks>=5 && wake_events==0) {
         if(d4_task_wake(&state,0,D4_TASK_SUPERVISOR)!=D4_TASK_OK)
@@ -321,6 +315,12 @@ static void supervisor_service(void)
             failed=true;
         else ++recovery_events;
     }
+#ifdef SPIFFOS_M10_D55C_TICK_TEST
+    /* Record service only AFTER the full privileged supervisor body has
+     * actually executed, not merely when IRQ selection targets its frame. */
+    if(!d55c_tick_service_completed(&d55c_watch,true,true,ticks))
+        failed=true;
+#endif
     irq_restore(before);
 }
 
