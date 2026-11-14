@@ -218,6 +218,18 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
 
+# M10-D5.6 privileged M10-A IRQ transaction test, hosted only so far.
+.PHONY: test-m10-d56-handoff test-m10-d56-acceptance
+test-m10-d56-handoff: build/m10-d56-irq-handoff-test
+	./build/m10-d56-irq-handoff-test
+
+build/m10-d56-irq-handoff-test: tests/m10-d56-irq-handoff-test.c src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d56-irq-handoff-test.c src/kernel/kernel-task.c -o $@
+
+test-m10-d56-acceptance: test-m10-d56-handoff test-m10-d55c-acceptance
+	@echo SPIFFOS_M10_D56_ACCEPTANCE_OK
+
 # D5.5c pure authoritative IRQ frame binding and hardware tick service tests.
 # No default kernel, D4 task controller, or editor preemption changes.
 .PHONY: test-m10-d55c-frame-tick test-m10-d55c-acceptance
