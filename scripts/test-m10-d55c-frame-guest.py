@@ -56,7 +56,7 @@ def main():
                   "M10-A generation, owned stack reaped, editor restored",flush=True)
         build(src,env,flag+" -DSPIFFOS_M10_D55C_BAD_GENERATION_TEST")
         for mib in (128,256,512):
-            data=guest(src,mib,"SPIFFOS_M10_D55C_FRAME_ERROR:ACTUAL_FRAME_OR_CLOCK")
+            data=guest(src,mib,"SPIFFOS_M10_D55C_FRAME_ERROR:FRAME_REJECTED")
             if (b"SPIFFOS_M10_D55C_FRAME_OK" in data or
                     b"SPIFFOS_KEYBOARD_READY" in data or
                     b"SPIFFOS_EXCEPTION:" in data):
