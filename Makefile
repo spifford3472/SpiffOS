@@ -35,6 +35,12 @@ ifneq ($(findstring -DSPIFFOS_M10_D4_PRIORITY_TEST,$(BOOT_TEST_FLAGS)),)
 M10D4_TEST_OBJECTS := build/m10-d3-guest-smoke.o build/kernel-priority-policy.o
 endif
 
+# Full four-worker diagnostic with its own IRQ state controller.
+M10D4_COMPLETE_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D4_COMPLETE_TEST,$(BOOT_TEST_FLAGS)),)
+M10D4_COMPLETE_OBJECTS := build/m10-d4-complete-guest.o build/m10-d4-task-control.o build/kernel-priority-policy.o
+endif
+
 .PHONY: all
 all: $(KERNEL)
 
@@ -89,6 +95,14 @@ build/kernel-priority-policy.o: src/kernel/kernel-priority-policy.c src/kernel/k
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/kernel-priority-policy.c -o $@
 
+build/m10-d4-task-control.o: src/kernel/m10-d4-task-control.c src/kernel/m10-d4-task-control.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d4-task-control.c -o $@
+
+build/m10-d4-complete-guest.o: src/kernel/m10-d4-complete-guest.c src/kernel/m10-d4-task-control.h src/kernel/m10-d2-irq-frame.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d4-complete-guest.c -o $@
+
 build/m10-d3-guest-smoke.o: src/kernel/m10-d3-guest-smoke.c src/kernel/m10-d2-irq-frame.h src/kernel/memory-boot.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/m10-d3-guest-smoke.c -o $@
@@ -109,6 +123,14 @@ test-m10-d4-host: build/m10-d4-host-test
 .PHONY: test-m10-d4-state
 test-m10-d4-state: build/m10-d4-task-state-test
 	./build/m10-d4-task-state-test
+
+.PHONY: test-m10-d4-complete-guest
+test-m10-d4-complete-guest:
+	python3 scripts/test-m10-d4-complete-guest.py
+
+.PHONY: test-m10-d4-complete-acceptance
+test-m10-d4-complete-acceptance: test-m10-d4-state test-m10-d4-complete-guest test-m10-d4-acceptance
+	@echo SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK
 
 build/m10-d4-task-state-test: tests/m10-d4-task-control-test.c src/kernel/m10-d4-task-control.c src/kernel/m10-d4-task-control.h src/kernel/kernel-priority-policy.c Makefile
 	mkdir -p build
@@ -316,8 +338,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
