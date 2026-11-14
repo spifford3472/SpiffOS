@@ -33,7 +33,8 @@ bool d4_task_check(const struct d4_task_control *table)
     for(unsigned i=0;i<D4_TASK_WORKERS;++i)
         if(table->worker[i].status<D4_TASK_READY ||
            table->worker[i].status>D4_TASK_QUARANTINED ||
-           table->worker[i].priority!=(enum kernel_priority_class)i)
+           (table->worker[i].priority<(enum kernel_priority_class)i ||
+            table->worker[i].priority>KERNEL_PRIORITY_TIME_SENSITIVE))
             return false;
     return true;
 }
@@ -146,6 +147,77 @@ enum d4_task_result d4_task_note_dispatch(struct d4_task_control *table,
             if(worker->dispatch_count!=UINT64_MAX) ++worker->dispatch_count;
         } else if(worker->waiting_dispatches!=UINT64_MAX)
             ++worker->waiting_dispatches;
+    }
+    return D4_TASK_OK;
+}
+
+/* A diagnostic fixed one-waiter lock starts unowned; the IDs are exact
+ * worker slots, never physical pointer addresses or user input. */
+bool d4_task_lock_init(struct d4_task_lock *lock)
+{
+    if(lock==NULL || lock->initialized) return false;
+    lock->owner=UINT32_MAX;
+    lock->waiter=UINT32_MAX;
+    lock->initialized=true;
+    return true;
+}
+
+/* Under caller-held IF=0, a high-priority waiter blocks itself and raises
+ * the READY owner's *effective* priority for the duration of this lock.
+ * Donation is bounded to one waiter and cannot form dependency cycles. */
+enum d4_task_result d4_task_lock_acquire(struct d4_task_control *table,
+                                        struct d4_task_lock *lock,
+                                        unsigned current_worker)
+{
+    if(!d4_task_check(table) || lock==NULL || !lock->initialized)
+        return D4_TASK_CORRUPT;
+    if(current_worker>=D4_TASK_WORKERS)
+        return D4_TASK_BAD_CALLER;
+    if(table->worker[current_worker].status!=D4_TASK_READY)
+        return D4_TASK_BAD_STATE;
+    if(lock->owner==UINT32_MAX) {
+        lock->owner=current_worker;
+        return D4_TASK_OK;
+    }
+    if(lock->owner>=D4_TASK_WORKERS || lock->waiter!=UINT32_MAX ||
+       lock->owner==current_worker ||
+       table->worker[lock->owner].status!=D4_TASK_READY)
+        return D4_TASK_BAD_STATE;
+    if(d4_task_block(table,current_worker,current_worker)!=D4_TASK_OK)
+        return D4_TASK_CORRUPT;
+    lock->waiter=current_worker;
+    if(table->worker[lock->owner].priority<
+       table->worker[current_worker].priority)
+        table->worker[lock->owner].priority=
+            table->worker[current_worker].priority;
+    return D4_TASK_WAITING;
+}
+
+/* Release restores base priority and performs a precise lock-authorized
+ * wake: only this one previously blocked waiter may become runnable.
+ * The lock transfers ownership atomically under caller-held IF=0, so
+ * the waiter resumes on its existing saved stack without a race. */
+enum d4_task_result d4_task_lock_release(struct d4_task_control *table,
+                                        struct d4_task_lock *lock,
+                                        unsigned current_worker)
+{
+    if(!d4_task_check(table) || lock==NULL || !lock->initialized)
+        return D4_TASK_CORRUPT;
+    if(current_worker>=D4_TASK_WORKERS ||
+       lock->owner!=current_worker)
+        return D4_TASK_BAD_CALLER;
+    uint32_t waiter=lock->waiter;
+    if(waiter!=UINT32_MAX &&
+       (waiter>=D4_TASK_WORKERS ||
+        table->worker[waiter].status!=D4_TASK_BLOCKED))
+        return D4_TASK_CORRUPT;
+    table->worker[current_worker].priority=
+        (enum kernel_priority_class)current_worker;
+    if(waiter==UINT32_MAX) lock->owner=UINT32_MAX;
+    else {
+        table->worker[waiter].status=D4_TASK_READY;
+        lock->owner=waiter;
+        lock->waiter=UINT32_MAX;
     }
     return D4_TASK_OK;
 }
