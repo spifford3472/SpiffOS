@@ -1239,6 +1239,10 @@ void kmain(void)
         (void)serial_write("\r\n");
         halt_forever();
     }
+    /* Exact metrics are emitted only after the trusted boot dispatcher
+     * has returned from the supervisor's independently owned stack. */
+    extern void m10_d56_report(bool (*write)(const char *));
+    m10_d56_report(serial_write);
     (void)serial_write("SPIFFOS_M10_D56_IRQ_OK\r\n");
 #endif
 #ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
