@@ -76,7 +76,14 @@ __attribute__((noreturn)) static void owner(void)
         failed=true;
     irq_restore(flags);
     stage[0]=1;
-    worker_yield(0);
+    /* Simulate a legitimate external-event wait while holding rank 0.
+     * While this owner is BLOCKED, both independent mutex contenders may
+     * queue. The surviving dispatcher wakes the owner after both block. */
+    flags=irq_off();
+    if(kernel_task_block(&tasks,ids[0])!=KERNEL_TASK_OK)
+        failed=true;
+    irq_restore(flags);
+    x86_task_switch(&context[0],&bootstrap);
     flags=irq_off();
     enum kernel_priority_class effective=KERNEL_PRIORITY_BACKGROUND;
     if(d53_effective(&locks,&resources,&tasks,ids[0],&effective)!=D53_OK ||
@@ -196,8 +203,6 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         if(chose!=KERNEL_TASK_OK || selected.slot>=D54_GUEST_WORKERS) {
             reason="DISPATCH";goto fail;
         }
-        const unsigned expected[D54_GUEST_WORKERS]={0,0,0};
-        (void)expected;
         const size_t order[7]={0,1,2,0,1,2,0};
         if(selected.slot!=order[turn]) {
             reason="PRIORITY_ORDER";goto fail;
@@ -220,13 +225,21 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             irq_restore(flags);
             if(!ready) {reason="WAITER_ENQUEUE";goto fail;}
         }
-        if(turn==2 &&
-           (tasks.tasks[ids[1].slot].state!=KERNEL_TASK_BLOCKED ||
-            tasks.tasks[ids[2].slot].state!=KERNEL_TASK_BLOCKED ||
-            locks.locks[0].waiting!=2 ||
-            resources.task[ids[1].slot].registered_waiters!=1 ||
-            resources.task[ids[2].slot].registered_waiters!=1)) {
-            reason="TWO_BLOCKED";goto fail;
+        if(turn==2) {
+            if(tasks.tasks[ids[0].slot].state!=KERNEL_TASK_BLOCKED ||
+               tasks.tasks[ids[1].slot].state!=KERNEL_TASK_BLOCKED ||
+               tasks.tasks[ids[2].slot].state!=KERNEL_TASK_BLOCKED ||
+               locks.locks[0].waiting!=2 ||
+               resources.task[ids[1].slot].registered_waiters!=1 ||
+               resources.task[ids[2].slot].registered_waiters!=1) {
+                reason="TWO_BLOCKED";goto fail;
+            }
+            /* The external event has completed. Wake only the original
+             * owner; donated priority is now consumed by D5.4 dispatch. */
+            flags=irq_off();
+            ready=kernel_task_wake(&tasks,ids[0])==KERNEL_TASK_OK;
+            irq_restore(flags);
+            if(!ready) {reason="OWNER_WAKE";goto fail;}
         }
         if(turn==3 &&
            (locks.locks[0].owner.slot!=ids[1].slot ||
