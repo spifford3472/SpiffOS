@@ -738,3 +738,50 @@ See [D5.1 task-model ADR](decisions/ADR-m10-d5-production-task-model.md).
 Marking a task TERMINATED removes it from scheduling, but the CPU may still be executing instructions on that task's 16 KiB stack. Calling a memory-owner release there would let the CPU overwrite already-freed backing. The M10-B diagnostic now deliberately attempts a self-reap and requires that it **fail without freeing anything**. It then returns via the existing cooperative switch to the permanent boot stack; the dispatcher reads its actual RSP, validates the retired task's saved RSP and stack bounds, and calls `kernel_task_reap_owned` under interrupt exclusion. Only a successful exact-owner backing release permits `kernel_task_reap` to make the descriptor reusable.
 
 The range checker guards integer overflow before adding stack length and rejects malformed or overlapping ranges. The release callback belongs to trusted kernel memory code, not a user task. Tests cover 20,000 retirements, release refusal, stale generations, rejected self-free, and ordinary-task privilege confusion. Run `make HOST_CC=gcc test-m10-d5-execution-acceptance` in an isolated checkout. This still does not prove general production lock/wait resource cleanup or enable ordinary editor preemption. See [execution-reaper ADR](decisions/ADR-m10-d5-execution-aware-reaper.md).
+
+
+## M10-D5.2b — The task resource ledger and quarantine state
+
+The M10-A task handle is `(slot,generation)`. A slot can be reused, but
+its generation must advance. A stack-owner record must therefore be
+registered against the **whole handle**, not just its numeric slot.
+`kernel-task-resources.[ch]` implements exactly one bounded (16-element)
+ledger indexed by the existing task table; it does not schedule or switch
+tasks. Before first dispatch the trusted memory owner records the exact
+16 KiB stack base, range, saved stack pointer and memory-owner token.
+Attempting to use the same backing or owner token for another live
+generation fails. A later dispatcher-side saved-RSP refresh may update
+the suspended context value, but cannot redirect the stack's backing or
+owner index.
+
+The resource ledger counts lock ownership and waiter registrations only
+as **interlocks**. These are not yet wired to a production mutex manager.
+A task with nonzero counts can be logically TERMINATED, but its stack
+remains reserved and it cannot be reaped; the supervisor must resolve
+the outstanding references through a separate, future cleanup protocol.
+A terminated task may not decrement its own counts afterward, because
+that would invent unverified cleanup.
+
+The trusted surviving dispatcher reads its actual RSP with assembly,
+then calls `kernel_task_resources_retire`. It checks the complete handle,
+registered backing, saved RSP, outstanding references and supervisor or
+external-dispatcher authority before invoking the D5.2a off-stack
+reaper. Failed physical release **quarantines** the binding and blocks
+retries; the existing test allocator can poison itself after partial
+release and does not guarantee atomic rollback. Quarantined tasks are
+unavailable for descriptor reuse. Only a future explicit supervisor
+recovery design may resolve them.
+
+The M10-B QEMU diagnostic exercises the registered-owner path at
+128/256/512 MiB. Hosted GCC ASan/UBSan tests include 20,000 recycling
+cycles, collision/stale handle checks, overflow/underflow, blocked
+termination, self-release denial, ordinary-task denial and quarantine
+without retry. Run `make HOST_CC=gcc test-m10-d5-resource-ownership`
+for the fast gate and `make HOST_CC=gcc test-m10-d5-resource-acceptance`
+for the inherited D5.2a/D4/M9 suite.
+
+This is a **development-only execution boundary**, not a production
+reaper queue, resource graph or general editor preemption. Existing
+mutexes, wait queues and drivers do not yet register references in the
+ledger; general task termination must remain disabled until they do.
+See [D5.2b ownership ADR](decisions/ADR-m10-d5-resource-ownership.md).
