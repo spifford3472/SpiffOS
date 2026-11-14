@@ -135,3 +135,53 @@ against exact original commit
 `28bbcca650957a0a031611f8e0a16dfe6958d0b3`
 without losing the merged history; no automated `git reset --hard`
 is authorized. Preserve all backups, release checksums and this ledger.
+
+
+## Owner deployment and independent verification — 2026-11-13
+
+Owner ran `bash /tmp/spiffos-m10-d4-merged-install.sh` as `geoff`
+on Forge and reported successful completion marker `M10_D4_INSTALL_OK`
+with source SHA
+`896512138eaed698bfb80b6f7f155aa04fca34b7`, normal ISO SHA-256
+`0f2dbca116bd991cd44ad7b477042a8bf13caae67711819290b30b8b5bdb9cf6`,
+and separately installed D4 diagnostic ISO SHA-256
+`b9c79847fdc63779db65bee8d28ffff2235366311401fadf5d29ea94d92568c6`.
+The successful owner-run installer verified both staged and installed
+diagnostic hashes and created
+`/home/geoff/projects/spiffos-qemu-d4-test-20261113`.
+
+Independent read-only inspection confirmed the owner checkout exactly
+at `896512138eaed698bfb80b6f7f155aa04fca34b7`, **clean
+working tree**, and installed normal ISO hash matching the release.
+All three persistent backups were separately verified unchanged:
+
+- Pre-D4 D3 rollback: `build/spiffos.iso.pre-m10-d4-20261113`,
+  SHA-256 `4fcda82804c72fb4697175b811865755deb3caa4605797bce7a1d7c521eda596`.
+- Pre-D3 M10 rollback: `build/spiffos.iso.pre-m10-d3-20261113`,
+  SHA-256 `ffb0631bbbc0eb4b6885dfe46db158939f75a726c5f3d79fd57ddf9a6c78ab90`.
+- Original M9 backup: `build/spiffos.iso.pre-m10-release-20261113-0210`,
+  SHA-256 `758492d3b4aea5587e28514e5882231929e25a90f31c7ce1a38bae8135eb4ba2`.
+
+The protected diagnostic workspace is `0700 geoff:geoff`; the
+remote read-only account correctly cannot traverse it. We did
+**not** weaken its permissions. Its installed contents were
+verified by the successful owner installer. The byte-identical
+staged D4 diagnostic ISO remains independently readable.
+
+After owner installation, QEMU TCG boot tests (256 MiB) separately
+verified **the actually installed normal ISO** and **the verified
+staged D4 diagnostic ISO**. Normal guest emitted
+`SPIFFOS_BOOT_OK` and `SPIFFOS_KEYBOARD_READY` with no
+D4-only marker or exception. D4 guest emitted
+`SPIFFOS_M10_D4_COMPLETE_OK`, `D4_SUPERVISOR_MAX_GAP_TICKS`
+and `SPIFFOS_KEYBOARD_READY` with no exception or test failure.
+Both commands finished successfully with zero exit status. No
+production normal ISO or owner workspace modifications were
+made during this read-only verification.
+
+Owner interactive GUI acceptance still **PENDING**: F1–F9
+workspace isolation and editor, F10 actual prepared/ready/tick counters,
+F12 overlay, clean close; repeat keyboard test in D4 diagnostic
+workspace. Do not mark D4 owner-accepted or start D5 until
+that confirmation. No network configuration, OPNsense, or physical
+disk/media change occurred.
