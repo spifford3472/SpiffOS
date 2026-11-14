@@ -4,8 +4,9 @@
  * Dependencies: stdbool/stdint, no host OS services, heap or hardware.
  * Invariants: at most one RUNNING task, FIFO contains exactly RUNNABLE tasks,
  * each task gets one unique live handle; ordinary tasks cannot use slot 15.
- * IRQ/concurrency: caller serializes operations with interrupts disabled when
- * embedded in kernel; no operation is safe to call from IRQ context.
+ * IRQ/concurrency: caller serializes operations with interrupts disabled.
+ * Cooperative APIs are forbidden from IRQ; the privileged D5.6 handoff is
+ * the sole exception after trusted frame/owner/critical prevalidation.
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #ifndef SPIFFOS_KERNEL_TASK_H
 #define SPIFFOS_KERNEL_TASK_H
