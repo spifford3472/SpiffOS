@@ -477,3 +477,8 @@ The owner elected to implement D5.4 after D5.3: effective-priority selection mus
 ## M10-D5.5 owner direction — preemption safety boundaries (2026-11-13)
 
 Following D5.4's passing exact-head CI, the owner adopted the recommendation to address execution-safety boundaries **before** enabling general SpiffOS preemption. D5.5 begins as an isolated, fail-closed safety-admission and supervisor-service-deadline proof: validate task generation, CPU entry/context provenance, interrupts/critical-section exclusion, registered stack ownership, and latched missed-service diagnostics. This direction does **not** authorize normal editor preemption, Ring 3, automatic orphan recovery, merge, accepted ISO replacement or physical deployment. Any future hardware enforcement must provide trusted snapshots; the new policy alone cannot authenticate CPU state. See [D5.5 ADR](ADR-m10-d55-preemption-safety.md).
+
+
+## M10-D5.5b hardware-observed IRQ0 frame proof — 2026-11-14
+
+Owner elected the next isolated execution-safety checkpoint after D5.5. D5.5b may add **test-only** x86 IRQ0 real saved-frame observation, independent live IF sampling, exact assembly-sentinel RIP/RSP and full GPR/segment cross-validation, with positive and negative real QEMU checks. The observer never changes the interrupt frame, scheduler, EOI or ordinary editor. This permits no merge, ISO replacement, physical deploy or ordinary editor preemption. See [D5.5b ADR](ADR-m10-d55b-x86-evidence.md).
