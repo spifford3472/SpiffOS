@@ -91,6 +91,16 @@ enum kernel_task_result kernel_task_make_runnable(
 enum kernel_task_result kernel_task_dispatch(struct kernel_task_table *table,
     struct kernel_task_handle *out);
 
+/* Select a particular exact-generation RUNNABLE task inside M10-A's sole
+ * authoritative ready queue. The caller (bounded D5.4 policy adapter) may
+ * choose its priority, but only M10-A performs the RUNNING transition.
+ * Reject stale/missing identities without modifying queue, record or output.
+ * Caller owns IF=0; not an IRQ context or separate scheduler. */
+enum kernel_task_result kernel_task_dispatch_selected(
+    struct kernel_task_table *table,
+    struct kernel_task_handle selected,
+    struct kernel_task_handle *out);
+
 /* Current RUNNING -> RUNNABLE at FIFO tail; requires exact current handle.
  * This changes policy metadata only: no actual context switch occurs in A. */
 enum kernel_task_result kernel_task_yield(struct kernel_task_table *table,
