@@ -14,6 +14,9 @@
 #ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
 .extern m10_d55c_frame_irq_observe
 #endif
+#ifdef SPIFFOS_M10_D56_IRQ_TEST
+.extern m10_d56_irq_select
+#endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 .extern m10_d3_irq_select
 #endif
@@ -66,6 +69,14 @@ x86_irq0_entry:
      * pointer. Normal production IRQ assembly contains no extra call. */
     movq %r12,%rdi
     call m10_d2_probe_on_irq
+#endif
+#ifdef SPIFFOS_M10_D56_IRQ_TEST
+    /* D5.6 diagnostic: C prevalidates exact M10-A generation and both
+     * independently owned IRQ frames before a single atomic task handoff.
+     * No other IRQ selector may be enabled with this test-only flag. */
+    movq %r12,%rdi
+    call m10_d56_irq_select
+    movq %rax,%r12
 #endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* D3-only: normal bounded IRQ0 callback and EOI already completed.
