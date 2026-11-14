@@ -4,7 +4,9 @@
  * Dependencies: kernel-sync-d53.h, authoritative M10-A and D5.2b.
  * Invariants: never create an extra task scheduler, free dead owner backing,
  * or release a lock on unknown owner termination.
- * Concurrency: boot CPU only, IF=0 across calls, never from IRQ.
+ * Concurrency: boot CPU only, IF=0. Mutating entrypoints remain
+ * strictly forbidden in IRQ; D5.7 uses check/effective read-only at a
+ * verified IRQ exit after the entire graph has been serialized.
  * References: ADR-m10-d53-bounded-synchronization.md and AGENTS.md. */
 #include "kernel-sync-d53.h"
 #include <limits.h>
