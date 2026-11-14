@@ -168,6 +168,19 @@ test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
 test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 	./build/m10-d5-mutex-block-wake-test
 
+# D5.5 safety admission and monotonic supervisor service watchdog are
+# hosted diagnostic-only: never linked into ordinary editor/kernel.
+.PHONY: test-m10-d55-safety test-m10-d55-acceptance
+test-m10-d55-safety: build/m10-d55-preempt-safety-test
+	./build/m10-d55-preempt-safety-test
+
+build/m10-d55-preempt-safety-test: tests/m10-d55-preempt-safety-test.c src/kernel/kernel-preempt-safety-d55.c src/kernel/kernel-preempt-safety-d55.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d55-preempt-safety-test.c src/kernel/kernel-preempt-safety-d55.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d55-acceptance: test-m10-d55-safety test-m10-d54-acceptance
+	@echo SPIFFOS_M10_D55_ACCEPTANCE_OK
+
 # D5.4 authoritative priority selection, supervisor dispatch and real-QEMU
 # bounded multiwaiter integration (diagnostic only, not normal editor).
 .PHONY: test-m10-d54-dispatch test-m10-d54-acceptance
