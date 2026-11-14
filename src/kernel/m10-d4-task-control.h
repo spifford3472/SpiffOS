@@ -17,13 +17,21 @@ enum d4_task_status { D4_TASK_READY=1, D4_TASK_BLOCKED=2,
                       D4_TASK_QUARANTINED=3 };
 enum d4_task_result { D4_TASK_OK, D4_TASK_BAD_ARGUMENT,
                       D4_TASK_BAD_STATE, D4_TASK_BAD_CALLER,
-                      D4_TASK_NO_READY, D4_TASK_CORRUPT };
+                      D4_TASK_NO_READY, D4_TASK_CORRUPT, D4_TASK_WAITING };
 
 struct d4_task_entry {
     enum d4_task_status status;
     enum kernel_priority_class priority;
     uint64_t waiting_dispatches;
     uint64_t dispatch_count;
+};
+/* One held lock with one blocked waiter is sufficient to prove bounded
+ * priority inheritance; cycles, multiple owners and nested locks are not
+ * supported by this D4 diagnostic interface. */
+struct d4_task_lock {
+    uint32_t owner;
+    uint32_t waiter;
+    bool initialized;
 };
 struct d4_task_control {
     struct d4_task_entry worker[D4_TASK_WORKERS];
@@ -62,4 +70,17 @@ enum d4_task_result d4_task_choose(const struct d4_task_control *table,
  * ready-time age, no aging while blocked or quarantined; no wrap. */
 enum d4_task_result d4_task_note_dispatch(struct d4_task_control *table,
                                           uint32_t selected_slot);
+/* Initialize an unowned single-waiter lock. Caller holds IRQ exclusion. */
+bool d4_task_lock_init(struct d4_task_lock *lock);
+/* Current worker acquires lock, or blocks itself and donates its priority
+ * to current owner on contention. Returns WAITING iff task was BLOCKED. */
+enum d4_task_result d4_task_lock_acquire(struct d4_task_control *table,
+                                        struct d4_task_lock *lock,
+                                        unsigned current_worker);
+/* Only the current owner may release. Restore owner's base priority,
+ * transfer lock ownership to an eligible blocked waiter and wake it.
+ * No privilege to wake arbitrary tasks is introduced. */
+enum d4_task_result d4_task_lock_release(struct d4_task_control *table,
+                                        struct d4_task_lock *lock,
+                                        unsigned current_worker);
 #endif
