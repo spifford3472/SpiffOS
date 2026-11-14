@@ -8,7 +8,7 @@ name: SpiffOS kernel / QEMU acceptance
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   workflow_dispatch:
 
 permissions:
@@ -41,9 +41,13 @@ jobs:
         run: |
           set -euo pipefail
           pin=7a9013f305de0bea1f6310e76e7baba30499fef0
+          # Test harnesses copy the repo while excluding every .git folder.
+          # Place Limine OUTSIDE the source tree and link it into every
+          # copied source, retaining the pinned Git metadata for build-image.py.
           mkdir -p .local-dev
-          git clone --quiet https://github.com/limine-bootloader/limine.git .local-dev/limine
-          git -C .local-dev/limine checkout --quiet --detach "$pin"
+          git clone --quiet https://github.com/limine-bootloader/limine.git "$RUNNER_TEMP/spiffos-limine"
+          git -C "$RUNNER_TEMP/spiffos-limine" checkout --quiet --detach "$pin"
+          ln -s "$RUNNER_TEMP/spiffos-limine" .local-dev/limine
           test "$(git -C .local-dev/limine rev-parse HEAD)" = "$pin"
           test -s .local-dev/limine/BOOTX64.EFI
           test -s .local-dev/limine/limine-uefi-cd.bin
