@@ -1,0 +1,93 @@
+# Purpose: fail-closed, isolated PR acceptance of SpiffOS kernel changes.
+# Dependencies: pinned official Limine binaries, Clang/LLD, GCC, QEMU TCG,
+# OVMF 4M and xorriso on disposable GitHub Ubuntu CI.
+# Invariants: read-only token, no secret use, no writes to physical devices,
+# no user-owned Forge ISO; missing checks are never interpreted as success.
+# References: AGENTS.md, docs/operations/m10-d31-d4-pr-ci-20261113.md.
+name: SpiffOS kernel / QEMU acceptance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spiffos-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel-acceptance:
+    name: kernel-acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact PR merge test ref
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install isolated host and guest test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential clang lld git make python3 qemu-system-x86 ovmf xorriso binutils
+
+      - name: Fetch the audited Limine commit at expected path
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin=7a9013f305de0bea1f6310e76e7baba30499fef0
+          mkdir -p .local-dev
+          git clone --quiet https://github.com/limine-bootloader/limine.git .local-dev/limine
+          git -C .local-dev/limine checkout --quiet --detach "$pin"
+          test "$(git -C .local-dev/limine rev-parse HEAD)" = "$pin"
+          test -s .local-dev/limine/BOOTX64.EFI
+          test -s .local-dev/limine/limine-uefi-cd.bin
+          test -r /usr/share/OVMF/OVMF_CODE_4M.fd
+          test -r /usr/share/OVMF/OVMF_VARS_4M.fd
+
+      - name: Verify default kernel and workspace tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          make HOST_CC=gcc test-workspace-manager-memory
+          make HOST_CC=gcc iso
+
+      - name: Run highest available comprehensive acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q '^test-m10-d4-complete-acceptance:' Makefile; then
+            target=test-m10-d4-complete-acceptance
+            marker=SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d4-acceptance:' Makefile; then
+            target=test-m10-d4-acceptance
+            marker=SPIFFOS_M10_D4_CHECKPOINT_OK
+          elif grep -q '^test-m10-d3-acceptance:' Makefile; then
+            target=test-m10-d3-acceptance
+            marker=SPIFFOS_M10_D3_ACCEPTANCE_OK
+          else
+            echo 'ERROR: No supported M10 acceptance target exists' >&2
+            exit 1
+          fi
+          echo "Target: $target"
+          echo "Expected marker: $marker"
+          set -o pipefail
+          make HOST_CC=gcc "$target" 2>&1 | tee acceptance.log
+          grep -Fx "$marker" acceptance.log
+
+      - name: Record failing regression output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spiffos-acceptance-failure
+          path: |
+            acceptance.log
+            build/serial.log
+            build/run-qemu.log
+          if-no-files-found: ignore
+          retention-days: 7
