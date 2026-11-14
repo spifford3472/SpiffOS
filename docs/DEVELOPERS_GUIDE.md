@@ -785,3 +785,14 @@ reaper queue, resource graph or general editor preemption. Existing
 mutexes, wait queues and drivers do not yet register references in the
 ledger; general task termination must remain disabled until they do.
 See [D5.2b ownership ADR](decisions/ADR-m10-d5-resource-ownership.md).
+
+
+## M10-D5.2c — A bounded supervisor cleanup FIFO
+
+A terminated kernel task may still own other kernel resources. Calling `kernel_task_reap` directly would permit reusing its task slot before its stack, locks and waiter registrations are verified. The D5.2c `kernel-task-cleanup.[ch]` module is a small static FIFO holding complete `(slot,generation)` task identities, not pointers into freed memory. At most the 15 ordinary task slots can be queued; slot 15 is reserved permanently for the supervisor. Queue validation rejects duplicate slots and invalid generations and checks the **entire queue** before calling a memory-owner release function.
+
+On the surviving boot stack, a service visit examines at most the count recorded at entry. If a task still has lock or waiter references, its entry rotates to the tail. An eligible task's registered backing is retired through the D5.2b resource ledger. A refused release quarantines the ledger entry and removes only that request from the automatic queue: backing is never blindly retried or marked reusable. The queue itself never frees or fabricates outstanding synchronization ownership. All calls require IF=0; none run in timer IRQ context.
+
+`kernel-task-sync-proof.[ch]` separately models one registered lock owner and one registered waiter using exact generation-tagged handles. It calls the D5.2b reference API for each acquisition, wait registration, release and ownership transfer, with checks that prohibit stale or terminated owners. This **does not yet** block or wake real CPU tasks, implement priority donation, or connect the distinct D4 diagnostic lock controller to production M10-A state. The point is to prove reference transfer and fail-closed termination before designing the actual generalized mutex implementation.
+
+Fast sanitizer gates: `make HOST_CC=gcc test-m10-d5-supervisor-queue` and `make HOST_CC=gcc test-m10-d5-sync-ledger`. Complete inherited QEMU/host gate: `make HOST_CC=gcc test-m10-d5-supervisor-acceptance`. The M10-B QEMU fixture uses the queue only after returning from the outgoing worker stack to the permanent boot dispatcher. No ordinary editor/preemption ISO change is authorized. See [ADR-m10-d5-supervisor-cleanup](decisions/ADR-m10-d5-supervisor-cleanup.md).
