@@ -203,8 +203,50 @@ static void stress(void)
     }
 }
 
+/* Fill the entire ordinary task capacity: one owner plus fourteen
+ * blocked waiters; cancellation retains the exact owner reference. */
+static void full_capacity(void)
+{
+    struct kernel_task_table t={0};
+    struct kernel_task_resources r={0};
+    struct d53_sync s={0};
+    struct kernel_task_handle task[D53_TASKS];
+    assert(kernel_task_init(&t) && kernel_task_resources_init(&r) &&
+           d53_init(&s));
+    for(size_t i=0;i<D53_TASKS;++i)
+        task[i]=create(&t,&r,&s,i,KERNEL_PRIORITY_NORMAL);
+    assert(dispatch(&t).slot==task[0].slot);
+    assert(d53_acquire(&s,&r,&t,0,task[0])==D53_OK);
+    assert(kernel_task_yield(&t,task[0])==KERNEL_TASK_OK);
+    for(size_t i=1;i<D53_TASKS;++i) {
+        assert(dispatch(&t).slot==task[i].slot);
+        assert(d53_acquire(&s,&r,&t,0,task[i])==D53_BLOCKED);
+        assert(t.tasks[task[i].slot].state==KERNEL_TASK_BLOCKED);
+        assert(d53_check(&s,&r,&t));
+    }
+    assert(s.locks[0].waiting==D53_TASKS-1);
+    assert(t.ready_count==1 && t.current_slot==SIZE_MAX);
+    struct kernel_task_handle stale=task[1];
+    ++stale.generation;
+    assert(d53_cancel(&s,&r,&t,0,stale)==D53_REJECTED);
+    for(size_t i=1;i<D53_TASKS;++i) {
+        assert(d53_cancel(&s,&r,&t,0,task[i])==D53_OK);
+        assert(r.task[task[i].slot].registered_waiters==0);
+    }
+    assert(s.locks[0].waiting==0 && d53_check(&s,&r,&t));
+    assert(dispatch(&t).slot==task[0].slot);
+    assert(d53_release(&s,&r,&t,0,task[0])==D53_OK);
+    finish(&t,&r,task[0]);
+    for(size_t i=1;i<D53_TASKS;++i) {
+        assert(dispatch(&t).slot==task[i].slot);
+        finish(&t,&r,task[i]);
+    }
+    assert(d53_check(&s,&r,&t));
+}
+
 int main(void)
 {
+    full_capacity();
     multiple_waiters();
     donation_and_order();
     cancel_and_orphan();
