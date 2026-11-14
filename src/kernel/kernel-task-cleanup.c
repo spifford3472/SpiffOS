@@ -30,7 +30,16 @@ static void take_front(struct kernel_task_cleanup_queue *queue)
 bool kernel_task_cleanup_init(struct kernel_task_cleanup_queue *queue)
 {
     if(queue==NULL || queue->initialized) return false;
-    *queue=(struct kernel_task_cleanup_queue){.initialized=true};
+    /* Assign scalar fields explicitly: a whole-structure assignment of
+     * this fixed-size FIFO can lower to unavailable freestanding memset. */
+    queue->initialized=true;
+    queue->count=0;
+    queue->completed=0;
+    queue->quarantines=0;
+    for(size_t i=0;i<KERNEL_TASK_CAPACITY;++i) {
+        queue->entries[i].slot=0;
+        queue->entries[i].generation=0;
+    }
     return true;
 }
 
