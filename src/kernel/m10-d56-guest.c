@@ -333,8 +333,9 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
     for(unsigned i=0;i<D56_STACKS && ready;++i) {
         const struct kernel_task_stack_binding binding={
             .bottom=(uintptr_t)stacks[i],.bytes=X86_TASK_STACK_BYTES,
-            .saved_rsp=(uintptr_t)(i==D56_SUP_INDEX ?
-                supervisor_context.saved_rsp:saved_frames[i]),
+            .saved_rsp=i==D56_SUP_INDEX ?
+                (uintptr_t)supervisor_context.saved_rsp:
+                (uintptr_t)saved_frames[i],
             .owner_index=i
         };
         ready=kernel_task_resources_bind(&owners,&tasks,handles[i],
@@ -389,6 +390,7 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
 fail_early:
     /* No task has executed yet; all allocated backing can be safely
      * returned from the boot stack. Never repair an active IRQ owner. */
+    ; /* A statement before local declarations keeps strict C11. */
     const uint64_t rollback=enter_critical();
     for(unsigned i=prepared;i>0;--i)
         (void)memory_boot_m10_task_stack_release(i-1);
