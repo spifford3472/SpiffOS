@@ -12,7 +12,7 @@ KERNEL := build/spiffos-kernel.elf
 # production ISO links none of these objects and retains original behavior.
 M10B_TEST_OBJECTS :=
 ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
-M10B_TEST_OBJECTS := build/kernel-task.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
+M10B_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
 endif
 
 # D2 is a separate interrupt-frame diagnostic, never in the released ISO.
@@ -133,6 +133,23 @@ test-m10-d4-complete-guest:
 .PHONY: test-m10-d5-reap test-m10-d5-acceptance
 test-m10-d5-reap: build/m10-d5-task-reap-test
 	./build/m10-d5-task-reap-test
+
+# D5.2a owner-backed reaper: hosted sanitizer plus M10-B real stack-switch
+# fixture and inherited D5.1/D4 acceptance. No normal-kernel linkage.
+.PHONY: test-m10-d5-execution-reap test-m10-d5-execution-acceptance
+test-m10-d5-execution-reap: build/m10-d5-execution-reaper-test
+	./build/m10-d5-execution-reaper-test
+
+build/m10-d5-execution-reaper-test: tests/m10-d5-execution-reaper-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-reaper.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-execution-reaper-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c -o $@
+
+build/kernel-task-reaper.o: src/kernel/kernel-task-reaper.c src/kernel/kernel-task-reaper.h src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d5-execution-acceptance: test-m10-d5-execution-reap test-m10-d5-acceptance
+	@echo SPIFFOS_M10_D5_2A_ACCEPTANCE_OK
 
 build/m10-d5-task-reap-test: tests/m10-d5-task-reap-test.c src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
 	mkdir -p build
