@@ -166,8 +166,34 @@ static void reuse_stress(void)
     assert(released-before==20000);
 }
 
+/* Fill every ordinary task slot without touching the reserved supervisor.
+ * The FIFO makes deterministic bounded progress and never allocates. */
+static void full_ordinary_queue(void)
+{
+    struct kernel_task_table table={0};
+    struct kernel_task_resources resources={0};
+    struct kernel_task_cleanup_queue queue={0};
+    assert(kernel_task_init(&table) && kernel_task_resources_init(&resources));
+    assert(kernel_task_cleanup_init(&queue));
+    for(size_t i=0;i<KERNEL_TASK_SUPERVISOR_SLOT;++i) {
+        struct kernel_task_handle h=new_task(&table,&resources,i);
+        terminate(&table,h);
+        assert(kernel_task_cleanup_enqueue(&queue,&resources,&table,h)==KERNEL_CLEANUP_OK);
+    }
+    assert(queue.count==KERNEL_TASK_SUPERVISOR_SLOT);
+    assert(kernel_task_cleanup_check(&queue));
+    unsigned before=released;
+    for(size_t i=0;i<KERNEL_TASK_SUPERVISOR_SLOT;++i)
+        assert(kernel_task_cleanup_service(&queue,&resources,&table,
+            (uintptr_t)0x400000u,release_owner)==KERNEL_CLEANUP_OK);
+    assert(released-before==KERNEL_TASK_SUPERVISOR_SLOT);
+    assert(queue.count==0 && kernel_task_cleanup_check(&queue));
+    assert(kernel_task_resources_check(&resources,&table));
+}
+
 int main(void)
 {
+    full_ordinary_queue();
     queue_fairness();
     quarantine_and_reuse();
     ordinary_current_rejected();
