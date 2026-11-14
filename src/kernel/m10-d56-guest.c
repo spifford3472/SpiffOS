@@ -17,6 +17,9 @@
 #ifdef SPIFFOS_M10_D57_IRQ_TEST
 #include "m10-d57-safety.h"
 #endif
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+#include "m10-d58-notify.h"
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -46,6 +49,11 @@ static struct d53_sync d57_sync;
 static struct d57_irq_policy d57_policy;
 static struct d57_preempt_guard d57_guard;
 static uint32_t d57_guard_cookies[D57_MAX_GUARD_DEPTH];
+#endif
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+/* Test-only IRQ observation transport; never a lock mutation queue. */
+static struct d58_notice_queue d58_observations;
+static uint32_t d58_drained;
 #endif
 static volatile uint64_t iterations[D56_WORKERS];
 static volatile uint32_t slices[D56_STACKS],ticks,irq_switches;
@@ -229,6 +237,16 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
 #endif
     saved_frames[from]=incoming;
     if(ticks!=UINT32_MAX) ++ticks;
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+    /* Independently sample live IF on genuine IRQ0 entry, instead of
+     * supplying a reassuring constant to the diagnostic admission gate. */
+    uint64_t d58_live_flags=0;
+    __asm__ volatile("pushfq; popq %0":"=r"(d58_live_flags)::"memory");
+    if(!d58_note_irq(&d58_observations,&tasks,handles[from],ticks,
+                     true,(d58_live_flags&UINT64_C(0x200))==0)) {
+        failed=true;reason="D58_IRQ_NOTICE";
+    }
+#endif
     if(slices[from]!=UINT32_MAX) ++slices[from];
     if(!d55c_tick_observe(&service,true,ticks))
         {failed=true;reason="SUPERVISOR_DEADLINE";}
@@ -359,6 +377,30 @@ __attribute__((noreturn)) static void worker_run(unsigned index)
 __attribute__((noreturn)) static void worker_zero(void) {worker_run(0);}
 __attribute__((noreturn)) static void worker_one(void) {worker_run(1);}
 
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+/* Called exclusively on supervisor stack inside an IF=0 critical region;
+ * consuming diagnostic observations never transfers any mutex ownership. */
+static void d58_supervisor_drain(void)
+{
+    while(d58_observations.count!=0 && !d58_observations.faulted) {
+        struct d58_notice witness={0};
+        if(!d58_take_supervisor(&d58_observations,&tasks,&witness,
+                                false,true,true)) {
+            failed=true;reason="D58_SUPERVISOR_DRAIN";
+            return;
+        }
+        if(d58_drained==UINT32_MAX) {
+            failed=true;reason="D58_DRAIN_OVERFLOW";
+            return;
+        }
+        ++d58_drained;
+    }
+    if(d58_observations.faulted) {
+        failed=true;reason="D58_QUEUE_FAULT";
+    }
+}
+#endif
+
 /* Supervisor executes on a third, registered stack and records only
  * completed work, never mere opportunities chosen by the IRQ scheduler. */
 __attribute__((noreturn)) static void supervisor_run(void)
@@ -377,6 +419,9 @@ __attribute__((noreturn)) static void supervisor_run(void)
 #endif
     while(!done && !failed) {
         const uint64_t prior=enter_critical();
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+        d58_supervisor_drain();
+#endif
         if(!d55c_tick_service_completed(&service,true,true,ticks)) {
             failed=true;reason="SERVICE_COMPLETION";
         }
@@ -393,6 +438,9 @@ __attribute__((noreturn)) static void supervisor_run(void)
         __asm__ volatile("pause":::"memory");
     }
     const uint64_t prior=enter_critical();
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+    d58_supervisor_drain();
+#endif
     if(kernel_task_terminate(&tasks,handles[D56_SUP_INDEX])!=KERNEL_TASK_OK) {
         failed=true;reason="SUPERVISOR_EXIT";
     }
@@ -447,6 +495,9 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
 #ifdef SPIFFOS_M10_D57_IRQ_TEST
        || !d53_init(&d57_sync) || !d57_policy_init(&d57_policy) ||
        !d57_guard_init(&d57_guard)
+#endif
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+       || !d58_queue_init(&d58_observations)
 #endif
        ) {
         reason="INIT";goto fail_early;
@@ -524,6 +575,10 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         d57_policy.decisions>0 &&
         d53_check(&d57_sync,&owners,&tasks) &&
 #endif
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+        !d58_observations.faulted && d58_observations.count==0 &&
+        d58_drained==ticks && d58_drained>=D56_MIN_WORKER_TICKS &&
+#endif
         kernel_task_check(&tasks) &&
         kernel_task_resources_check(&owners,&tasks);
     for(unsigned i=0;i<D56_WORKERS;++i)
@@ -586,6 +641,10 @@ void m10_d56_report(bool (*write)(const char *))
     report_number(write,critical_cycles);
     (void)write("\r\nD56_IRQ_SWITCHES:");
     report_number(write,irq_switches);
+#ifdef SPIFFOS_M10_D58_NOTIFY_TEST
+    (void)write("\r\nD58_IRQ_NOTICES_DRAINED:");
+    report_number(write,d58_drained);
+#endif
     (void)write("\r\n");
 }
 #endif

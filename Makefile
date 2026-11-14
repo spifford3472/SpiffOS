@@ -53,6 +53,12 @@ ifneq ($(findstring -DSPIFFOS_M10_D57_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
 M10D57_IRQ_OBJECTS := build/m10-d57-safety.o build/kernel-sync-d53.o build/kernel-priority-policy.o
 endif
 
+# D5.8a IRQ notifications: exclusively the flagged D5.6/D5.7 guest.
+M10D58_IRQ_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D58_NOTIFY_TEST,$(BOOT_TEST_FLAGS)),)
+M10D58_IRQ_OBJECTS := build/m10-d58-notify.o
+endif
+
 # D2 is a separate interrupt-frame diagnostic, never in the released ISO.
 M10D2_TEST_OBJECTS :=
 ifneq ($(filter -DSPIFFOS_M10_D2_IRQ_FRAME_TEST -DSPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST,$(BOOT_TEST_FLAGS)),)
@@ -135,6 +141,14 @@ build/m10-d2-irq-frame.o: src/kernel/m10-d2-irq-frame.c src/kernel/m10-d2-irq-fr
 build/m10-d57-safety.o: src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h Makefile
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/m10-d57-safety.c -o $@
+
+build/m10-d58-notify.o: src/kernel/m10-d58-notify.c src/kernel/m10-d58-notify.h Makefile
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d58-notify.c -o $@
+
+.PHONY: test-m10-d58-guest
+test-m10-d58-guest:
+	python3 scripts/test-m10-d58-guest.py
 
 .PHONY: test-m10-d57-guest
 test-m10-d57-guest:
@@ -251,6 +265,18 @@ test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 
 # D5.7 hosted sanitizer proves fail-closed generation-tagged guard,
 # transitive D5.3 donation and supervisor reservation before IRQ enabling.
+.PHONY: test-m10-d58-acceptance
+test-m10-d58-acceptance: test-m10-d58-notify test-m10-d58-guest test-m10-d57-acceptance
+	@echo SPIFFOS_M10_D58_ACCEPTANCE_OK
+
+.PHONY: test-m10-d58-notify
+test-m10-d58-notify: build/m10-d58-notify-test
+	./build/m10-d58-notify-test
+
+build/m10-d58-notify-test: tests/m10-d58-notify-test.c src/kernel/m10-d58-notify.c src/kernel/m10-d58-notify.h src/kernel/kernel-task.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58-notify-test.c src/kernel/m10-d58-notify.c src/kernel/kernel-task.c -o $@
+
 .PHONY: test-m10-d57-safety test-m10-d57-acceptance
 test-m10-d57-safety: build/m10-d57-safety-test
 	./build/m10-d57-safety-test
@@ -607,8 +633,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
