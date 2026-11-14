@@ -20,6 +20,9 @@
 enum { D4_SUP_INDEX=D4_TASK_WORKERS, D4_TOTAL=D4_TASK_WORKERS+1,
        D4_STACK_CANARY=64, D4_MIN_SLICES=12, D4_MAX_TICKS=700 };
 static struct d4_task_control state;
+static struct d4_task_lock inversion_lock;
+static volatile bool low_owns_lock,high_waited,low_released_lock,
+                     high_released_lock;
 static volatile bool active,done,failed;
 static volatile uint32_t running=D4_TASK_SUPERVISOR, ticks, switches;
 static volatile uint32_t slices[D4_TOTAL];
@@ -64,16 +67,54 @@ static void worker_run(unsigned id)
     for(;;) {
         local=local*UINT64_C(6364136223846793005)+UINT64_C(1);
         ++iterations[id];
-        if(id==0 && !worker_blocked_once && iterations[0]>=1000) {
+        /* Real lock inversion: Background worker owns a kernel lock;
+         * Time-sensitive worker then blocks behind it and donates its
+         * effective priority until owner releases. Every mutation uses
+         * IF=0 exclusion; both workers remain on their own saved stacks. */
+        if(id==0 && !low_owns_lock) {
+            uint64_t previous=irq_disable();
+            if(d4_task_lock_acquire(&state,&inversion_lock,0)!=D4_TASK_OK)
+                failed=true;
+            else low_owns_lock=true;
+            irq_restore(previous);
+        }
+        if(id==3 && low_owns_lock && !high_waited) {
+            uint64_t previous=irq_disable();
+            if(d4_task_lock_acquire(&state,&inversion_lock,3)!=D4_TASK_WAITING)
+                failed=true;
+            else high_waited=true;
+            irq_restore(previous);
+            /* The task is actually BLOCKED and absent from all snapshots.
+             * It resumes here only after Background transfers the lock. */
+            while(state.worker[3].status==D4_TASK_BLOCKED)
+                __asm__ volatile("pause" : : : "memory");
+        }
+        if(id==0 && high_waited && !low_released_lock) {
+            uint64_t previous=irq_disable();
+            if(state.worker[0].priority!=KERNEL_PRIORITY_TIME_SENSITIVE ||
+               d4_task_lock_release(&state,&inversion_lock,0)!=D4_TASK_OK)
+                failed=true;
+            else low_released_lock=true;
+            irq_restore(previous);
+        }
+        if(id==3 && high_waited && low_released_lock &&
+           !high_released_lock && inversion_lock.owner==3) {
+            uint64_t previous=irq_disable();
+            if(d4_task_lock_release(&state,&inversion_lock,3)!=D4_TASK_OK)
+                failed=true;
+            else high_released_lock=true;
+            irq_restore(previous);
+        }
+        if(id==0 && low_released_lock && high_released_lock &&
+           !worker_blocked_once && iterations[0]>=1000) {
             uint64_t before=irq_disable();
             if(running!=0 ||
                d4_task_block(&state,0,running)!=D4_TASK_OK)
                 failed=true;
             else worker_blocked_once=true;
             irq_restore(before);
-            /* Wait on the same kernel stack. Hardware IRQ0 will save this
-             * interrupted RIP/RSP, park it, and run other READY frames.
-             * No cooperative yield and no fake re-created task occurs. */
+            /* Distinct independent self-block/wakeup exercise follows
+             * ownership transfer. No cooperative schedule/yield call. */
             while(state.worker[0].status==D4_TASK_BLOCKED)
                 __asm__ volatile("pause" : : : "memory");
         }
@@ -172,6 +213,9 @@ uint64_t *m10_d4_complete_irq_select(uint64_t *incoming)
             all_served=false;
     if(current==D4_TASK_SUPERVISOR && all_served &&
        worker_blocked_once && wake_events>0 &&
+       low_owns_lock && high_waited &&
+       low_released_lock && high_released_lock &&
+       inversion_lock.owner==UINT32_MAX &&
        quarantine_events>0 && recovery_events>0 &&
        quarantine_rejected_bad_frame &&
        state.supervisor_dispatches>=D4_MIN_SLICES)
@@ -267,6 +311,7 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
         failure_reason="IRQ0_NOT_ENABLED";return false;
     }
     if(!d4_task_init(&state) ||
+       !d4_task_lock_init(&inversion_lock) ||
        !memory_boot_m10_task_stack_failure_probe()) {
         failure_reason="TASK_OR_ALLOCATOR_INIT";irq_restore(entry);return false;
     }
@@ -316,6 +361,9 @@ bool m10_d4_complete_guest_smoke(bool (*clock_ms)(uint64_t *))
         supervisor_max_gap<=KERNEL_PRIORITY_SUPERVISOR_INTERVAL &&
         switches>=D4_MIN_SLICES*D4_TASK_WORKERS &&
         blocked_ticks>=5 && wake_events>0 &&
+        low_owns_lock && high_waited &&
+        low_released_lock && high_released_lock &&
+        inversion_lock.owner==UINT32_MAX &&
         quarantine_events>0 && recovery_events>0 &&
         quarantine_rejected_bad_frame &&
         clock_ms(&end) && end>begin;
