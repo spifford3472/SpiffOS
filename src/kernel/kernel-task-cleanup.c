@@ -49,10 +49,12 @@ bool kernel_task_cleanup_check(const struct kernel_task_cleanup_queue *queue)
     if(queue==NULL || !queue->initialized ||
        queue->count>KERNEL_TASK_CAPACITY) return false;
     for(size_t i=0;i<queue->count;++i) {
-        if(queue->entries[i].slot>=KERNEL_TASK_CAPACITY ||
+        /* Slot 15 is the permanent supervisor; a second generation of a
+         * queued slot also indicates broken lifecycle ownership. */
+        if(queue->entries[i].slot>=KERNEL_TASK_SUPERVISOR_SLOT ||
            queue->entries[i].generation==0) return false;
         for(size_t j=0;j<i;++j)
-            if(equal_handles(queue->entries[j],queue->entries[i]))
+            if(queue->entries[j].slot==queue->entries[i].slot)
                 return false;
     }
     return true;
@@ -71,7 +73,7 @@ enum kernel_cleanup_result kernel_task_cleanup_enqueue(
         return KERNEL_CLEANUP_INVALID;
     const struct kernel_task_record *task=kernel_task_get(table,handle);
     if(task==NULL || task->state!=KERNEL_TASK_TERMINATED ||
-       task->reclaimed || handle.slot>=KERNEL_TASK_CAPACITY)
+       task->reclaimed || handle.slot>=KERNEL_TASK_SUPERVISOR_SLOT)
         return KERNEL_CLEANUP_INVALID;
     const struct kernel_task_resource_record *owner=&resources->task[handle.slot];
     if(!owner->installed || owner->quarantined ||
@@ -103,6 +105,18 @@ enum kernel_cleanup_result kernel_task_cleanup_service(
         table->current_slot!=KERNEL_TASK_SUPERVISOR_SLOT))
         return KERNEL_CLEANUP_INVALID;
     if(queue->count==0) return KERNEL_CLEANUP_EMPTY;
+    /* Check every pending identity BEFORE any callback is invoked. An old
+     * handle hidden behind a good entry must not allow partial processing. */
+    for(size_t index=0;index<queue->count;++index) {
+        struct kernel_task_handle pending=queue->entries[index];
+        const struct kernel_task_resource_record *owner=
+            &resources->task[pending.slot];
+        const struct kernel_task_record *task=kernel_task_get(table,pending);
+        if(!owner->installed || owner->quarantined ||
+           !equal_handles(owner->handle,pending) || task==NULL ||
+           task->state!=KERNEL_TASK_TERMINATED || task->reclaimed)
+            return KERNEL_CLEANUP_INVALID;
+    }
     size_t scanned=queue->count;
     for(size_t i=0;i<scanned;++i) {
         struct kernel_task_handle handle=queue->entries[0];
