@@ -72,6 +72,9 @@ static uint64_t enter_critical(void)
         const unsigned current=index_of_slot(tasks.current_slot);
         uint32_t cookie=0;
         if(current>=D56_STACKS ||
+           tasks.tasks[handles[current].slot].generation!=
+               handles[current].generation ||
+           tasks.tasks[handles[current].slot].state!=KERNEL_TASK_RUNNING ||
            !d57_guard_enter(&d57_guard,handles[current],false,
                true,&cookie) ||
            d57_guard.depth==0 || d57_guard.depth>D57_MAX_GUARD_DEPTH) {
@@ -87,9 +90,26 @@ static void exit_critical(uint64_t previous_flags)
 {
 #ifdef SPIFFOS_M10_D57_IRQ_TEST
     if(active) {
-        /* A task may terminate while holding IF=0 exclusion. The exact
-         * original generation recorded on entry remains the guard owner. */
-        struct kernel_task_handle owner=d57_guard.owner;
+        /* Verify the owner against the authoritative M10-A record, not
+         * just the guard's own stored identity. The one legal exception is
+         * the terminating reserved supervisor: M10-A clears current_slot
+         * on exit, while this IF=0 critical region still needs its final
+         * LIFO pop before returning to the boot stack. */
+        struct kernel_task_handle owner={0};
+        if(tasks.current_slot!=SIZE_MAX) {
+            const unsigned current=index_of_slot(tasks.current_slot);
+            if(current<D56_STACKS &&
+               tasks.tasks[handles[current].slot].state==
+                   KERNEL_TASK_RUNNING &&
+               tasks.tasks[handles[current].slot].generation==
+                   handles[current].generation)
+                owner=handles[current];
+        } else if(d57_guard.owner.slot==handles[D56_SUP_INDEX].slot &&
+                  d57_guard.owner.generation==
+                      handles[D56_SUP_INDEX].generation &&
+                  tasks.tasks[handles[D56_SUP_INDEX].slot].state==
+                      KERNEL_TASK_TERMINATED)
+            owner=handles[D56_SUP_INDEX];
         if(d57_guard.depth==0 ||
            !d57_guard_exit(&d57_guard,owner,false,true,
                d57_guard_cookies[d57_guard.depth-1])) {
