@@ -452,3 +452,8 @@ The owner elected to proceed with an execution-aware cleanup boundary after D5.1
 ## M10-D5.2b owner direction — isolated resource ownership, 2026-11-13
 
 The owner chose the next D5.2b checkpoint after D5.2a. Implement a bounded generation-tagged task resource registry and fail-closed cleanup gate, with tested lock/wait reference interlocks and quarantine after memory-owner failure. This is **development/testing authorization only**, stacked on PRs #71/#72; it does not authorize merge, deployment, general editor preemption, new process ABI or physical disk changes. See [D5.2b ADR](ADR-m10-d5-resource-ownership.md).
+
+
+## M10-D5.2c owner direction — bounded supervisor cleanup proof (2026-11-13)
+
+Owner selected isolated implementation of the next M10-D5 cleanup checkpoint. Add a fixed-capacity supervisor-only FIFO of terminated generation-tagged tasks and verify a one-owner/one-waiter synchronization reference proof against the D5.2b registry. Keep D4 diagnostics separate; production mutex/wait integration and general editor preemption are explicitly **not** approved. No merge, accepted ISO deployment or physical media is authorized. See [D5.2c ADR](ADR-m10-d5-supervisor-cleanup.md).

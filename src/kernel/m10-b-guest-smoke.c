@@ -8,7 +8,7 @@
 #include "x86-task-context.h"
 #include "memory-boot.h"
 #include "kernel-task.h"
-#include "kernel-task-resources.h"
+#include "kernel-task-cleanup.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -23,6 +23,7 @@ static volatile bool task_done[TEST_STACKS];
 static volatile bool task_failed;
 static struct kernel_task_table task_table;
 static struct kernel_task_resources resource_owners;
+static struct kernel_task_cleanup_queue cleanup_queue;
 static struct kernel_task_handle task_handles[TEST_STACKS];
 static const char *failure_reason = "UNSET";
 
@@ -149,7 +150,8 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     bool success=false;
     flags=save_and_disable_irq();
     bool policy_ready=kernel_task_init(&task_table) &&
-        kernel_task_resources_init(&resource_owners);
+        kernel_task_resources_init(&resource_owners) &&
+        kernel_task_cleanup_init(&cleanup_queue);
     for(size_t i=0;i<TEST_STACKS && policy_ready;++i)
         policy_ready=kernel_task_create(&task_table,false,
                          &task_handles[i])==KERNEL_TASK_OK &&
@@ -251,16 +253,25 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         __asm__ volatile("mov %%rsp,%0" : "=r"(boot_rsp) : : "memory");
         /* Registered binding is authoritative: a forged owner index or
          * stale pointer cannot direct the physical frame release. */
-        enum kernel_task_resource_result reaped=
-            kernel_task_resources_retire(&resource_owners,
-                &task_table,task_handles[index],boot_rsp,
-                memory_boot_m10_task_stack_release);
+        /* A surviving boot dispatcher first enqueues exact-generation
+         * retirement; the bounded queue verifies registered references and
+         * performs the exact-owner release. This is not an IRQ callback. */
+        enum kernel_cleanup_result enqueued=kernel_task_cleanup_enqueue(
+            &cleanup_queue,&resource_owners,&task_table,task_handles[index]);
+        enum kernel_cleanup_result reaped=enqueued==KERNEL_CLEANUP_OK ?
+            kernel_task_cleanup_service(&cleanup_queue,&resource_owners,
+                &task_table,boot_rsp,memory_boot_m10_task_stack_release) :
+            KERNEL_CLEANUP_INVALID;
         restore_irq(flags);
-        if(reaped!=KERNEL_RESOURCE_OK) {
+        if(reaped!=KERNEL_CLEANUP_OK) {
             /* Never attempt a second free after uncertain release state. */
             failure_reason="EXECUTION_REAPER_REJECTED";
             return false;
         }
+    }
+    if(cleanup_queue.count!=0 || cleanup_queue.completed!=TEST_STACKS) {
+        failure_reason="SUPERVISOR_QUEUE_ACCOUNTING";
+        return false;
     }
     return true;
 cleanup:

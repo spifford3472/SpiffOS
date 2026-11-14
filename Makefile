@@ -12,7 +12,7 @@ KERNEL := build/spiffos-kernel.elf
 # production ISO links none of these objects and retains original behavior.
 M10B_TEST_OBJECTS :=
 ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
-M10B_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
+M10B_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/kernel-task-cleanup.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
 endif
 
 # D2 is a separate interrupt-frame diagnostic, never in the released ISO.
@@ -145,6 +145,31 @@ test-m10-d5-execution-reap: build/m10-d5-execution-reaper-test
 .PHONY: test-m10-d5-resource-ownership test-m10-d5-resource-acceptance
 test-m10-d5-resource-ownership: build/m10-d5-task-resources-test
 	./build/m10-d5-task-resources-test
+
+# D5.2c isolated supervisor cleanup: no normal-kernel linkage.
+.PHONY: test-m10-d5-supervisor-queue test-m10-d5-supervisor-acceptance
+test-m10-d5-supervisor-queue: build/m10-d5-supervisor-queue-test
+	./build/m10-d5-supervisor-queue-test
+
+# D5.2c registered one-owner/one-waiter reference interlock regression.
+.PHONY: test-m10-d5-sync-ledger
+test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
+	./build/m10-d5-sync-ledger-test
+
+build/m10-d5-sync-ledger-test: tests/m10-d5-sync-ledger-test.c src/kernel/kernel-task-sync-proof.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-sync-ledger-test.c src/kernel/kernel-task-sync-proof.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+build/m10-d5-supervisor-queue-test: tests/m10-d5-supervisor-queue-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-cleanup.c src/kernel/kernel-task-cleanup.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-supervisor-queue-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-cleanup.c -o $@
+
+build/kernel-task-cleanup.o: src/kernel/kernel-task-cleanup.c src/kernel/kernel-task-cleanup.h src/kernel/kernel-task-resources.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task-cleanup.c -o $@
+
+test-m10-d5-supervisor-acceptance: test-m10-d5-supervisor-queue test-m10-d5-sync-ledger test-m10-d5-resource-acceptance
+	@echo SPIFFOS_M10_D5_2C_ACCEPTANCE_OK
 
 build/m10-d5-task-resources-test: tests/m10-d5-task-resources-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-resources.h Makefile
 	mkdir -p build

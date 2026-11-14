@@ -293,3 +293,8 @@ A bounded kernel-task-reaper adapter supplements the authoritative M10-A/D5.1 ta
 ## M10-D5.2b bounded ownership interlock (development only)
 
 One static, generation-keyed record per authoritative kernel task slot tracks stack identity, verified saved RSP, and bounded synchronization references. The dispatcher/supervisor refuses to reclaim tasks with remaining references, uses the registered stack binding for the D5.2a off-stack owner release, and quarantines any memory-owner release failure without retry. This is an isolated adapter for the M10-B diagnostic, not a parallel scheduler and not yet integrated into the normal SpiffOS kernel. See `../decisions/ADR-m10-d5-resource-ownership.md`.
+
+
+## M10-D5.2c supervisor reaper and synchronization reference proof (isolated)
+
+The authoritative M10-A task table and D5.2b generation-keyed resource registry now have a bounded cleanup FIFO that processes only on the external dispatcher or reserved supervisor stack, never in IRQ context. Registered outstanding locks/waiters retain a terminated task in queue; safe candidates retire using their exact registered stack owner; uncertain failures quarantine the task and leave backing unavailable for reuse without retry. A separate one-owner/one-waiter helper proves reference accounting and transfer but does not implement blocking, wake, priority inheritance or production mutex APIs. The M10-B QEMU diagnostic exercises the queue after switching to the boot stack; the normal editor remains unchanged. See `../decisions/ADR-m10-d5-supervisor-cleanup.md`.

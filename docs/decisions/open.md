@@ -323,3 +323,8 @@ The isolated reaper adapter checks a terminated generation-tagged task, owner st
 ## M10-D5.2b open production integration gates — 2026-11-13
 
 Resource registry and lifecycle tests may run in isolation, but existing kernel synchronization objects do not yet register their waiters and owners with it. Real mutex/wait registration, verified atomic stack-owner release or quarantine recovery, bounded supervisor reaper queue, and task/driver reference lifecycle remain OPEN before allowing general production task termination. No production editor preemption is authorized. See `ADR-m10-d5-resource-ownership.md`.
+
+
+## M10-D5.2c remaining integration blockers (2026-11-13)
+
+The isolated cleanup queue can rotate task entries blocked by lock/wait references and quarantine uncertain physical releases, but the real operating-system mutex, wait-queue and driver-owner paths do **not** yet use the new registered one-owner/waiter fixture. This fixture deliberately does not block/wake task execution, donate priority or create an ABI. Production scheduler integration, lock cancellation/owner-death semantics, actual task resource graph, recovery after partially freed frames and bounded supervisor CPU service remain OPEN. No general preemptive editor activation. See `ADR-m10-d5-supervisor-cleanup.md`.
