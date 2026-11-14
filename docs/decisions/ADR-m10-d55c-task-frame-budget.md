@@ -19,7 +19,7 @@ Do not equate an address merely *within* a stack with proof of a trusted current
 
 ## Open
 
-Trusted IRQ entry + exact authority binding, real owned-worker interrupt-frame execution, safe IRQ-exit dispatch integration, preempt-disable nesting/memory ordering, owner-death recovery, timer accuracy/jitter, SIMD/FPU, Ring 3/CR3 and separate production activation authorization.
+Trusted multiworker IRQ-entry task authority binding, safe IRQ-exit dispatch integration, preempt-disable nesting/memory ordering, owner-death recovery, timer accuracy/jitter, SIMD/FPU, Ring 3/CR3 and separate production activation authorization.
 
 ## Change history
 
