@@ -501,3 +501,7 @@ Owner authorized progressing from D5.6 to test-only preemption safety, D5.3 dona
 ## M10-D5.8 isolated IRQ-mutex integration direction — 2026-11-14
 
 Owner requested next recommended D5.8 milestone following confirmed exact-head D5.7 GitHub Actions success. Staged development/test authorization only, beginning with a bounded deferred diagnostic notification, then real IRQ-preempted mutex donation/wake and failure containment. M10-A remains sole state authority; no D5.3 mutation in IRQ. Normal EDIT/BASIC preemption, merge, ISO replacement and physical deployment are not authorized. See `ADR-m10-d58-irq-mutex-integration.md`.
+
+## M10-D5.8b Phase 1 frame-ownership investigation — 2026-11-14
+
+Owner approved proceeding with the recommended D5.8b Phase 1 after D5.8a CI passed. Isolated, read-only exact-generation D5.3 graph + D5.2b owner admission may be coded/tested; no weakening of the old D5.6/D5.5c IRQ frame check and no real blocked-stack resumption is approved by this preliminary checkpoint. `ADR-m10-d58b-frame-ownership-gate.md` records the proof and separate hardware execution gate. No merge, ISO deployment or ordinary EDIT/BASIC preemption.

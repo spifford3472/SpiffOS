@@ -372,3 +372,7 @@ D5.7's isolated guard uses an exact-current-generation owner and LIFO cookies un
 ## M10-D5.8 real-IRQ contention and production audit gates — 2026-11-14
 
 D5.7 exact-head CI passed, but there is no integrated real IRQ lock contention/donation/wake proof. D5.8 must demonstrate an authentic low-priority lock owner, high-priority BLOCKED waiter, intervening CPU worker and surviving supervisor using M10-A transitions, while forbidding D5.3 mutation in ISR. Safe deferred notification is not lock-transfer authority. Owner-death locks stay orphaned and fail-closed. Before production activation, full kernel allocator/editor/driver exclusion audit, correct on-stack failure recovery and independent validation remain OPEN. See `ADR-m10-d58-irq-mutex-integration.md`.
+
+## M10-D5.8b Phase 1 remaining x86 handoff boundary — 2026-11-14
+
+A nonzero resource lock count can be legitimate when validated against the full D5.3 graph, but D5.6 and D5.5c still reject such frames. A read-only admission helper cannot itself prove genuine saved IRQ frame geometry, live stack detachment or blocked-task x86 surrender. Before real lock-contention IRQ switching, explicitly validate physical CPU RSP after `d53_acquire()` makes the waiter BLOCKED, transfer to a separate surviving stack at IF=0 non-IRQ safe point, and independently validate READY target frame ownership. No synthetic blocked-stack IRETQ. See `ADR-m10-d58b-frame-ownership-gate.md`.
