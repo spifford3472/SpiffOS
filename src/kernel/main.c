@@ -1228,6 +1228,22 @@ void kmain(void)
     (void)serial_write("SPIFFOS_M10_D3_PREEMPT_OK\r\n");
 #endif
 #endif
+#ifdef SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST
+    /* C2b physically proves full IRQ-priority donation/handoff while a
+     * high-priority waiter is BLOCKED on its separate original RET stack.
+     * IRQ0 must be disarmed before release/wake and cooperative resume. */
+    extern bool m10_d58c_c2b_real_guest_smoke(bool (*clock_ms)(uint64_t *));
+    extern const char *m10_d58c_c2b_real_failure_reason(void);
+    if(!m10_d58c_c2b_real_guest_smoke(kernel_timer_boot_now_ms)) {
+        (void)serial_write("SPIFFOS_M10_D58C_C2B_IRQ_ERROR:");
+        (void)serial_write(m10_d58c_c2b_real_failure_reason());
+        (void)serial_write("\r\n");
+        halt_forever();
+    }
+    extern void m10_d58c_c2b_real_report(bool (*write)(const char *));
+    m10_d58c_c2b_real_report(serial_write);
+    (void)serial_write("SPIFFOS_M10_D58C_C2B_IRQ_OK\r\n");
+#endif
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
     /* Real non-yielding M10-A worker preemption, reserved owned-stack
      * supervisor and verified IRQ0 frames; isolated diagnostic only. */

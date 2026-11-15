@@ -517,3 +517,11 @@ Owner requested continuing the remaining D5.8c work after exact-head C1 CI run #
 ## M10-D5.8c C2b Phase 0 context-form gate — 2026-11-14
 
 After C2a genuine donated-owner IRQ0 observation, owner-directed continuation permits an isolated exact-generation read-only admission predicate that differentiates a cooperative saved RET continuation from a fully verified IRQ IRETQ frame. A READY waiter with cooperative context is never a legal IRQ-return target; only a trusted hardware-frame bridge may later join the phases. This Phase 0 implementation and hosted tests do NOT authorize actual mixed-form IRQ dispatch, merge, deployment or ordinary editor preemption. See ADR-m10-d58c-c2b-context-modes.md.
+
+## M10-D5.8c C2b Phase 1 physical bridge experiment — 2026-11-14
+
+Owner's continuation authorizes isolated test-only real IRQ0 handoff between a donated low lock owner and an independent medium IRQ worker, with high BLOCKED on its original RET context and reserved supervisor on its own IRQ frame. Require a verified IF-off IRQ disarm before off-IRQ D5.3 release/wake and high's genuine cooperative continuation. Prohibit synthetic RET-to-IRETQ conversion or normal EDIT/BASIC preemption. This is work authorization, not proof of a passing experiment. See ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.8c C2b physical IRQ experiment checkpoint — 2026-11-14
+
+The four independently owned M2-stack diagnostic now passes targeted real IRQ0 tests at 128/256/512 MiB: medium worker preempted by donated low owner via actual M10-A handoff, reserved supervisor completes bounded service, and high genuine BLOCKED waiter is woken only AFTER an IF-off IRQ-selector disarm and resumes via its original RET context. Five fault categories at three QEMU sizes also fail closed. These observations are isolated development evidence, not merge/release authorization. Full inherited acceptance and independent exact-head CI must still pass. See ../operations/m10-d58c-c2b-real-irq-20261114.md.

@@ -388,3 +388,11 @@ The first C2a fixture may prove actual IRQ0 saved-frame observation of donation 
 ## M10-D5.8c C2b physical frame/stack interoperability — 2026-11-14
 
 A pure generation-tagged context-form admission guard can refuse illegal RET-to-IRETQ destinations, but cannot prove that a CPU has left one stack, authenticated a new full saved IRQ frame or safely disarmed IRQ selection before waking a RET-only waiter. A separate QEMU-only physical bridge and supervisor CPU service proof remain OPEN. No blind conversion, synthetic frame or production activation. See ADR-m10-d58c-c2b-context-modes.md.
+
+## M10-D5.8c C2b Phase 1 physical execution acceptance — 2026-11-14
+
+Until independently tested under genuine IRQ0, the four-stack owner/high RET waiter/medium IRETQ worker/reserved supervisor execution sequence remains an experiment: source/target physical frame integrity, donation-selected medium-to-owner switches, actual supervisor CPU work, IF-off pre-release off-ramp, high-only cooperative continuation and safe reaping must pass on all three QEMU sizes. No physical release or normal editor preemption. See ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.8c C2b post-diagnostic production activation gates — 2026-11-14
+
+The four-stack targeted C2b real IRQ0 test addresses the previously open physical RET/IRETQ interoperability and priority-donation handoff under genuine contention. Still OPEN before ordinary kernel/editor preemption: complete driver and allocator IF/lock exclusion audit, interrupt/nesting exception recovery, secure orphan-owner remediation without forced lock release, hardware CPU-time deadline assurance, user program address-space/CR3, FPU/SIMD and SMP handling. The new test is exclusively disposable QEMU; full regression and independent CI/owner review gate remain. See ADR-m10-d58c-c2b-real-irq-bridge.md.

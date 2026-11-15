@@ -17,6 +17,11 @@
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
 .extern m10_d56_irq_select
 #endif
+#ifdef SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST
+/* Separate C2b-only authentic hardware-frame selector; no D5.6 selector
+ * or unrelated test flag may be combined with this test-only mode. */
+.extern m10_d58c_c2b_real_irq_select
+#endif
 #ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
 .extern m10_d58c_c2_irq_observe
 #endif
@@ -78,6 +83,14 @@ x86_irq0_entry:
      * regular handler/EOI; this must NOT mutate M10-A or select RSP. */
     movq %r12,%rdi
     call m10_d58c_c2_irq_observe
+#endif
+#ifdef SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST
+    /* After the normal IRQ0 accounting/EOI, pass only the REAL complete
+     * CPU-saved 20-qword frame at R12. The validator may hand off the
+     * sole M10-A RUNNING identity to an independently owned IRQ frame. */
+    movq %r12,%rdi
+    call m10_d58c_c2b_real_irq_select
+    movq %rax,%r12
 #endif
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
     /* D5.6 diagnostic: C prevalidates exact M10-A generation and both
