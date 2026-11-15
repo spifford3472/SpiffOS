@@ -513,3 +513,7 @@ Owner elected the recommended D5.8c integration after PR #84 exact-head CI succe
 ## M10-D5.8c C2a authentic IRQ donation observation gate — 2026-11-14
 
 Owner requested continuing the remaining D5.8c work after exact-head C1 CI run #85 passed. First prove a real IF=0 IRQ0 observation of a lock-owning low-priority task with a genuine high-priority BLOCKED waiter and separate READY medium competitor; preserve both real cooperative saved waiter continuation and non-IRQ D5.3 lock transfer/wake. This is C2a test authorization, not permission to conflate cooperative dispatch with real IRQ handoff. Complete C2b IRQ priority switching during contention remains open. No merge, accepted ISO, normal editor or physical deployment. See ADR-m10-d58c-c2-blocked-irq-observation.md.
+
+## M10-D5.8c C2b Phase 0 context-form gate — 2026-11-14
+
+After C2a genuine donated-owner IRQ0 observation, owner-directed continuation permits an isolated exact-generation read-only admission predicate that differentiates a cooperative saved RET continuation from a fully verified IRQ IRETQ frame. A READY waiter with cooperative context is never a legal IRQ-return target; only a trusted hardware-frame bridge may later join the phases. This Phase 0 implementation and hosted tests do NOT authorize actual mixed-form IRQ dispatch, merge, deployment or ordinary editor preemption. See ADR-m10-d58c-c2b-context-modes.md.
