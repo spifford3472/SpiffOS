@@ -876,3 +876,24 @@ Run `make HOST_CC=gcc test-m10-d57-safety` for GCC ASan/UBSan LIFO and donated-p
 A C function that updates an allocation bitmap and then decrements a free-count is correct only when another task cannot observe the intermediate state. On a single x86 boot CPU, interrupt exclusion can protect that short transaction, but a correct guard must capture and later restore the **original** IF rather than blindly execute STI. Nested guards need task-generation ownership and strict LIFO release; a test-only guard does not automatically protect ordinary allocator callers. An IRQ handler must not call blocking mutex or allocator APIs and cannot safely recover an abandoned lock by guessing ownership.
 
 The read-only D5.9-A inventory in `docs/operations/m10-d59-a-preemption-path-audit-20261114.md` records source function line numbers and whole-file SHA256, and fails CI when reviewed files change. This is a **review reminder, not static proof**: function-pointer calls, assembler, macros, concurrency and runtime timing require separate inspection and real QEMU tests. Before adding a new production call, decide exact task owner, IF state, transaction span, IRQ entry rules, failure containment and off-stack reclamation, then update the manifest only after reviewing the changed source and its callers.
+
+
+## D5.9-B: original IF is separate from guard ownership
+
+`m10-d59b-context.[ch]` is a separately flagged adapter, not another lock.
+PUSHFQ samples the original x86 interrupt-enable bit; CLI establishes exclusion
+before inspecting mutable task or resource state. Only then can the adapter bind
+the actual RSP to the RUNNING task's exact generation and independently registered
+stack. The existing D5.7 cookie stack still decides nested ownership and release.
+A full flags word remains nonzero with IF off because architectural reserved bit
+1 is set; test bit 9 rather than comparing the complete word to zero.
+
+A nested section must start IF-off. Its exit must keep IF-off, while the final
+matching exit restores the outer caller's original state. An invalid cookie or
+stale owner faults permanently and never executes STI. Actual assembly records
+IRQ entry depth, so having IF=0 inside an interrupt cannot impersonate ordinary
+IF-off task execution. Hosted callbacks simulate these facts; actual QEMU tests
+supply the hardware evidence. TSC samples measure observed exclusion cycles,
+not a calibrated physical latency guarantee. See
+[execution evidence](operations/m10-d59b-authentic-context-20261115.md) and
+[adapter contract](decisions/ADR-m10-d59b-authentic-context.md).

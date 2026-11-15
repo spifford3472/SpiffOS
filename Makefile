@@ -53,6 +53,18 @@ ifneq ($(findstring -DSPIFFOS_M10_D57_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
 M10D57_IRQ_OBJECTS := build/m10-d57-safety.o build/kernel-sync-d53.o build/kernel-priority-policy.o
 endif
 
+# D5.9-B real-context adapter is absent from default kernel linkage.
+M10D59B_CONTEXT_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D59B_CONTEXT_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D57_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_CONTEXT_TEST requires D57_IRQ_TEST and D56_IRQ_TEST)
+endif
+ifeq ($(findstring -DSPIFFOS_M10_D56_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_CONTEXT_TEST requires D56_IRQ_TEST)
+endif
+M10D59B_CONTEXT_OBJECTS := build/m10-d59b-context.o
+endif
+
 # D5.8b separately flagged IF=0 blocked-stack handoff fixture.
 # Never link into unflagged kernel or change normal cooperative ABI.
 M10D58B_BLOCK_OBJECTS :=
@@ -747,8 +759,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -1129,3 +1141,26 @@ build/m10-d59b-d57-compat-host-test: tests/m10-d59b-gate/d57_frame_guard_test.c 
 .PHONY: test-m10-d59b-acceptance
 test-m10-d59b-acceptance: test-m10-d59b-gate test-m10-d59-acceptance
 	@echo SPIFFOS_M10_D59B_HOSTED_ACCEPTANCE_OK
+
+
+.PHONY: test-m10-d59b-context-host test-m10-d59b-context-guest
+# The mockable hardware surface exists exclusively in this hosted executable.
+test-m10-d59b-context-host: build/m10-d59b-context-host-test
+	./build/m10-d59b-context-host-test
+
+build/m10-d59b-context-host-test: tests/m10-d59b-context-test.c src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_D59B_HOSTED -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-context-test.c src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -Wl,--gc-sections -o $@
+
+test-m10-d59b-context-guest:
+	python3 scripts/test-m10-d59b-context-guest.py
+
+# Keep highest existing target/marker, extending its inherited coverage.
+test-m10-d59b-acceptance: test-m10-d59b-context-host test-m10-d59b-context-guest
+
+# Explicit freestanding adapter rule; no implicit kernel compilation paths.
+build/m10-d59b-context.o: src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.h src/kernel/kernel-task-resources.h src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d59b-context.c -o $@
+
+build/m10-d56-guest.o build/memory-boot.o: src/kernel/m10-d59b-context.h

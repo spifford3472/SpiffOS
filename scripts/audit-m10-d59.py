@@ -22,7 +22,7 @@ CATEGORIES = {
     "entry": ("main.c",),
     "allocator": (
         "frame-allocator.c", "frame-allocate.c", "kernel-heap.c",
-        "memory-service.c", "memory-boot.c", "page-access.c",
+        "memory-service.c", "memory-boot.c", "page-access.c", "m10-d59b-context.c",
     ),
     "keyboard": (
         "keyboard.c", "keyboard-ps2.c", "keyboard-console.c", "logical-line.c",
@@ -182,8 +182,8 @@ def main(argv=None):
         return 1
     print(
         f"SPIFFOS_M10_D59_AUDIT_GUARD_OK: {len(actual)} tracked C/ASM "
-        "files (33 reviewed path entries, remainder explicitly UNREVIEWED); "
-        "no runtime changes")
+        "files (explicit path entries and remainder explicitly UNREVIEWED); "
+        "inventory only; no runtime safety certification")
     return 0
 
 

@@ -804,7 +804,7 @@
       "candidate_calls": [],
       "category": "unreviewed",
       "functions": [],
-      "sha256": "4eed24f4cfb3f02b78b7bf78462a4a612414e799194b3f55dc5f2febace32618",
+      "sha256": "37d9e1c6bb2e329965e906694c83634716c5c4c5a642f6764998eb50410cef14",
       "state": "UNREVIEWED_NO_PREEMPTION"
     },
     "src/kernel/m10-d57-safety.c": {
@@ -855,6 +855,66 @@
       "functions": [],
       "sha256": "5bd8b36cc3e8dd484abb1d76b60168e1c3f7e839703967b7618c4ce518757b45",
       "state": "UNREVIEWED_NO_PREEMPTION"
+    },
+    "src/kernel/m10-d59b-context.c": {
+      "candidate_calls": [],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "backend_valid",
+          "line": 14
+        },
+        {
+          "function": "cpu_flags",
+          "line": 27
+        },
+        {
+          "function": "cpu_save_disable",
+          "line": 41
+        },
+        {
+          "function": "cpu_id",
+          "line": 54
+        },
+        {
+          "function": "cpu_rsp",
+          "line": 67
+        },
+        {
+          "function": "cpu_enable",
+          "line": 80
+        },
+        {
+          "function": "current_owner",
+          "line": 94
+        },
+        {
+          "function": "d59b_context_init",
+          "line": 120
+        },
+        {
+          "function": "cpu_cycles",
+          "line": 151
+        },
+        {
+          "function": "reject_context",
+          "line": 164
+        },
+        {
+          "function": "execution_owner",
+          "line": 172
+        },
+        {
+          "function": "d59b_enter",
+          "line": 185
+        },
+        {
+          "function": "d59b_exit",
+          "line": 211
+        }
+      ],
+      "sha256": "b7115f34dbc9c93149f2ccd75c74eee31d8147afaf24421cc904e2fa217dae79",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/main.c": {
       "candidate_calls": [],
@@ -1145,9 +1205,13 @@
         {
           "function": "memory_boot_m10_task_stack_failure_probe",
           "line": 997
+        },
+        {
+          "function": "memory_boot_d59b_frame_cycle",
+          "line": 1038
         }
       ],
-      "sha256": "3b85ef1ffa9c686eb828a317579e0e3a1f18418abc10d7b585b032e99dc53726",
+      "sha256": "0826d9ec9944bb9a359800c8fa7667594c0373168d4b9ab2ce45cabf021632cd",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-map.c": {
@@ -1525,7 +1589,7 @@
       "candidate_calls": [],
       "category": "irq-assembly",
       "functions": [],
-      "sha256": "31bec9543f618bfd3569a3b3511eebe295356f02c9aa75c80d2735734caac319",
+      "sha256": "def8d4138d525450367af17d4445eee525e97b9073d548dbc83386d199cf1c39",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/x86-mmio-map.c": {

@@ -96,4 +96,11 @@ bool memory_boot_m10_task_stack_release(size_t index);
 /* Isolated QEMU test: fail after two owned pages and prove rollback counts. */
 bool memory_boot_m10_task_stack_failure_probe(void);
 #endif
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+struct d59b_context;
+/* Real boot allocator transaction under authenticated D5.7 exclusion.
+ * No mapped payload/stack is freed; caller is a registered RUNNING task.
+ * Failure retains IF=0 and forbids automatic retry of uncertain work. */
+bool memory_boot_d59b_frame_cycle(struct d59b_context *context);
+#endif
 #endif
