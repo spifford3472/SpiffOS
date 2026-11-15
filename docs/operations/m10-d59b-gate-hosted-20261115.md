@@ -64,3 +64,21 @@ Qwen's first small `frame_gate_test.c` draft was rejected at the compilation/rev
 **Still unproven:** direct unsafe production allocator callers remain possible; no true CPU/IF provenance or IRQ gate has been authenticated; no injected faults inside the three-store allocator mutation sequence; no real QEMU IRQ-off latency, scheduler handoff, task stack retirement or production allocator preemption proof. Do not treat these hosted successes as D5.9-B completion.
 
 Change history: 2026-11-15 Phase 0b added a reviewed, real-source hosted fixture and CI target. No merge/deploy.
+
+## Phase 0c — mutation-boundary hosted injection (2026-11-15)
+
+The opt-in `tests/m10-d59b-gate/instrument-frame-mutations.py` generates a **disposable copy** of the genuine `frame-allocate.c`, inserting a fixture callback after each of its three owner-slot/counter mutations. It requires exactly one recognized source anchor per mutation point and refuses changed source rather than silently running a partial test. It makes no changes to `src/kernel`.
+
+`tests/m10-d59b-gate/frame_mutation_test.c` exercises the instrumented real allocator while holding the hosted exact-generation gate. The callback asserts the simulated IF remains disabled, confirms the gate is held by the exact generation, and verifies simulated IRQ/stale-generation gate admissions reject at *every one* of the three mutation points. The final frame checks and release succeed.
+
+Verified on Forge:
+
+- GCC strict C11 + ASan/UBSan fixture: **PASS** `SPIFFOS_M10_D59B_MUTATION_HOOKS_OK`.
+- Clang strict C11 fixture: **PASS**, same marker.
+- Intentional source mutation replacing the owner increment: **EXPECTED REJECTION** (`unsafe source drift at mutation point 2`); no instrumented output created.
+- Existing M2 allocator baseline recompiled to isolated `/tmp` executable: **PASS** (owners, holes, reserve/OOM, rejected frees/counters). Default `make test-frame-allocator` could not overwrite owner-owned `build/frame-allocator-test` from Desktop Commander user `rt-remote`; no permission changes were made.
+- `Makefile` now requires all three hosted gate, real-allocator, and mutation-hook tests under `test-m10-d59b-gate`, and the CI-inherited D5.9-B acceptance target invokes those tests.
+
+**Limits:** These callbacks simulate an attempted interrupt-context admission, rather than delivering actual IRQ0 between x86 machine instructions. The temporary metadata may be inconsistent between stores and must not be read concurrently. The tests do not authenticate production task provenance, bound interrupt latency, prevent bypassing the fixture wrapper, or protect the real production allocator. Actual IRQ and scheduler admission remain OPEN.
+
+Change history: 2026-11-15 Phase 0c added three mutation-boundary checks, an explicit source-drift negative, and baseline host validation; no merge or deployment.
