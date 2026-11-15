@@ -396,3 +396,7 @@ Until independently tested under genuine IRQ0, the four-stack owner/high RET wai
 ## M10-D5.8c C2b post-diagnostic production activation gates — 2026-11-14
 
 The four-stack targeted C2b real IRQ0 test addresses the previously open physical RET/IRETQ interoperability and priority-donation handoff under genuine contention. Still OPEN before ordinary kernel/editor preemption: complete driver and allocator IF/lock exclusion audit, interrupt/nesting exception recovery, secure orphan-owner remediation without forced lock release, hardware CPU-time deadline assurance, user program address-space/CR3, FPU/SIMD and SMP handling. The new test is exclusively disposable QEMU; full regression and independent CI/owner review gate remain. See ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.9 remaining production exclusion proofs — 2026-11-14
+
+The prior C2b real-IRQ diagnostic does not instrument production frame_allocator, kernel_heap, memory_service, workspace/editor, keyboard input, timer/IOAPIC, memory mapper and exception paths. Explicit root callers, saved IF, task-generation ownership and the critical-span boundaries remain to be proved before any code activation. Do not infer preemption safety from absence of locks or from documented single-CPU behavior. D5.9-A static inventory is not a concurrency proof. See ADR-m10-d59-production-preemption-boundaries.md.

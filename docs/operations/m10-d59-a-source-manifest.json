@@ -1,0 +1,1406 @@
+{
+  "entries": {
+    "src/kernel/apic-irq0.c": {
+      "candidate_calls": [
+        "apic_irq0_eoi"
+      ],
+      "category": "irq-timer",
+      "functions": [
+        {
+          "function": "ioapic_read",
+          "line": 18
+        },
+        {
+          "function": "ioapic_write",
+          "line": 32
+        },
+        {
+          "function": "apic_irq0_probe",
+          "line": 46
+        },
+        {
+          "function": "apic_irq0_prepare",
+          "line": 94
+        },
+        {
+          "function": "apic_irq0_unmask",
+          "line": 124
+        },
+        {
+          "function": "apic_irq0_eoi",
+          "line": 142
+        }
+      ],
+      "sha256": "09234b7d336e948d165c7df23bea00727c654cef256a37790c407b818ad7630e",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/apic-memory-type.c": {
+      "candidate_calls": [],
+      "category": "mmio",
+      "functions": [
+        {
+          "function": "apic_memory_type_safe",
+          "line": 11
+        }
+      ],
+      "sha256": "47a0581b105db44d3281fa8979ecdcd59d4d23073bbdb0f015a67d4b1be16351",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/console-font.c": {
+      "candidate_calls": [],
+      "category": "display",
+      "functions": [
+        {
+          "function": "console_font_row",
+          "line": 88
+        }
+      ],
+      "sha256": "b01f52bf8cf8ac9db1e6c09d1f94e9845a53da5bc597ee2bf4c54f4e3f3ee041",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/frame-allocate.c": {
+      "candidate_calls": [
+        "frame_allocate"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "frame_allocate",
+          "line": 14
+        }
+      ],
+      "sha256": "75de65a3b4c4a62b701ca66452337a5a836a235a73176ac15212b9e7b1d84a76",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/frame-allocator.c": {
+      "candidate_calls": [
+        "frame_release"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "frame_owner_valid",
+          "line": 10
+        },
+        {
+          "function": "region_frames",
+          "line": 18
+        },
+        {
+          "function": "frame_allocator_initialize",
+          "line": 37
+        },
+        {
+          "function": "frame_allocator_address",
+          "line": 73
+        },
+        {
+          "function": "address_ordinal",
+          "line": 101
+        },
+        {
+          "function": "frame_release",
+          "line": 130
+        },
+        {
+          "function": "frame_allocator_check",
+          "line": 171
+        }
+      ],
+      "sha256": "f68e7329073f10b89bccfda7383ce6da7590efb888588697e9009f71d0db72c5",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/framebuffer.c": {
+      "candidate_calls": [
+        "framebuffer_invert_rectangle"
+      ],
+      "category": "display",
+      "functions": [
+        {
+          "function": "framebuffer_supported",
+          "line": 20
+        },
+        {
+          "function": "pixel_color",
+          "line": 60
+        },
+        {
+          "function": "framebuffer_draw_boot_pattern",
+          "line": 73
+        },
+        {
+          "function": "framebuffer_draw_boot_title",
+          "line": 119
+        },
+        {
+          "function": "framebuffer_fill_rectangle",
+          "line": 168
+        },
+        {
+          "function": "framebuffer_draw_cell",
+          "line": 193
+        },
+        {
+          "function": "framebuffer_scroll_rectangle",
+          "line": 223
+        },
+        {
+          "function": "framebuffer_move_rectangle_down",
+          "line": 256
+        },
+        {
+          "function": "framebuffer_invert_rectangle",
+          "line": 287
+        },
+        {
+          "function": "framebuffer_draw_rgb_image",
+          "line": 310
+        }
+      ],
+      "sha256": "717c333dc08db5efbd9d86873fee7ebde71be8bc5f16672ab3f6fad74208974e",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-dispatch-d54.c": {
+      "candidate_calls": [],
+      "category": "task-sync",
+      "functions": [
+        {
+          "function": "same_handle",
+          "line": 12
+        },
+        {
+          "function": "d54_init",
+          "line": 19
+        },
+        {
+          "function": "d54_dispatch_next",
+          "line": 34
+        }
+      ],
+      "sha256": "2caa4322d4437bdaa68e2c8298b9235032d6518b8a92c20c06563ba790eaf5fb",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-heap.c": {
+      "candidate_calls": [
+        "kernel_heap_allocate"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "kernel_heap_range",
+          "line": 17
+        },
+        {
+          "function": "kernel_heap_ranges_overlap",
+          "line": 29
+        },
+        {
+          "function": "kernel_heap_storage_valid",
+          "line": 38
+        },
+        {
+          "function": "kernel_heap_descriptor_zeroed",
+          "line": 72
+        },
+        {
+          "function": "kernel_heap_output_disjoint",
+          "line": 93
+        },
+        {
+          "function": "kernel_heap_check",
+          "line": 117
+        },
+        {
+          "function": "kernel_heap_initialize",
+          "line": 223
+        },
+        {
+          "function": "kernel_heap_owner_valid",
+          "line": 264
+        },
+        {
+          "function": "kernel_heap_allocate",
+          "line": 274
+        },
+        {
+          "function": "kernel_heap_retire_block",
+          "line": 374
+        },
+        {
+          "function": "kernel_heap_release",
+          "line": 391
+        },
+        {
+          "function": "kernel_heap_release_owner",
+          "line": 496
+        },
+        {
+          "function": "kernel_heap_release_workspace",
+          "line": 549
+        },
+        {
+          "function": "kernel_heap_release_session",
+          "line": 561
+        }
+      ],
+      "sha256": "ea918031b480424ab48370153e0200826db0640dfe3b440dba82ee719b2756ba",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-scheduler-clock.c": {
+      "candidate_calls": [],
+      "category": "irq-timer",
+      "functions": [
+        {
+          "function": "kernel_scheduler_clock_init",
+          "line": 11
+        },
+        {
+          "function": "kernel_scheduler_clock_note_tick",
+          "line": 27
+        },
+        {
+          "function": "kernel_scheduler_clock_read_ticks",
+          "line": 46
+        },
+        {
+          "function": "kernel_scheduler_clock_take_request",
+          "line": 57
+        },
+        {
+          "function": "kernel_scheduler_clock_boot_init",
+          "line": 69
+        },
+        {
+          "function": "kernel_scheduler_clock_boot_note_tick",
+          "line": 75
+        },
+        {
+          "function": "kernel_scheduler_clock_boot_take_request",
+          "line": 81
+        },
+        {
+          "function": "kernel_scheduler_clock_boot_read_ticks",
+          "line": 87
+        }
+      ],
+      "sha256": "f3be846c7549c1085a5c4fb424b1134e9d39be2210391348428a276467c258e0",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-sync-d53.c": {
+      "candidate_calls": [
+        "d53_acquire",
+        "d53_release"
+      ],
+      "category": "task-sync",
+      "functions": [
+        {
+          "function": "same",
+          "line": 16
+        },
+        {
+          "function": "d53_init",
+          "line": 23
+        },
+        {
+          "function": "member",
+          "line": 44
+        },
+        {
+          "function": "rank_allowed",
+          "line": 60
+        },
+        {
+          "function": "held_mask",
+          "line": 69
+        },
+        {
+          "function": "d53_check",
+          "line": 82
+        },
+        {
+          "function": "d53_enroll",
+          "line": 129
+        },
+        {
+          "function": "effective_all",
+          "line": 163
+        },
+        {
+          "function": "d53_effective",
+          "line": 188
+        },
+        {
+          "function": "d53_acquire",
+          "line": 205
+        },
+        {
+          "function": "d53_release",
+          "line": 250
+        },
+        {
+          "function": "d53_cancel",
+          "line": 304
+        },
+        {
+          "function": "d53_orphan",
+          "line": 334
+        }
+      ],
+      "sha256": "d4ee881e71acc0f804ee0947eb12bb5ebcb19d96afa62016df362ef0345b0170",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-task-cleanup.c": {
+      "candidate_calls": [],
+      "category": "task-sync",
+      "functions": [
+        {
+          "function": "equal_handles",
+          "line": 14
+        },
+        {
+          "function": "take_front",
+          "line": 22
+        },
+        {
+          "function": "kernel_task_cleanup_init",
+          "line": 30
+        },
+        {
+          "function": "kernel_task_cleanup_check",
+          "line": 47
+        },
+        {
+          "function": "kernel_task_cleanup_enqueue",
+          "line": 65
+        },
+        {
+          "function": "kernel_task_cleanup_service",
+          "line": 94
+        }
+      ],
+      "sha256": "96c88bd083671b2b72809521daa9d5dd1f1766ae5b4724c3e5f640518272f2c2",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-task-reaper.c": {
+      "candidate_calls": [],
+      "category": "task-sync",
+      "functions": [
+        {
+          "function": "kernel_task_stack_safe_to_release",
+          "line": 16
+        },
+        {
+          "function": "kernel_task_reap_owned",
+          "line": 38
+        }
+      ],
+      "sha256": "f8bbf4b4b98f963fa30c9eb567127b1a1208661b002829e5d081b7d75e06edc5",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-task-resources.c": {
+      "candidate_calls": [],
+      "category": "task-sync",
+      "functions": [
+        {
+          "function": "same_handle",
+          "line": 15
+        },
+        {
+          "function": "kernel_task_resources_check",
+          "line": 23
+        },
+        {
+          "function": "kernel_task_resources_init",
+          "line": 54
+        },
+        {
+          "function": "lookup",
+          "line": 65
+        },
+        {
+          "function": "kernel_task_resources_bind",
+          "line": 79
+        },
+        {
+          "function": "kernel_task_resources_saved_rsp",
+          "line": 111
+        },
+        {
+          "function": "kernel_task_resources_ref",
+          "line": 131
+        },
+        {
+          "function": "kernel_task_resources_retire",
+          "line": 156
+        }
+      ],
+      "sha256": "9505f9b8e88e7db335165ad9360cb0bbcf2749804887473153b7144db6288347",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-task.c": {
+      "candidate_calls": [
+        "kernel_task_irq_handoff"
+      ],
+      "category": "task-sync",
+      "functions": [
+        {
+          "function": "valid_handle",
+          "line": 17
+        },
+        {
+          "function": "append_ready",
+          "line": 28
+        },
+        {
+          "function": "remove_ready",
+          "line": 35
+        },
+        {
+          "function": "kernel_task_init",
+          "line": 49
+        },
+        {
+          "function": "kernel_task_check",
+          "line": 64
+        },
+        {
+          "function": "preflight",
+          "line": 101
+        },
+        {
+          "function": "kernel_task_create",
+          "line": 109
+        },
+        {
+          "function": "kernel_task_make_runnable",
+          "line": 141
+        },
+        {
+          "function": "kernel_task_dispatch",
+          "line": 156
+        },
+        {
+          "function": "kernel_task_dispatch_selected",
+          "line": 177
+        },
+        {
+          "function": "kernel_task_irq_handoff",
+          "line": 217
+        },
+        {
+          "function": "kernel_task_yield",
+          "line": 263
+        },
+        {
+          "function": "kernel_task_block",
+          "line": 279
+        },
+        {
+          "function": "kernel_task_wake",
+          "line": 294
+        },
+        {
+          "function": "kernel_task_terminate",
+          "line": 309
+        },
+        {
+          "function": "kernel_task_reap",
+          "line": 331
+        },
+        {
+          "function": "kernel_task_get",
+          "line": 346
+        }
+      ],
+      "sha256": "76027e25d04392e6e31b55b60c7c2b609bf3a1bd75ec32d56f05f1d46229733d",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/kernel-timer.c": {
+      "candidate_calls": [],
+      "category": "irq-timer",
+      "functions": [
+        {
+          "function": "kernel_timer_init",
+          "line": 12
+        },
+        {
+          "function": "kernel_timer_note_tick",
+          "line": 26
+        },
+        {
+          "function": "kernel_timer_read_ticks",
+          "line": 38
+        },
+        {
+          "function": "kernel_timer_ticks_to_ms",
+          "line": 50
+        },
+        {
+          "function": "kernel_timer_elapsed_ticks",
+          "line": 66
+        },
+        {
+          "function": "kernel_timer_initialize_boot",
+          "line": 76
+        },
+        {
+          "function": "kernel_timer_boot_tick",
+          "line": 82
+        },
+        {
+          "function": "kernel_timer_boot_now_ms",
+          "line": 89
+        }
+      ],
+      "sha256": "6817317d374060ca7b235543176755d61c7d2dcde6c6991eeb68fa2bbf4be533",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/keyboard-console.c": {
+      "candidate_calls": [],
+      "category": "keyboard",
+      "functions": [
+        {
+          "function": "supported_printable",
+          "line": 12
+        },
+        {
+          "function": "keyboard_console_initialize",
+          "line": 22
+        },
+        {
+          "function": "backspace_last",
+          "line": 50
+        },
+        {
+          "function": "keyboard_console_accept",
+          "line": 79
+        }
+      ],
+      "sha256": "4aa7efa0ba76a4b702eda93134a561b0a5b31f6666d82439d49db762b18eb2bd",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/keyboard-ps2.c": {
+      "candidate_calls": [],
+      "category": "keyboard",
+      "functions": [
+        {
+          "function": "write_ready",
+          "line": 18
+        },
+        {
+          "function": "read_reply",
+          "line": 30
+        },
+        {
+          "function": "device_command",
+          "line": 46
+        },
+        {
+          "function": "keyboard_ps2_initialize",
+          "line": 59
+        },
+        {
+          "function": "keyboard_ps2_poll",
+          "line": 90
+        }
+      ],
+      "sha256": "80947a7feefe84e59690ee533a8814737bcebc474c738838f6680e8c66bd71c6",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/keyboard.c": {
+      "candidate_calls": [],
+      "category": "keyboard",
+      "functions": [
+        {
+          "function": "keyboard_decoder_reset",
+          "line": 21
+        },
+        {
+          "function": "emit_event",
+          "line": 32
+        },
+        {
+          "function": "keyboard_decode_event",
+          "line": 43
+        },
+        {
+          "function": "keyboard_decode",
+          "line": 177
+        }
+      ],
+      "sha256": "1f2cc901fe70da99d21b9637e99eaae81601383927b89fb96e44c95e9826cf9e",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/logical-line.c": {
+      "candidate_calls": [],
+      "category": "keyboard",
+      "functions": [
+        {
+          "function": "logical_line_initialize",
+          "line": 11
+        },
+        {
+          "function": "logical_line_append",
+          "line": 30
+        },
+        {
+          "function": "logical_line_edit",
+          "line": 48
+        },
+        {
+          "function": "logical_line_delete_before",
+          "line": 95
+        },
+        {
+          "function": "logical_line_backspace",
+          "line": 116
+        },
+        {
+          "function": "logical_line_submit",
+          "line": 135
+        },
+        {
+          "function": "logical_line_reset",
+          "line": 147
+        }
+      ],
+      "sha256": "d7d4c75dbb4f0a93cd0a03266a9fdfe9d33f8a90b091cdf6bdf49de5db3b822c",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/main.c": {
+      "candidate_calls": [],
+      "category": "entry",
+      "functions": [
+        {
+          "function": "port_write",
+          "line": 100
+        },
+        {
+          "function": "port_read",
+          "line": 107
+        },
+        {
+          "function": "serial_initialize",
+          "line": 117
+        },
+        {
+          "function": "serial_write",
+          "line": 135
+        },
+        {
+          "function": "halt_forever",
+          "line": 153
+        },
+        {
+          "function": "console_write_number",
+          "line": 164
+        },
+        {
+          "function": "console_scroll_demo",
+          "line": 179
+        },
+        {
+          "function": "keyboard_port_read",
+          "line": 200
+        },
+        {
+          "function": "keyboard_port_write",
+          "line": 206
+        },
+        {
+          "function": "keyboard_submit_diagnostic",
+          "line": 220
+        },
+        {
+          "function": "indicator_clock_start",
+          "line": 242
+        },
+        {
+          "function": "indicator_clock_stop",
+          "line": 250
+        },
+        {
+          "function": "pit_read_counter",
+          "line": 254
+        },
+        {
+          "function": "acpi_map_read_only",
+          "line": 270
+        },
+        {
+          "function": "boot_table_map",
+          "line": 296
+        },
+        {
+          "function": "apic_boot_pages_present",
+          "line": 324
+        },
+        {
+          "function": "mmio_boot_cpu_policy",
+          "line": 364
+        },
+        {
+          "function": "mmio_boot_root_ready",
+          "line": 408
+        },
+        {
+          "function": "mmio_boot_acquire",
+          "line": 442
+        },
+        {
+          "function": "mmio_boot_release",
+          "line": 457
+        },
+        {
+          "function": "mmio_boot_invlpg",
+          "line": 465
+        },
+        {
+          "function": "mmio_boot_map_apic",
+          "line": 477
+        },
+        {
+          "function": "apic_alias_checked_table",
+          "line": 534
+        },
+        {
+          "function": "apic_boot_cache_gate",
+          "line": 544
+        },
+        {
+          "function": "apic_hw_lapic_id_read",
+          "line": 621
+        },
+        {
+          "function": "apic_hw_ioapic_index_read",
+          "line": 636
+        },
+        {
+          "function": "apic_boot_readonly_probe",
+          "line": 655
+        },
+        {
+          "function": "apic_boot_io_read",
+          "line": 672
+        },
+        {
+          "function": "apic_boot_io_write",
+          "line": 687
+        },
+        {
+          "function": "x86_irq0_handler",
+          "line": 703
+        },
+        {
+          "function": "apic_boot_pit0_100hz",
+          "line": 715
+        },
+        {
+          "function": "x86_irq0_handler",
+          "line": 727
+        },
+        {
+          "function": "apic_boot_irq0_activate",
+          "line": 737
+        },
+        {
+          "function": "acpi_boot_discover",
+          "line": 783
+        },
+        {
+          "function": "keyboard_run",
+          "line": 805
+        },
+        {
+          "function": "x86_exception_panic",
+          "line": 997
+        },
+        {
+          "function": "kmain",
+          "line": 1014
+        }
+      ],
+      "sha256": "25383d3bf1dd23a6db56309913e0de8d6acca2324bf646d04622f2fc78c38053",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/memory-boot.c": {
+      "candidate_calls": [
+        "frame_allocate",
+        "frame_release",
+        "kernel_heap_allocate",
+        "memory_service_allocate",
+        "memory_service_release"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "write_number",
+          "line": 49
+        },
+        {
+          "function": "write_region",
+          "line": 64
+        },
+        {
+          "function": "memory_boot_report",
+          "line": 76
+        },
+        {
+          "function": "allocator_failure",
+          "line": 124
+        },
+        {
+          "function": "memory_boot_allocator_probe",
+          "line": 134
+        },
+        {
+          "function": "memory_boot_page_policy",
+          "line": 219
+        },
+        {
+          "function": "kernel_page_zero",
+          "line": 250
+        },
+        {
+          "function": "kernel_page_has_value",
+          "line": 268
+        },
+        {
+          "function": "kernel_page_write_and_verify",
+          "line": 283
+        },
+        {
+          "function": "page_probe_release",
+          "line": 294
+        },
+        {
+          "function": "page_probe_failure",
+          "line": 302
+        },
+        {
+          "function": "memory_boot_page_probe",
+          "line": 313
+        },
+        {
+          "function": "heap_bytes_write_and_verify",
+          "line": 377
+        },
+        {
+          "function": "heap_bytes_have_value",
+          "line": 394
+        },
+        {
+          "function": "heap_probe_failure",
+          "line": 415
+        },
+        {
+          "function": "heap_probe_retire_descriptor",
+          "line": 438
+        },
+        {
+          "function": "memory_boot_heap_probe",
+          "line": 466
+        },
+        {
+          "function": "retained_failure",
+          "line": 639
+        },
+        {
+          "function": "retained_valid",
+          "line": 652
+        },
+        {
+          "function": "memory_boot_service_start",
+          "line": 684
+        },
+        {
+          "function": "memory_boot_service_check",
+          "line": 740
+        },
+        {
+          "function": "memory_boot_service_editor_check",
+          "line": 750
+        },
+        {
+          "function": "memory_boot_select_workspace",
+          "line": 760
+        },
+        {
+          "function": "memory_boot_reset_workspace",
+          "line": 767
+        },
+        {
+          "function": "memory_boot_mmio_table_acquire",
+          "line": 777
+        },
+        {
+          "function": "memory_boot_mmio_table_release",
+          "line": 808
+        },
+        {
+          "function": "memory_boot_snapshot_prepare",
+          "line": 841
+        },
+        {
+          "function": "m10_b_stack_rollback",
+          "line": 919
+        },
+        {
+          "function": "memory_boot_m10_task_stack_prepare",
+          "line": 934
+        },
+        {
+          "function": "memory_boot_m10_task_stack_release",
+          "line": 984
+        },
+        {
+          "function": "memory_boot_m10_task_stack_failure_probe",
+          "line": 997
+        }
+      ],
+      "sha256": "3b85ef1ffa9c686eb828a317579e0e3a1f18418abc10d7b585b032e99dc53726",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/memory-service.c": {
+      "candidate_calls": [
+        "kernel_heap_allocate",
+        "memory_service_allocate",
+        "memory_service_release"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "memory_service_range",
+          "line": 19
+        },
+        {
+          "function": "memory_service_ranges_overlap",
+          "line": 30
+        },
+        {
+          "function": "memory_service_storage_valid",
+          "line": 39
+        },
+        {
+          "function": "memory_service_is_zeroed",
+          "line": 63
+        },
+        {
+          "function": "memory_service_workspace_owner",
+          "line": 101
+        },
+        {
+          "function": "memory_service_rounded_size",
+          "line": 111
+        },
+        {
+          "function": "memory_service_heap_result",
+          "line": 127
+        },
+        {
+          "function": "memory_service_owner_valid",
+          "line": 160
+        },
+        {
+          "function": "memory_service_root_block_valid",
+          "line": 169
+        },
+        {
+          "function": "memory_service_output_valid",
+          "line": 211
+        },
+        {
+          "function": "memory_service_validate",
+          "line": 236
+        },
+        {
+          "function": "memory_service_retire",
+          "line": 324
+        },
+        {
+          "function": "memory_service_initialize",
+          "line": 364
+        },
+        {
+          "function": "memory_service_check",
+          "line": 454
+        },
+        {
+          "function": "memory_service_select_workspace",
+          "line": 463
+        },
+        {
+          "function": "memory_service_get_session",
+          "line": 476
+        },
+        {
+          "function": "memory_service_get_workspace",
+          "line": 493
+        },
+        {
+          "function": "memory_service_allocate",
+          "line": 514
+        },
+        {
+          "function": "memory_service_is_root",
+          "line": 534
+        },
+        {
+          "function": "memory_service_release",
+          "line": 551
+        },
+        {
+          "function": "memory_service_reset_workspace",
+          "line": 575
+        }
+      ],
+      "sha256": "555839af6605bbe7b15b6f86c9aa9623cbb8ab3b2efa49cba1a01ec4137eb15f",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/mmio-page-policy.c": {
+      "candidate_calls": [],
+      "category": "mmio",
+      "functions": [
+        {
+          "function": "pat_index_three_is_uc",
+          "line": 21
+        },
+        {
+          "function": "kernel_slot_valid",
+          "line": 29
+        },
+        {
+          "function": "mmio_page_plan_leaf",
+          "line": 39
+        }
+      ],
+      "sha256": "bdd42a2c085a8d05d166d0d82c71e8e9bd978d5557a6e83c2ada2dd5dc6acca5",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/page-access.c": {
+      "candidate_calls": [
+        "frame_allocate",
+        "frame_release"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "page_access_object_range",
+          "line": 15
+        },
+        {
+          "function": "page_access_output_disjoint",
+          "line": 31
+        },
+        {
+          "function": "page_access_find_ordinal",
+          "line": 67
+        },
+        {
+          "function": "page_access_is_canonical",
+          "line": 113
+        },
+        {
+          "function": "page_access_resolve",
+          "line": 127
+        },
+        {
+          "function": "page_access_zero",
+          "line": 192
+        },
+        {
+          "function": "page_access_allocate_zero",
+          "line": 217
+        }
+      ],
+      "sha256": "cfdedf76f565bf4fb4908f4e2e92e5704a51d8a891314ad4af7928f42b0cb25d",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/screen-editor.c": {
+      "candidate_calls": [
+        "framebuffer_invert_rectangle"
+      ],
+      "category": "display",
+      "functions": [
+        {
+          "function": "supported_printable",
+          "line": 13
+        },
+        {
+          "function": "line_span",
+          "line": 21
+        },
+        {
+          "function": "toggle_cursor",
+          "line": 33
+        },
+        {
+          "function": "hide_cursor",
+          "line": 62
+        },
+        {
+          "function": "line_at_row",
+          "line": 69
+        },
+        {
+          "function": "reclaim_invisible_lines",
+          "line": 86
+        },
+        {
+          "function": "allocate_line",
+          "line": 102
+        },
+        {
+          "function": "redraw_line",
+          "line": 123
+        },
+        {
+          "function": "insert_rows",
+          "line": 157
+        },
+        {
+          "function": "remove_rows",
+          "line": 189
+        },
+        {
+          "function": "scroll_one_row",
+          "line": 222
+        },
+        {
+          "function": "position_from_offset",
+          "line": 241
+        },
+        {
+          "function": "select_at_cursor",
+          "line": 273
+        },
+        {
+          "function": "move_cursor",
+          "line": 291
+        },
+        {
+          "function": "type_character",
+          "line": 323
+        },
+        {
+          "function": "erase_character",
+          "line": 369
+        },
+        {
+          "function": "submit_line",
+          "line": 411
+        },
+        {
+          "function": "screen_editor_initialize",
+          "line": 448
+        },
+        {
+          "function": "screen_editor_seed_line",
+          "line": 497
+        },
+        {
+          "function": "screen_editor_accept",
+          "line": 533
+        }
+      ],
+      "sha256": "da41c1dda3351a70fabe3cfcbba010855a52c747b2b217235f78c35c02cbd1b8",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/text-console.c": {
+      "candidate_calls": [],
+      "category": "display",
+      "functions": [
+        {
+          "function": "text_console_initialize",
+          "line": 17
+        },
+        {
+          "function": "text_console_putc",
+          "line": 48
+        },
+        {
+          "function": "text_console_scroll_up_one_row",
+          "line": 81
+        },
+        {
+          "function": "text_console_write",
+          "line": 101
+        },
+        {
+          "function": "text_console_draw_at",
+          "line": 116
+        },
+        {
+          "function": "text_console_position",
+          "line": 136
+        }
+      ],
+      "sha256": "582d4ad9dfd299e1ffc27c6f06e002b06c77c044f4e0b6c1d3c3b90ee23a16cf",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/workspace-manager.c": {
+      "candidate_calls": [],
+      "category": "display",
+      "functions": [
+        {
+          "function": "snapshot_supported",
+          "line": 28
+        },
+        {
+          "function": "snapshot_transfer",
+          "line": 38
+        },
+        {
+          "function": "workspace_manager_initialize",
+          "line": 68
+        },
+        {
+          "function": "workspace_manager_hide_indicator",
+          "line": 109
+        },
+        {
+          "function": "workspace_manager_identify",
+          "line": 126
+        },
+        {
+          "function": "workspace_manager_fade_indicator",
+          "line": 156
+        },
+        {
+          "function": "system_write_unsigned",
+          "line": 188
+        },
+        {
+          "function": "workspace_manager_system_diagnostics",
+          "line": 207
+        },
+        {
+          "function": "workspace_manager_system",
+          "line": 256
+        },
+        {
+          "function": "workspace_manager_switch",
+          "line": 263
+        },
+        {
+          "function": "workspace_manager_active",
+          "line": 306
+        },
+        {
+          "function": "workspace_manager_reset",
+          "line": 316
+        }
+      ],
+      "sha256": "1644108f5322e53112a1ee5cd9faf08fcdfb7f026d19bb2ac25681cbcfde60eb",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/x86-exceptions.S": {
+      "candidate_calls": [],
+      "category": "irq-assembly",
+      "functions": [],
+      "sha256": "96de2f11037ff55c064851f3f5aceebac8e8753e4dbf8df12b06af35e71c5b70",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/x86-idt.c": {
+      "candidate_calls": [],
+      "category": "irq-timer",
+      "functions": [
+        {
+          "function": "x86_idt_make_gate",
+          "line": 25
+        },
+        {
+          "function": "x86_idt_construct",
+          "line": 47
+        },
+        {
+          "function": "x86_idt_initialize",
+          "line": 70
+        },
+        {
+          "function": "x86_idt_enable_apic_timer_gates",
+          "line": 97
+        }
+      ],
+      "sha256": "d325adb528f2886e6af97905a7ec7629593644c403d98991364ab5a520fa2a62",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/x86-irq0.S": {
+      "candidate_calls": [],
+      "category": "irq-assembly",
+      "functions": [],
+      "sha256": "31bec9543f618bfd3569a3b3511eebe295356f02c9aa75c80d2735734caac319",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/x86-mmio-map.c": {
+      "candidate_calls": [],
+      "category": "mmio",
+      "functions": [
+        {
+          "function": "page_index",
+          "line": 15
+        },
+        {
+          "function": "release_staged",
+          "line": 20
+        },
+        {
+          "function": "x86_mmio_map_create",
+          "line": 39
+        },
+        {
+          "function": "x86_mmio_map_destroy",
+          "line": 112
+        }
+      ],
+      "sha256": "68ca0c6ac8cb491f7e234fd05da59ab7d21fae710cdf495e3662f965b6f62661",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/x86-page-walk.c": {
+      "candidate_calls": [],
+      "category": "mmio",
+      "functions": [
+        {
+          "function": "entry64",
+          "line": 15
+        },
+        {
+          "function": "canonical",
+          "line": 24
+        },
+        {
+          "function": "x86_page_walk_read_only",
+          "line": 34
+        },
+        {
+          "function": "x86_page_probe_read_only",
+          "line": 82
+        }
+      ],
+      "sha256": "95d13311db1b5449d595d13e8ff0e36b329bebf33896a7799ccb97182affe512",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/x86-tss.c": {
+      "candidate_calls": [],
+      "category": "irq-timer",
+      "functions": [
+        {
+          "function": "x86_tss_make_descriptor",
+          "line": 21
+        },
+        {
+          "function": "x86_tss_initialize",
+          "line": 41
+        },
+        {
+          "function": "x86_tss_emergency_ready",
+          "line": 90
+        }
+      ],
+      "sha256": "cbbd5ffdd3d2ed0369af9523c5934123de09074cb19df4f885a86993fb94a6cb",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    }
+  },
+  "schema": 1,
+  "warning": "Read-only source inventory; NO paths certified safe."
+}

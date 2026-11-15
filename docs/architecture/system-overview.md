@@ -370,3 +370,7 @@ The diagnostic uses four independently owned M2 stacks: low donated owner (coope
 ## M10-D5.8c C2b verified test-only physical context integration
 
 A separately flagged x86 IRQ0 test now switches the donated low mutex owner, competing medium CPU worker and independently owned reserved supervisor through actual validated M10-A IRETQ handoffs while the high-priority waiter remains BLOCKED on a genuine cooperative RET stack. The low owner disarms IRQ handoffs IF-off before releasing the lock and waking high; boot dispatcher resumes high through the original RET stack and safely reaps all backing before editor. Positive 128/256/512MiB and 15 injected fail-closed boots have passed; not a production global-preemption guarantee. See ../operations/m10-d58c-c2b-real-irq-20261114.md.
+
+## M10-D5.9 staged production preemption audit
+
+The ordinary kernel remains single-writer/nonpreemptive. Real C2b mutex contention in a test-only x86-64 IRQ0 fixture does not automatically protect production heap/frame allocation, keyboard/editor or IOAPIC transactions. D5.9-A inventory captures exact source-level mutation paths and refuses unreviewed drift; D5.9-B/C/D add separately verified exclusion at chosen boundaries and D5.9-E is an owner-reviewed integration gate. No normal preemption until then. See ../decisions/ADR-m10-d59-production-preemption-boundaries.md.
