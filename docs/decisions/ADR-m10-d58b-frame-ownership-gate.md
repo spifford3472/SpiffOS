@@ -23,3 +23,7 @@ Alternatives rejected: allowing any nonzero count merely because a resource entr
 ## Change history
 
 2026-11-14: documented blocked-stack and lock-owned frame safety contract before implementation.
+
+## Existing D5.4 execution handoff finding (read-only audit, 2026-11-14)
+
+The earlier cooperative QEMU fixture `src/kernel/m10-d54-guest-smoke.c` already demonstrates actual x86 worker/dispatcher context switches and BLOCKED waiter continuations, but its `high()` and `medium()` paths call `irq_restore(flags)` **after** `d53_acquire()` transitions RUNNING to BLOCKED and **before** `x86_task_switch()` moves off that stack. This was an acceptable limitation of the isolated cooperative fixture, but is **not** a safe proof under general timer-driven preemption. Reuse the proven continuation structure, not that IF-enabled interval: the next isolated hardware test must retain IF=0 across the authoritative BLOCKED transition and actual switch to a surviving boot/supervisor context, witness the independent actual CPU RSP on the surviving stack, and restore each task's original IF correctly when it is legitimately awakened. No existing D5.4 source was changed by this read-only audit.
