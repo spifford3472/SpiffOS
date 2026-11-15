@@ -47,3 +47,15 @@ Test first: entry with IF on/off; nested matching entry; mismatched task and gen
 ## Change history
 
 - 2026-11-15: proposed documented gate contract and bounded first coding/test assignment. No code wired or runtime safety certification.
+
+## Production integration architecture — reuse D5.7, do not introduce a second guard
+
+Code review of `src/kernel/m10-d57-safety.[ch]` (existing earlier D5.x stack) confirms `d57_guard_enter/exit` already supplies exact M10-A task slot+generation, bounded eight-depth LIFO cookies, and a **sticky fault** on invalid release, owner, nesting or IF context. Its contract explicitly requires a trusted caller to have disabled hardware interrupts and verified the authoritative RUNNING task identity **before** calling `d57_guard_enter`. It does not save/restore IF itself, and is presently diagnostic-only.
+
+The hosted `tests/m10-d59b-gate/gate.[ch]` is **not** an alternative kernel guard and must NEVER be linked into production or used instead of D5.7's cookie/fault policy. Its `trusted` and `in_irq` flags are plain caller inputs, not authenticated CPU evidence; unlike D5.7 it also does not latch permanent owner-misuse faults. The hosted fixture demonstrates IF nesting/metadata exclusion principles only.
+
+A future isolated production-wiring candidate must reuse the **same D5.7 guard** and a separately reviewed, minimal outer execution-context adapter that obtains genuine x86 RFLAGS.IF and the authoritative current RUNNING task slot+generation. The adapter may save original IF once, disable IRQs, invoke `d57_guard_enter` with live IF proven cleared, and restore original IF only after successful matching `d57_guard_exit` and after ensuring depth zero. It must preserve original IF=0, prohibit IRQ admission and task switches while guarded, and quarantine rather than force-unlock on any sticky fault. No allocation, page-table update, stack release or real driver operation is permitted in ISR. Validate against current existing D5.7 test/QEMU proofs and all D5.9-A source mutation paths before production inclusion.
+
+This design corrects any inference that the standalone D5.9-B gate would become a new production lock system. Both the execution adapter and actual allocator wiring remain **OPEN and not implemented**. No task control or allocator source modification is authorized by the hosted fixture's success alone.
+
+Change history: 2026-11-15 architectural review reconciled the new hosted test fixture with the already-existing D5.7 authoritative guard; no duplicate production state machine is proposed.
