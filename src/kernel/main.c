@@ -1309,6 +1309,11 @@ void kmain(void)
         (void)serial_write("\r\n");
         halt_forever();
     }
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    extern void m10_d58c_c2_report(bool (*write)(const char *));
+    m10_d58c_c2_report(serial_write);
+    (void)serial_write("SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_OK\r\n");
+#endif
     (void)serial_write("SPIFFOS_M10_D54_GUEST_OK\r\n");
 #ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
     (void)serial_write("SPIFFOS_M10_D58B_BLOCK_HANDOFF_OK\r\n");

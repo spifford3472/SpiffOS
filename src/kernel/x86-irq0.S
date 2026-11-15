@@ -17,6 +17,9 @@
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
 .extern m10_d56_irq_select
 #endif
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+.extern m10_d58c_c2_irq_observe
+#endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 .extern m10_d3_irq_select
 #endif
@@ -69,6 +72,12 @@ x86_irq0_entry:
      * pointer. Normal production IRQ assembly contains no extra call. */
     movq %r12,%rdi
     call m10_d2_probe_on_irq
+#endif
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    /* C2a only: observe the *authentic* IRQ0 saved frame, after the
+     * regular handler/EOI; this must NOT mutate M10-A or select RSP. */
+    movq %r12,%rdi
+    call m10_d58c_c2_irq_observe
 #endif
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
     /* D5.6 diagnostic: C prevalidates exact M10-A generation and both

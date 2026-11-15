@@ -10,6 +10,10 @@
 #include "kernel-task-cleanup.h"
 #include "memory-boot.h"
 #include "x86-task-context.h"
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+#include "m10-d58c-irq-frame.h"
+#include "m10-d2-irq-frame.h"
+#endif
 #ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
 #include "m10-d58b-admission.h"
 /* Diagnostic-only IF=0 departure. Do not broaden the ordinary M10-B ABI. */
@@ -35,8 +39,77 @@ static volatile bool failed;
 static volatile bool done[D54_GUEST_WORKERS];
 static volatile unsigned stage[D54_GUEST_WORKERS];
 static const char *reason="UNSET";
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+/* All C2a observations are read-only while the genuine IRQ0 hardware
+ * frame is owned by the currently running M10-A low-priority task.
+ * No IRQ-time scheduler handoff or mutex mutation occurs. */
+static volatile bool c2_observing,c2_fault;
+static volatile uint32_t c2_donated_irq_frames;
+static uint16_t c2_cs,c2_ss;
+#endif
 #ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
 static volatile unsigned verified_departures;
+#endif
+
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+/* R12 from the real x86-irq0.S stub points to the entire 20-qword
+ * hardware-saved frame. This observer reads it only after exact owner
+ * generation and D5.2b range/graph prevalidation; never writes the frame,
+ * never changes M10-A, D5.3 or EOI. A fault latches permanently. */
+void m10_d58c_c2_irq_observe(const uint64_t *frame)
+{
+    if(!c2_observing || c2_fault) return;
+    uint64_t flags=0;
+    __asm__ volatile("pushfq; popq %0":"=r"(flags)::"memory");
+    struct kernel_task_handle owner=ids[0],high_id=ids[1],medium_id=ids[2];
+    bool source=(flags&UINT64_C(0x200))==0 &&
+        owner.generation!=0 && high_id.generation!=0 &&
+        medium_id.generation!=0 &&
+        owner.slot<D53_TASKS && high_id.slot<D53_TASKS &&
+        medium_id.slot<D53_TASKS &&
+        tasks.current_slot==owner.slot &&
+        tasks.tasks[owner.slot].state==KERNEL_TASK_RUNNING &&
+        tasks.tasks[high_id.slot].state==KERNEL_TASK_BLOCKED &&
+        tasks.tasks[medium_id.slot].state==KERNEL_TASK_RUNNABLE &&
+        resources.task[high_id.slot].registered_waiters==1 &&
+        locks.locks[0].owned &&
+        locks.locks[0].owner.slot==owner.slot &&
+        locks.locks[0].owner.generation==owner.generation &&
+        locks.locks[0].waiting==1 &&
+        locks.locks[0].waiters[0].slot==high_id.slot &&
+        locks.locks[0].waiters[0].generation==high_id.generation;
+    enum kernel_priority_class donated=KERNEL_PRIORITY_BACKGROUND;
+    if(!source) {
+        c2_fault=true;reason="C2_IRQ_SOURCE";
+        return;
+    }
+    if(!d58c_irq_frame_eligible(&tasks,&resources,&locks,owner,
+           KERNEL_TASK_RUNNING,frame,c2_cs,c2_ss,true,true,true)) {
+        c2_fault=true;reason="C2_IRQ_FRAME";
+        return;
+    }
+    if(d53_effective(&locks,&resources,&tasks,owner,&donated)!=D53_OK ||
+       donated!=KERNEL_PRIORITY_TIME_SENSITIVE) {
+        c2_fault=true;reason="C2_IRQ_PRIORITY";
+        return;
+    }
+    if(c2_donated_irq_frames!=UINT32_MAX) ++c2_donated_irq_frames;
+}
+
+/* Report actual hardware count only after leaving all worker stacks and
+ * returning to the surviving bootstrap; serial is never called in IRQ. */
+void m10_d58c_c2_report(bool (*write)(const char *))
+{
+    if(write==NULL) return;
+    (void)write("D58C_C2_DONATED_IRQ_FRAMES:");
+    char digits[12];
+    unsigned pos=11;
+    digits[pos]='\0';
+    uint32_t value=c2_donated_irq_frames;
+    do {digits[--pos]=(char)('0'+value%10u); value/=10u;} while(value!=0);
+    (void)write(&digits[pos]);
+    (void)write("\r\n");
+}
 #endif
 
 /* Static diagnostic failure labels remain accessible after stack failure. */
@@ -61,8 +134,15 @@ static void worker_yield(size_t i)
 {
     uint64_t flags=irq_off();
     if(kernel_task_yield(&tasks,ids[i])!=KERNEL_TASK_OK) failed=true;
+#ifndef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
     irq_restore(flags);
+#endif
     x86_task_switch(&context[i],&bootstrap);
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    /* Actual cooperative return is possible only after a validated M10-A
+     * RUNNABLE->RUNNING dispatcher selection on this exact saved stack. */
+    irq_restore(flags);
+#endif
 }
 
 /* Worker exit preserves its still-allocated stack until supervisor reaps. */
@@ -70,7 +150,11 @@ __attribute__((noreturn)) static void worker_exit(size_t i)
 {
     uint64_t flags=irq_off();
     if(kernel_task_terminate(&tasks,ids[i])!=KERNEL_TASK_OK) failed=true;
+#ifndef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
     irq_restore(flags);
+#else
+    (void)flags; /* Keep IF=0 until actual physical off-stack transfer. */
+#endif
     done[i]=true;
     x86_task_switch(&context[i],&bootstrap);
     for(;;) __asm__ volatile("cli; hlt":::"memory");
@@ -91,8 +175,31 @@ __attribute__((noreturn)) static void owner(void)
     flags=irq_off();
     if(kernel_task_block(&tasks,ids[0])!=KERNEL_TASK_OK)
         failed=true;
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    /* While the owner temporarily waits for an external event, keep IF=0
+     * across the actual CPU-stack switch into the surviving dispatcher. */
+    x86_d58b_block_switch(&context[0],&bootstrap);
+    irq_restore(flags);
+    /* The high-priority waiter was blocked on THIS lock on its own stack;
+     * medium priority CPU competitor must still be READY. Wait for real
+     * interrupt evidence before transferring the lock to high. */
+    c2_observing=true;
+    /* This old D5.4 fixture accepts a clock callback that may be
+     * unavailable during boot; do not mistake absence of that optional
+     * time source for a failed hardware IRQ0 observation. Bound CPU work
+     * independently and let the guest harness enforce wall-time timeout. */
+    for(uint32_t spins=0; spins<UINT32_C(200000000) &&
+        !c2_fault && c2_donated_irq_frames<3; ++spins)
+        __asm__ volatile("pause":::"memory");
+    c2_observing=false;
+    if(c2_fault || c2_donated_irq_frames<3) {
+        failed=true;
+        if(!c2_fault) reason="C2_IRQ_TIMEOUT";
+    }
+#else
     irq_restore(flags);
     x86_task_switch(&context[0],&bootstrap);
+#endif
     flags=irq_off();
     enum kernel_priority_class effective=KERNEL_PRIORITY_BACKGROUND;
     if(d53_effective(&locks,&resources,&tasks,ids[0],&effective)!=D53_OK ||
@@ -140,6 +247,14 @@ __attribute__((noreturn)) static void high(void)
  * is woken; its separate saved stack continuation runs after next handoff. */
 __attribute__((noreturn)) static void medium(void)
 {
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    /* CPU competitor participates in M10-A READY queue but does not
+     * claim any mutex. It retains an independent saved C continuation. */
+    stage[2]=1;
+    worker_yield(2);
+    stage[2]=2;
+    worker_exit(2);
+#else
     uint64_t flags=irq_off();
     if(d53_acquire(&locks,&resources,&tasks,0,ids[2])!=D53_BLOCKED)
         failed=true;
@@ -160,6 +275,7 @@ __attribute__((noreturn)) static void medium(void)
     irq_restore(flags);
     stage[2]=2;
     worker_exit(2);
+#endif
 }
 
 /* Allocate and bind three M2-owned 16KiB stacks. No owner is runnable
@@ -167,6 +283,10 @@ __attribute__((noreturn)) static void medium(void)
 bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
 {
     if(read_clock_ms==NULL) {reason="CLOCK";return false;}
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    __asm__ volatile("movw %%cs,%0":"=r"(c2_cs));
+    __asm__ volatile("movw %%ss,%0":"=r"(c2_ss));
+#endif
     uint64_t flags=irq_off();
     if((flags & UINT64_C(0x200))==0) {reason="IF_DISABLED";return false;}
     if(!memory_boot_m10_task_stack_failure_probe()) {
@@ -248,7 +368,11 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
 #endif
         x86_task_switch(&bootstrap,&context[selected.slot]);
 #ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+        if(turn==0 || turn==1) {
+#else
         if(turn==1 || turn==2) {
+#endif
             uintptr_t observed_rsp;
             uint64_t live_flags;
             __asm__ volatile("movq %%rsp,%0":"=r"(observed_rsp)::"memory");
@@ -261,10 +385,23 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
                     observed_rsp<bottom+X86_TASK_STACK_BYTES))
                     independent=false;
             }
+            bool metadata_ok=tasks.current_slot==SIZE_MAX;
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+            if(turn==0)
+                metadata_ok=metadata_ok &&
+                    tasks.tasks[ids[0].slot].state==KERNEL_TASK_BLOCKED &&
+                    resources.task[ids[0].slot].owned_locks==1;
+            else
+                metadata_ok=metadata_ok &&
+                    d58b_blocked_departure_metadata(&tasks,&resources,
+                                                     &locks,ids[1],false,true);
+#else
+            metadata_ok=metadata_ok &&
+                d58b_blocked_departure_metadata(&tasks,&resources,&locks,
+                                                  ids[selected.slot],false,true);
+#endif
             if((live_flags&UINT64_C(0x200))!=0 || !independent ||
-               tasks.current_slot!=SIZE_MAX ||
-               !d58b_blocked_departure_metadata(&tasks,&resources,&locks,
-                                                  ids[selected.slot],false,true)) {
+               !metadata_ok) {
                 reason="BLOCKED_STACK_UNSAFE";
                 /* Restore boot IF before following ordinary error path. */
                 irq_restore(bootstrap_if);
@@ -282,7 +419,13 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             kernel_task_check(&tasks);
         irq_restore(flags);
         if(saved!=KERNEL_RESOURCE_OK || !consistent || failed) {
-            reason="TASK_HANDOFF";goto fail;
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+            if(!failed) reason=saved!=KERNEL_RESOURCE_OK?"C2_RSP" :
+                !consistent?"C2_GRAPH":"C2_WORKER";
+#else
+            reason="TASK_HANDOFF";
+#endif
+            goto fail;
         }
         if(turn==0) {
             flags=irq_off();
@@ -292,12 +435,21 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             if(!ready) {reason="WAITER_ENQUEUE";goto fail;}
         }
         if(turn==2) {
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+            if(tasks.tasks[ids[0].slot].state!=KERNEL_TASK_BLOCKED ||
+               tasks.tasks[ids[1].slot].state!=KERNEL_TASK_BLOCKED ||
+               tasks.tasks[ids[2].slot].state!=KERNEL_TASK_RUNNABLE ||
+               locks.locks[0].waiting!=1 ||
+               resources.task[ids[1].slot].registered_waiters!=1 ||
+               resources.task[ids[2].slot].registered_waiters!=0) {
+#else
             if(tasks.tasks[ids[0].slot].state!=KERNEL_TASK_BLOCKED ||
                tasks.tasks[ids[1].slot].state!=KERNEL_TASK_BLOCKED ||
                tasks.tasks[ids[2].slot].state!=KERNEL_TASK_BLOCKED ||
                locks.locks[0].waiting!=2 ||
                resources.task[ids[1].slot].registered_waiters!=1 ||
                resources.task[ids[2].slot].registered_waiters!=1) {
+#endif
                 reason="TWO_BLOCKED";goto fail;
             }
             /* The external event has completed. Wake only the original
@@ -307,15 +459,29 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             irq_restore(flags);
             if(!ready) {reason="OWNER_WAKE";goto fail;}
         }
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+        if(turn==3 &&
+           (locks.locks[0].owner.slot!=ids[1].slot ||
+            locks.locks[0].waiting!=0 ||
+            tasks.tasks[ids[2].slot].state!=KERNEL_TASK_RUNNABLE ||
+            c2_donated_irq_frames<3 || c2_fault)) {
+#else
         if(turn==3 &&
            (locks.locks[0].owner.slot!=ids[1].slot ||
             locks.locks[0].waiting!=1 ||
             tasks.tasks[ids[2].slot].state!=KERNEL_TASK_BLOCKED)) {
+#endif
             reason="FIRST_TRANSFER";goto fail;
         }
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+        if(turn==4 &&
+           (locks.locks[0].owned ||
+            tasks.tasks[ids[2].slot].state!=KERNEL_TASK_RUNNABLE)) {
+#else
         if(turn==4 &&
            (locks.locks[0].owner.slot!=ids[2].slot ||
             tasks.tasks[ids[2].slot].state!=KERNEL_TASK_RUNNABLE)) {
+#endif
             reason="SECOND_TRANSFER";goto fail;
         }
     }
@@ -330,7 +496,11 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
        resources.task[1].owned_locks || resources.task[2].owned_locks ||
        resources.task[1].registered_waiters ||
        resources.task[2].registered_waiters ||
-       tasks.ready_count!=0 || tasks.current_slot!=SIZE_MAX) {
+       tasks.ready_count!=0 || tasks.current_slot!=SIZE_MAX
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+       || c2_donated_irq_frames<3 || c2_fault
+#endif
+       ) {
         reason="FINAL_REFS";goto fail;
     }
     if(clock && (!read_clock_ms(&end) || end<begin)) {
@@ -365,6 +535,17 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
 fail:
     /* Diagnostic failure never resumes a task. Do not free any backing
      * if execution might still be on it: the caller is on boot stack. */
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    /* C2a can fail after donating ownership or blocking high. In that
+     * state a live lock/waiter still pins the backing, regardless of
+     * whether the dispatcher has returned. Quarantine by halting the
+     * isolated test with backing still owned, never free a referenced
+     * task stack or synthesize an unblocked waiter. */
+    for(size_t i=0;i<D54_GUEST_WORKERS;++i)
+        if(resources.task[ids[i].slot].owned_locks!=0 ||
+           resources.task[ids[i].slot].registered_waiters!=0)
+            return false;
+#endif
     flags=irq_off();
     bool clean=true;
     for(size_t i=0;i<D54_GUEST_WORKERS;++i)

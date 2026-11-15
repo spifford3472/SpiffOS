@@ -509,3 +509,7 @@ Owner approved proceeding with the recommended D5.8b Phase 1 after D5.8a CI pass
 ## M10-D5.8c diagnostic real-IRQ lock-owner direction — 2026-11-14
 
 Owner elected the recommended D5.8c integration after PR #84 exact-head CI success. Authorize isolated diagnostics first proving a real D5.3 lock-owning worker's authentic IRQ0 source and target frame under M10-A, without weakening old D5.6/D5.5c strict production conditions. Then, under separate review, integrate genuinely BLOCKED waiter, medium competitor and donation/wake only after proving interoperability of cooperative BLOCKED stack surrender and IRQ0 IRETQ context. Owner ISO, normal EDIT/BASIC, merge and physical deployment remain prohibited. See ADR-m10-d58c-real-irq-lock-owner.md.
+
+## M10-D5.8c C2a authentic IRQ donation observation gate — 2026-11-14
+
+Owner requested continuing the remaining D5.8c work after exact-head C1 CI run #85 passed. First prove a real IF=0 IRQ0 observation of a lock-owning low-priority task with a genuine high-priority BLOCKED waiter and separate READY medium competitor; preserve both real cooperative saved waiter continuation and non-IRQ D5.3 lock transfer/wake. This is C2a test authorization, not permission to conflate cooperative dispatch with real IRQ handoff. Complete C2b IRQ priority switching during contention remains open. No merge, accepted ISO, normal editor or physical deployment. See ADR-m10-d58c-c2-blocked-irq-observation.md.
