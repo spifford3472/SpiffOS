@@ -20,6 +20,9 @@
 #ifdef SPIFFOS_M10_D58_NOTIFY_TEST
 #include "m10-d58-notify.h"
 #endif
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+#include "m10-d58c-irq-frame.h"
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -54,6 +57,12 @@ static uint32_t d57_guard_cookies[D57_MAX_GUARD_DEPTH];
 /* Test-only IRQ observation transport; never a lock mutation queue. */
 static struct d58_notice_queue d58_observations;
 static uint32_t d58_drained;
+#endif
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+/* C1: count actual IRQ0 interruptions on a D5.3 registered live owner.
+ * These are measurements, never an alternate scheduler authority. */
+static volatile uint32_t d58c_locked_source_irqs;
+static volatile uint32_t d58c_lock_acquires,d58c_lock_releases;
 #endif
 static volatile uint64_t iterations[D56_WORKERS];
 static volatile uint32_t slices[D56_STACKS],ticks,irq_switches;
@@ -161,6 +170,19 @@ static bool frame_safe(unsigned index,const uint64_t *frame,
        tasks.tasks[slot].state!=required)
         return false;
     const struct kernel_task_resource_record *r=&owners.task[slot];
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+    /* Diagnostic C1 *additional* whole-graph + frame proof, used only
+     * for ordinary worker tasks. The supervisor must still pass the
+     * original zero-lock gate below. No fake IRETQ or IRQ lock action. */
+    if(index<D56_WORKERS) {
+        uint64_t observed_flags;
+        __asm__ volatile("pushfq; popq %0":"=r"(observed_flags)::"memory");
+        return d58c_irq_frame_eligible(&tasks,&owners,&d57_sync,h,
+            required,frame,(uint16_t)expected_cs,(uint16_t)expected_ss,
+            true,(observed_flags&UINT64_C(0x200))==0,
+            critical_depth==0 && d57_guard.depth==0);
+    }
+#endif
     if(!r->installed || r->quarantined ||
        r->handle.slot!=h.slot || r->handle.generation!=h.generation ||
        r->owned_locks!=0 || r->registered_waiters!=0)
@@ -198,6 +220,12 @@ static bool incoming_safe(unsigned index,const uint64_t *frame)
 {
     if(!frame_safe(index,frame,KERNEL_TASK_RUNNING)) return false;
     if(index==D56_SUP_INDEX) return true;
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+    /* C1 source is hardware-supplied via IRQ0 assembly and was already
+     * checked with the full D5.8c frame/graph admission above. The older
+     * D5.5c helper excludes all locks by design; do not weaken it. */
+    return true;
+#endif
     uint64_t flags;
     __asm__ volatile("pushfq; popq %0":"=r"(flags)::"memory");
     struct d55c_irq_snapshot evidence={
@@ -248,6 +276,11 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
     }
 #endif
     if(slices[from]!=UINT32_MAX) ++slices[from];
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+    if(from==0 && owners.task[handles[0].slot].owned_locks!=0 &&
+       d58c_locked_source_irqs!=UINT32_MAX)
+        ++d58c_locked_source_irqs;
+#endif
     if(!d55c_tick_observe(&service,true,ticks))
         {failed=true;reason="SUPERVISOR_DEADLINE";}
     if(ticks>=D56_STOP_TICKS) done=true;
@@ -355,7 +388,39 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
 __attribute__((noreturn)) static void worker_run(unsigned index)
 {
     volatile uint64_t work=(uint64_t)index+1u;
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+    bool has_lock=false;
+    bool lock_completed=false;
+    if(index==0) {
+        const uint64_t flags=enter_critical();
+        if(d53_acquire(&d57_sync,&owners,&tasks,0,handles[index])!=D53_OK) {
+            failed=true;reason="C1_OWNER_ACQUIRE";
+        } else {
+            has_lock=true;
+            ++d58c_lock_acquires;
+        }
+        exit_critical(flags);
+    }
+#endif
     while(!done && !failed) {
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+        /* Release only after several genuine IRQ0 interruptions while
+         * this exact worker was holding the real D5.3 rank-0 mutex.
+         * A live-running owner changes the graph only at non-IRQ IF=0
+         * safe point; all IRQ selections are read-only. */
+        if(index==0 && has_lock && !lock_completed &&
+           d58c_locked_source_irqs>=3) {
+            const uint64_t flags=enter_critical();
+            if(d53_release(&d57_sync,&owners,&tasks,0,handles[index])!=D53_OK) {
+                failed=true;reason="C1_OWNER_RELEASE";
+            } else {
+                ++d58c_lock_releases;
+                has_lock=false;
+                lock_completed=true;
+            }
+            exit_critical(flags);
+        }
+#endif
         work=work*UINT64_C(6364136223846793005)+UINT64_C(1);
         ++iterations[index];
         if((iterations[index]&UINT64_C(0x3fff))==0) {
@@ -570,6 +635,12 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         service.service_completions>=D56_MIN_WORKER_TICKS &&
         service.max_observed_gap_ticks<=D56_MAX_SERVICE_GAP &&
         critical_cycles!=0 &&
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+        d58c_lock_acquires==1 && d58c_lock_releases==1 &&
+        d58c_locked_source_irqs>=3 &&
+        owners.task[handles[0].slot].owned_locks==0 &&
+        !d57_sync.locks[0].owned &&
+#endif
 #ifdef SPIFFOS_M10_D57_IRQ_TEST
         !d57_guard.faulted && d57_guard.depth==0 &&
         d57_policy.decisions>0 &&
@@ -641,6 +712,14 @@ void m10_d56_report(bool (*write)(const char *))
     report_number(write,critical_cycles);
     (void)write("\r\nD56_IRQ_SWITCHES:");
     report_number(write,irq_switches);
+#ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
+    (void)write("\r\nD58C_LOCKED_SOURCE_IRQS:");
+    report_number(write,d58c_locked_source_irqs);
+    (void)write("\r\nD58C_LOCK_ACQUIRES:");
+    report_number(write,d58c_lock_acquires);
+    (void)write("\r\nD58C_LOCK_RELEASES:");
+    report_number(write,d58c_lock_releases);
+#endif
 #ifdef SPIFFOS_M10_D58_NOTIFY_TEST
     (void)write("\r\nD58_IRQ_NOTICES_DRAINED:");
     report_number(write,d58_drained);

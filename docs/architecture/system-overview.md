@@ -350,3 +350,7 @@ The D5.8b architecture separates lock graph/ledger admission from real x86 inter
 ## D5.8b exact BLOCKED stack departure diagnostic (QEMU only)
 
 A dedicated D5.8b flag reuses the established D5.4 multiwaiter guest but leaves IF disabled across the RUNNING-to-BLOCKED transition and through a separate, test-only x86 register-context switch. The surviving boot dispatcher reads actual IF and RSP before restoring IF, verifies it is outside all three worker stacks and confirms the exact BLOCKED generation remains registered. Its two worker continuations resume only after real D5.3 wake. This is not IRQ-preemptive lock contention or a production context-switch ABI; see ../decisions/ADR-m10-d58b-frame-ownership-gate.md.
+
+## M10-D5.8c staged real-IRQ mutex integration (test-only)
+
+C1 exercises authentic x86 IRQ0 preemption of a task holding a generation-registered D5.3 mutex: exact frame validation and D5.8b whole-graph/ledger proof are both mandatory. C1 does not yet exercise a blocked waiter. C2 separately requires a safe transition between cooperative blocked-stack saved-register contexts and IRQ0's saved 20-qword IRETQ task contexts before actual priority-donation/wakeup can be claimed. No unflagged kernel/editor changes. See ../decisions/ADR-m10-d58c-real-irq-lock-owner.md.

@@ -505,3 +505,7 @@ Owner requested next recommended D5.8 milestone following confirmed exact-head D
 ## M10-D5.8b Phase 1 frame-ownership investigation — 2026-11-14
 
 Owner approved proceeding with the recommended D5.8b Phase 1 after D5.8a CI passed. Isolated, read-only exact-generation D5.3 graph + D5.2b owner admission may be coded/tested; no weakening of the old D5.6/D5.5c IRQ frame check and no real blocked-stack resumption is approved by this preliminary checkpoint. `ADR-m10-d58b-frame-ownership-gate.md` records the proof and separate hardware execution gate. No merge, ISO deployment or ordinary EDIT/BASIC preemption.
+
+## M10-D5.8c diagnostic real-IRQ lock-owner direction — 2026-11-14
+
+Owner elected the recommended D5.8c integration after PR #84 exact-head CI success. Authorize isolated diagnostics first proving a real D5.3 lock-owning worker's authentic IRQ0 source and target frame under M10-A, without weakening old D5.6/D5.5c strict production conditions. Then, under separate review, integrate genuinely BLOCKED waiter, medium competitor and donation/wake only after proving interoperability of cooperative BLOCKED stack surrender and IRQ0 IRETQ context. Owner ISO, normal EDIT/BASIC, merge and physical deployment remain prohibited. See ADR-m10-d58c-real-irq-lock-owner.md.
