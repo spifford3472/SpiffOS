@@ -342,3 +342,7 @@ A fixed-capacity `m10-d57-safety.[ch]` sidecar validates exact-generation, neste
 ## M10-D5.8 staged diagnostic boundary (2026-11-14)
 
 D5.8 explores deferred IRQ scheduling notifications and actual multiworker priority-inheritance contention in test-only QEMU. M10-A owns all runnable/blocked transitions; D5.3 mutates only from verified non-IRQ IF=0 contexts, while D5.7 computes read-only interrupt priority. No normal kernel/editor preemption or user ABI is enabled. See `../decisions/ADR-m10-d58-irq-mutex-integration.md`.
+
+## M10-D5.8b Phase 1 graph-backed eligibility (test-only)
+
+The D5.8b architecture separates lock graph/ledger admission from real x86 interrupt frame geometry and blocked-stack surrender. Exact RUNNING/RUNNABLE M10-A generation and D5.3 counter-equal graph may prove a lock-holding task *eligible for later frame validation*, but cannot authorize an IRQ handoff or a BLOCKED task to execute. Existing D5.6/D5.5c checks remain unmodified until separately validated. See `../decisions/ADR-m10-d58b-frame-ownership-gate.md`.

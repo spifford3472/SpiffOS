@@ -265,6 +265,20 @@ test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
 
 # D5.7 hosted sanitizer proves fail-closed generation-tagged guard,
 # transitive D5.3 donation and supervisor reservation before IRQ enabling.
+# D5.8b Phase 1 hosted graph admission; inherited genuine IRQ0 tests
+# remain unchanged. This does not yet activate lock-bearing IRQ execution.
+.PHONY: test-m10-d58b-acceptance
+test-m10-d58b-acceptance: test-m10-d58b-admission test-m10-d58-acceptance
+	@echo SPIFFOS_M10_D58B_ACCEPTANCE_OK
+
+.PHONY: test-m10-d58b-admission
+test-m10-d58b-admission: build/m10-d58b-admission-test
+	./build/m10-d58b-admission-test
+
+build/m10-d58b-admission-test: tests/m10-d58b-admission-test.c src/kernel/m10-d58b-admission.c src/kernel/m10-d58b-admission.h src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58b-admission-test.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
 .PHONY: test-m10-d58-acceptance
 test-m10-d58-acceptance: test-m10-d58-notify test-m10-d58-guest test-m10-d57-acceptance
 	@echo SPIFFOS_M10_D58_ACCEPTANCE_OK
