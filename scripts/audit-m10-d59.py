@@ -22,7 +22,7 @@ CATEGORIES = {
     "entry": ("main.c",),
     "allocator": (
         "frame-allocator.c", "frame-allocate.c", "kernel-heap.c",
-        "memory-service.c", "memory-boot.c", "page-access.c", "m10-d59b-context.c",
+        "memory-service.c", "memory-boot.c", "page-access.c", "m10-d59b-context.c", "m10-d59b-service.c",
     ),
     "keyboard": (
         "keyboard.c", "keyboard-ps2.c", "keyboard-console.c", "logical-line.c",

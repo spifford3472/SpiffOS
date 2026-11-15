@@ -65,6 +65,15 @@ endif
 M10D59B_CONTEXT_OBJECTS := build/m10-d59b-context.o
 endif
 
+# Same authenticated guard, isolated retained-service transaction probe.
+M10D59B_SERVICE_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D59B_SERVICE_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D59B_CONTEXT_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_SERVICE_TEST requires D59B_CONTEXT_TEST)
+endif
+M10D59B_SERVICE_OBJECTS := build/m10-d59b-service.o
+endif
+
 # D5.8b separately flagged IF=0 blocked-stack handoff fixture.
 # Never link into unflagged kernel or change normal cooperative ABI.
 M10D58B_BLOCK_OBJECTS :=
@@ -759,8 +768,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D59B_SERVICE_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D59B_SERVICE_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -1164,3 +1173,24 @@ build/m10-d59b-context.o: src/kernel/m10-d59b-context.c src/kernel/m10-d59b-cont
 	$(CC) $(CFLAGS) -c src/kernel/m10-d59b-context.c -o $@
 
 build/m10-d56-guest.o build/memory-boot.o: src/kernel/m10-d59b-context.h
+
+
+.PHONY: test-m10-d59b-service-host test-m10-d59b-service-guest
+build/m10-d59b-service.o: src/kernel/m10-d59b-service.c src/kernel/m10-d59b-service.h src/kernel/m10-d59b-context.h src/kernel/memory-service.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d59b-service.c -o $@
+
+build/memory-boot.o build/m10-d56-guest.o: src/kernel/m10-d59b-service.h
+build/m10-d59b-context-host-test: tests/m10-d59b-test-cpu.h
+
+test-m10-d59b-service-host: build/m10-d59b-service-host-test
+	./build/m10-d59b-service-host-test
+
+build/m10-d59b-service-host-test: tests/m10-d59b-service-test.c tests/m10-d59b-test-cpu.h src/kernel/m10-d59b-service.c src/kernel/m10-d59b-service.h src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/memory-service.c src/kernel/kernel-heap.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_D59B_HOSTED -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-service-test.c src/kernel/m10-d59b-service.c src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/memory-service.c src/kernel/kernel-heap.c -Wl,--gc-sections -o $@
+
+test-m10-d59b-service-guest:
+	python3 scripts/test-m10-d59b-service-guest.py
+
+test-m10-d59b-acceptance: test-m10-d59b-service-host test-m10-d59b-service-guest

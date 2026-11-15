@@ -29,9 +29,10 @@ def metric(serial, name):
     return int(match.group(1))
 
 
-def main():
+def main(extra_flags="", extra_check=None):
     """Prove both guarded frame callers execute under real IRQ preemption."""
     flags = "-DSPIFFOS_M10_D56_IRQ_TEST -DSPIFFOS_M10_D57_IRQ_TEST -DSPIFFOS_M10_D59B_CONTEXT_TEST"
+    flags += extra_flags
     with tempfile.TemporaryDirectory(prefix="spiffos-d59b-context-") as tmp:
         source = Path(tmp) / "source"
         shutil.copytree(ROOT, source, symlinks=True,
@@ -46,6 +47,8 @@ def main():
                     b"SPIFFOS_M10_D56_IRQ_OK" not in serial or
                     b"SPIFFOS_EXCEPTION:" in serial or b"SPIFFOS_M10_D56_IRQ_ERROR" in serial):
                 raise RuntimeError(f"D59B invalid positive boot: {serial[-1800:]!r}")
+            if extra_check is not None:
+                extra_check(serial, mib)
             counts = [metric(serial, f"D59B_WORKER{i}_FRAME_CYCLES") for i in (0, 1)]
             entries = metric(serial, "D59B_AUTHENTIC_IRQ_ENTRIES")
             duration = metric(serial, "D59B_MAX_TRANSACTION_BODY_TSC")

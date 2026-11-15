@@ -382,3 +382,10 @@ M10-A and D5.2b before using the existing D5.7 guard. No second scheduler or loc
 state machine; hosted backend is compiled out of kernel builds. Runtime acceptance
 and memory-service integration remain open. See
 ../decisions/ADR-m10-d59b-authentic-context.md.
+
+## D5.9-B retained service transaction candidate — 2026-11-15
+
+A diagnostic probe invokes the existing service/heap implementation under the
+same authenticated D5.7 guard. Hosted and actual retained-boot instances use
+the same probe code; no parallel memory manager. General service activation
+remains open. See ../decisions/ADR-m10-d59b-service-transactions.md.

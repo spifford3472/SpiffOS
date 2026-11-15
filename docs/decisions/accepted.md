@@ -537,3 +537,10 @@ and allocator integration reusing D5.7, required tests, commits and draft PRs.
 It supersedes the hosted-only next-assignment limitation for development, not
 acceptance. No merge, accepted ISO replacement, unrestricted ordinary preemption,
 privilege, host OS or infrastructure changes. See ADR-m10-d59b-authentic-context.md.
+
+## D5.9-B bounded service continuation — 2026-11-15
+
+Owner autonomous memory-safety scope permits isolated tests of the existing one-page
+M6 service through the same D5.7/context adapter. No general heap masking or new
+manager; see ADR-m10-d59b-service-transactions.md. Parent #91 exact-head CI run #108 has passed; this child still requires
+its own independent acceptance.

@@ -804,7 +804,7 @@
       "candidate_calls": [],
       "category": "unreviewed",
       "functions": [],
-      "sha256": "37d9e1c6bb2e329965e906694c83634716c5c4c5a642f6764998eb50410cef14",
+      "sha256": "97de6d69a4a854ffd599b4708e145b11d11a0b1acc068f70f763534291909e40",
       "state": "UNREVIEWED_NO_PREEMPTION"
     },
     "src/kernel/m10-d57-safety.c": {
@@ -914,6 +914,21 @@
         }
       ],
       "sha256": "b7115f34dbc9c93149f2ccd75c74eee31d8147afaf24421cc904e2fa217dae79",
+      "state": "REVIEW_REQUIRED_NO_PREEMPTION"
+    },
+    "src/kernel/m10-d59b-service.c": {
+      "candidate_calls": [
+        "memory_service_allocate",
+        "memory_service_release"
+      ],
+      "category": "allocator",
+      "functions": [
+        {
+          "function": "d59b_service_probe",
+          "line": 15
+        }
+      ],
+      "sha256": "88ca82177d99e9016db044e900a67f11cef2a0023aee754b6aea0d3ff827272c",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/main.c": {
@@ -1209,9 +1224,13 @@
         {
           "function": "memory_boot_d59b_frame_cycle",
           "line": 1038
+        },
+        {
+          "function": "memory_boot_d59b_service_cycle",
+          "line": 1104
         }
       ],
-      "sha256": "0826d9ec9944bb9a359800c8fa7667594c0373168d4b9ab2ce45cabf021632cd",
+      "sha256": "a7e5878a3300cba847f22000ab4b8260145beafb87344bb368ce82819622c986",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-map.c": {

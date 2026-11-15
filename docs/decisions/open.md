@@ -407,3 +407,9 @@ Owner authorized isolated adapter implementation; hosted tests alone cannot clos
 real IRQ/CPU/stack/IF evidence. Complete frame, heap/service, mapping rollback and
 stack-lifetime gates remain open until independently tested. See
 ADR-m10-d59b-authentic-context.md.
+
+## D5.9-B service limits — 2026-11-15
+
+One-page/64-record/32-byte diagnostic transactions do not close general heap
+latency, root-reset lifetime, large zeroing, page rollback or caller coverage.
+See ADR-m10-d59b-service-transactions.md.

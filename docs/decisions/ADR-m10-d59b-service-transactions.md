@@ -2,8 +2,8 @@
 
 Status: owner-authorized isolated development, 2026-11-15; not runtime acceptance.
 Parent: draft PR #91, aabbea5b9ba3676f2a588e2db3ff2af7e3befa72. Parent has full
-Forge acceptance; its independent exact-head CI must pass before accepting this
-continuation. The accepted D4 owner ISO remains untouched.
+Forge acceptance and exact-head independent CI run #108 SUCCESS. This child
+still requires independent acceptance. The accepted D4 owner ISO remains untouched.
 
 Read AGENTS.md, accepted/open registers, system-overview, DEVELOPERS_GUIDE,
 ADR-m10-d59b-authentic-context.md, ADR-memory-services.md,
