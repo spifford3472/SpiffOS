@@ -59,6 +59,9 @@ static uint32_t d57_guard_cookies[D57_MAX_GUARD_DEPTH];
 static struct d59b_context d59b_context;
 static volatile uint32_t d59b_cycles[D56_WORKERS], d59b_real_irq_entries;
 static uint64_t d59b_max_body_cycles;
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+static volatile uint32_t d59b_page_cycles[D56_WORKERS];
+#endif
 #ifdef SPIFFOS_M10_D59B_SERVICE_TEST
 static volatile uint32_t d59b_service_cycles[D56_WORKERS];
 #endif
@@ -486,6 +489,13 @@ __attribute__((noreturn)) static void worker_run(unsigned index)
             }
             ++d59b_service_cycles[index];
 #endif
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+            if(!memory_boot_d59b_page_cycle(&d59b_context)) {
+                failed=true;reason="D59B_PAGE";
+                for(;;) __asm__ volatile("cli; hlt":::"memory");
+            }
+            ++d59b_page_cycles[index];
+#endif
             const uint64_t after=d59b_tsc();
             if(after>=before && after-before>d59b_max_body_cycles)
                 d59b_max_body_cycles=after-before;
@@ -795,6 +805,13 @@ void m10_d56_report(bool (*write)(const char *))
     (void)write("\r\nD59B_WORKER1_SERVICE_CYCLES:");
     report_number(write,d59b_service_cycles[1]);
     (void)write("\r\nSPIFFOS_M10_D59B_SERVICE_IRQ_OK\r\n");
+#endif
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+    (void)write("D59B_WORKER0_PAGE_CYCLES:");
+    report_number(write,d59b_page_cycles[0]);
+    (void)write("\r\nD59B_WORKER1_PAGE_CYCLES:");
+    report_number(write,d59b_page_cycles[1]);
+    (void)write("\r\nSPIFFOS_M10_D59B_PAGE_IRQ_OK\r\n");
 #endif
     (void)write("D59B_WORKER0_FRAME_CYCLES:");
     report_number(write,d59b_cycles[0]);

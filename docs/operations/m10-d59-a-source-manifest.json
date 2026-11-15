@@ -804,7 +804,7 @@
       "candidate_calls": [],
       "category": "unreviewed",
       "functions": [],
-      "sha256": "97de6d69a4a854ffd599b4708e145b11d11a0b1acc068f70f763534291909e40",
+      "sha256": "d89bfbf694e109096b17103512f36516c47b09606b870470e312817eef58a695",
       "state": "UNREVIEWED_NO_PREEMPTION"
     },
     "src/kernel/m10-d57-safety.c": {
@@ -1228,9 +1228,13 @@
         {
           "function": "memory_boot_d59b_service_cycle",
           "line": 1104
+        },
+        {
+          "function": "memory_boot_d59b_page_cycle",
+          "line": 1120
         }
       ],
-      "sha256": "a7e5878a3300cba847f22000ab4b8260145beafb87344bb368ce82819622c986",
+      "sha256": "c31e5feb2227f86289ea6b6c96d37954f7a2e5222f53427cda934885e850fc97",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-map.c": {
@@ -1390,9 +1394,13 @@
         {
           "function": "page_access_allocate_zero",
           "line": 217
+        },
+        {
+          "function": "page_access_claim",
+          "line": 259
         }
       ],
-      "sha256": "cfdedf76f565bf4fb4908f4e2e92e5704a51d8a891314ad4af7928f42b0cb25d",
+      "sha256": "04bdb801e97bda9ca481fec09e331a4b86c48b834db575ac96b1cea822f499a9",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/screen-editor.c": {

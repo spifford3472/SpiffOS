@@ -82,4 +82,23 @@ enum page_access_result page_access_allocate_zero(
     enum frame_owner owner, page_access_zero_backend backend,
     void *backend_context, uint64_t *physical_address);
 
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+/* Private transaction-local numeric claim. This is NOT an initialized page or
+ * a generation handle. The caller must retain existing exclusive ownership
+ * through a fixed direct initialization leaf and final publication/release. */
+struct page_access_claim {
+    uint64_t physical_address;
+    uint64_t mapped_address;
+};
+/* Claim one ordinary frame and resolve its complete direct-map range without
+ * invoking a backend. Both uint64_t fields must be disjoint from authority
+ * metadata. Exact-owner rollback on authorization failure preserves output;
+ * uncertain rollback returns ROLLBACK_FAILED and retains storage for diagnosis.
+ * Borrow stable inputs, one CPU/IF=0, no IRQ use or new lock. The UNINITIALIZED
+ * claim must never escape its surrounding authenticated transaction. */
+enum page_access_result page_access_claim(struct frame_allocator *allocator,
+    const struct page_access_policy *policy, enum frame_owner owner,
+    struct page_access_claim *claim);
+#endif
+
 #endif

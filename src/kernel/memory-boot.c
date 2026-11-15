@@ -1106,3 +1106,85 @@ bool memory_boot_d59b_service_cycle(struct d59b_context *context,unsigned index)
     return d59b_service_probe(context,&retained_service,index);
 }
 #endif
+
+
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+enum { D59B_PAGE_MAX_TRACKED_FRAMES=512u*1024u*1024u/MEMORY_PAGE_BYTES };
+/* Claim one real boot-allocator page, initialize it by fixed DIRECT leaf calls,
+ * verify all 4096 bytes, then release only the exact temporary ownership.
+ * Borrow context and retained authority for one authenticated transaction.
+ * Supported single-CPU diagnostic profile is at most 512MiB tracked frames.
+ * No address escapes; no arbitrary callback, stack release, retry or log.
+ * Any unexpected failure latches D5.7 fault/IF=0 and retains uncertain storage.
+ * Provenance: Qwen third reviewed draft; coordinator adds rollback negative. */
+bool memory_boot_d59b_page_cycle(struct d59b_context *context)
+{
+    uint32_t cookie = 0;
+    if (!d59b_enter(context, &cookie))
+        return false;
+
+    if (!boot_allocator_available ||
+        retained_policy.allocator != &boot_allocator ||
+        boot_allocator.total_frames > D59B_PAGE_MAX_TRACKED_FRAMES)
+        goto fault;
+
+    uint64_t ordinary_free = boot_allocator.ordinary_free;
+    uint64_t reserve_free = boot_allocator.reserve_free;
+    uint64_t kernel_owned = boot_allocator.owned[FRAME_OWNER_KERNEL];
+
+    /* Reuse real M2/M3 rollback with deliberately unsupported mapping width.
+     * Sentinels are numeric outputs ONLY and are NEVER dereferenced. */
+    struct page_access_policy refused_policy=retained_policy;
+    refused_policy.virtual_address_bits=1u;
+    struct page_access_claim refused={UINT64_C(0x12340),UINT64_C(0x56780)};
+    if(page_access_claim(&boot_allocator,&refused_policy,FRAME_OWNER_KERNEL,
+                         &refused)!=PAGE_ACCESS_UNSUPPORTED ||
+       refused.physical_address!=UINT64_C(0x12340) ||
+       refused.mapped_address!=UINT64_C(0x56780) ||
+       boot_allocator.ordinary_free!=ordinary_free ||
+       boot_allocator.reserve_free!=reserve_free ||
+       boot_allocator.owned[FRAME_OWNER_KERNEL]!=kernel_owned)
+        goto fault;
+
+    struct page_access_claim claim = {0};
+    enum page_access_result result = page_access_claim(&boot_allocator,
+        &retained_policy, FRAME_OWNER_KERNEL, &claim);
+    if (result != PAGE_ACCESS_OK)
+        goto fault;
+
+    if (!kernel_page_zero(NULL, claim.mapped_address, MEMORY_PAGE_BYTES))
+        goto fault;
+    if (!kernel_page_has_value(claim.mapped_address, 0))
+        goto fault;
+
+    if (!kernel_page_write_and_verify(claim.mapped_address, 0xa5))
+        goto fault;
+
+    if (kernel_page_zero(NULL, claim.mapped_address, MEMORY_PAGE_BYTES - 1))
+        goto fault;
+    if (!kernel_page_has_value(claim.mapped_address, 0xa5))
+        goto fault;
+
+    if (!kernel_page_zero(NULL, claim.mapped_address, MEMORY_PAGE_BYTES))
+        goto fault;
+    if (!kernel_page_has_value(claim.mapped_address, 0))
+        goto fault;
+
+    if (frame_release(&boot_allocator, FRAME_OWNER_SESSION, claim.physical_address) != FRAME_WRONG_OWNER)
+        goto fault;
+    if (frame_release(&boot_allocator, FRAME_OWNER_KERNEL, claim.physical_address) != FRAME_OK)
+        goto fault;
+
+    if (boot_allocator.ordinary_free != ordinary_free ||
+        boot_allocator.reserve_free != reserve_free ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned ||
+        !frame_allocator_check(&boot_allocator))
+        goto fault;
+
+    return d59b_exit(context, cookie);
+
+fault:
+    context->guard->faulted = true;
+    return false;
+}
+#endif

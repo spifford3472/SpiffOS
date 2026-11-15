@@ -909,3 +909,20 @@ in CLI would hide a different latency problem. The probe checks recoverable OOM,
 protected roots, ownership rejection and all client bytes, then disposes the
 client before leaving the guard. It is diagnostic code, not a public malloc.
 See [service evidence](operations/m10-d59b-service-transactions-20261115.md).
+
+
+## D5.9-B page claims are private, uninitialized ownership
+
+The flagged M3 claim returns two numeric addresses, not initialized RAM and
+not a public generation handle. Its caller keeps the SAME authenticated D5.7
+exclusion held across claim, fixed direct page initialization, validation and
+release/publication. Do not return the claim from that outer transaction or
+call a caller-supplied backend while holding the runtime guard.
+
+Both output fields are checked against authority metadata before M2 changes.
+Authorization errors release the exact owner and leave the caller's output
+untouched. ROLLBACK_FAILED retains uncertain storage and requires faulting,
+rather than retrying a guessed release. The QEMU memory-boot probe keeps the
+claim on its own stack and directly calls the existing kernel zero leaf; no
+page address escapes. See ADR-m10-d59b-runtime-memory-wiring.md. General caller
+admission and active-stack lifetime protection remain separate unfinished gates.

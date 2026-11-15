@@ -74,6 +74,13 @@ endif
 M10D59B_SERVICE_OBJECTS := build/m10-d59b-service.o
 endif
 
+# Callback-free page claiming is an isolated authentic-context diagnostic.
+ifneq ($(findstring -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D59B_CONTEXT_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_PAGE_CLAIM_TEST requires D59B_CONTEXT_TEST)
+endif
+endif
+
 # D5.8b separately flagged IF=0 blocked-stack handoff fixture.
 # Never link into unflagged kernel or change normal cooperative ABI.
 M10D58B_BLOCK_OBJECTS :=
@@ -1194,3 +1201,26 @@ test-m10-d59b-service-guest:
 	python3 scripts/test-m10-d59b-service-guest.py
 
 test-m10-d59b-acceptance: test-m10-d59b-service-host test-m10-d59b-service-guest
+
+.PHONY: test-m10-d59b-page-claim-host test-m10-d59b-page-claim-guest
+build/m10-d59b-page-claim-host-test: tests/m10-d59b-page-claim-test.c src/kernel/page-access.c src/kernel/page-access.h src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h src/kernel/memory-map.c src/kernel/memory-map.h Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-page-claim-test.c src/kernel/page-access.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -Wl,--wrap=frame_release -o $@
+
+test-m10-d59b-page-claim-host: build/m10-d59b-page-claim-host-test
+	./build/m10-d59b-page-claim-host-test
+
+test-m10-d59b-page-claim-guest:
+	python3 scripts/test-m10-d59b-page-claim-guest.py
+
+test-m10-d59b-acceptance: test-m10-d59b-page-claim-host test-m10-d59b-page-claim-guest
+
+.PHONY: test-m10-d59b-latency-math
+build/m10-d59b-latency-math-test: tests/m10-d59b-latency/calibration-test.c tests/m10-d59b-latency/calibrate.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/m10-d59b-latency/calibration-test.c -o $@
+
+test-m10-d59b-latency-math: build/m10-d59b-latency-math-test
+	./build/m10-d59b-latency-math-test
+
+test-m10-d59b-acceptance: test-m10-d59b-latency-math
