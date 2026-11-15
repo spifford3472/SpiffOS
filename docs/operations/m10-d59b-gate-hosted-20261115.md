@@ -82,3 +82,13 @@ Verified on Forge:
 **Limits:** These callbacks simulate an attempted interrupt-context admission, rather than delivering actual IRQ0 between x86 machine instructions. The temporary metadata may be inconsistent between stores and must not be read concurrently. The tests do not authenticate production task provenance, bound interrupt latency, prevent bypassing the fixture wrapper, or protect the real production allocator. Actual IRQ and scheduler admission remain OPEN.
 
 Change history: 2026-11-15 Phase 0c added three mutation-boundary checks, an explicit source-drift negative, and baseline host validation; no merge or deployment.
+
+## Phase 0d — authoritative D5.7 guard hosted compatibility (2026-11-15)
+
+Reviewed `src/kernel/m10-d57-safety.[ch]`: it is the existing guard to reuse, not the weaker D5.9-B fixture state machine. An isolated `tests/m10-d59b-gate/d57_frame_guard_test.c` now compiles the **actual current PR** `m10-d57-safety.c` and M2 allocator sources together. The test holds a real D5.7 owner+generation/cookie while allocating and releasing a frame; verifies the guard blocks selection during its critical depth, and validates that an invalid-generation exit latches a permanent fault and inhibits later switching. It tests an explicit saved-IF simulation, not hardware IF authentication.
+
+- GCC strict C11 ASan+UBSan: **PASS** `SPIFFOS_M10_D59B_D57_FRAME_COMPAT_OK`.
+- Recompiled against the actual current feature-branch `m10-d57-safety.c` obtained through GitHub, rather than relying on the old D5.7 workspace: **PASS**, same marker. The old workspace and current source differed only by a final blank line on transfer.
+- CI `test-m10-d59b-gate` now requires this fourth hosted test in addition to gate, real-frame and mutation-hook suites. The real D5.7 selector's unused functions are discarded with function-section garbage collection in the hosted executable; the production kernel is not linked against the new fixture.
+
+Still OPEN: a privileged adapter must independently attest CPU/RFLAGS.IF, current M10-A RUNNING generation, original IF restoration, guard cookie ownership and bounded IRQ-off duration before the real allocator could use this path. The source remains diagnostic-only. No normal preemption, merge or deployment.
