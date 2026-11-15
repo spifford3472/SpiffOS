@@ -354,3 +354,7 @@ A dedicated D5.8b flag reuses the established D5.4 multiwaiter guest but leaves 
 ## M10-D5.8c staged real-IRQ mutex integration (test-only)
 
 C1 exercises authentic x86 IRQ0 preemption of a task holding a generation-registered D5.3 mutex: exact frame validation and D5.8b whole-graph/ledger proof are both mandatory. C1 does not yet exercise a blocked waiter. C2 separately requires a safe transition between cooperative blocked-stack saved-register contexts and IRQ0's saved 20-qword IRETQ task contexts before actual priority-donation/wakeup can be claimed. No unflagged kernel/editor changes. See ../decisions/ADR-m10-d58c-real-irq-lock-owner.md.
+
+## M10-D5.8c C2a authentic interrupt donation witness (test-only)
+
+Under a distinct D5.4 guest test flag, an IF-off blocked high-priority waiter remains on its exact saved cooperative stack; low-priority mutex owner resumes via M10-A priority dispatch while a medium-priority competitor remains READY. Real x86 IRQ0 may *read* the whole D5.3 graph, verify owner IRQ frame/IF/stack and record effective donation before owner releases and wakes high off-IRQ. The IRQ does not switch task contexts in C2a; full real-IRQ priority handoff C2b remains open. See ../decisions/ADR-m10-d58c-c2-blocked-irq-observation.md.

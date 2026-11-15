@@ -380,3 +380,7 @@ A nonzero resource lock count can be legitimate when validated against the full 
 ## M10-D5.8c remaining live-waiter IRQ integration gate — 2026-11-14
 
 D5.8b's cooperative IF-off BLOCKED task context is a saved six-register RET stack, whereas D5.6 IRQ0 task continuation is a full 20-qword IRETQ frame. Their states are NOT interchangeable. Before real-IRQ high-priority wait and low-priority donation, prove handoff between those independent contexts without synthetic frames, running a blocked task, mutating D5.3 in IRQ, or releasing orphaned locks. Stage C1 tests only genuine lock-owning worker frame admission while an IRQ-preemptive competitor and supervisor remain live. See ADR-m10-d58c-real-irq-lock-owner.md.
+
+## M10-D5.8c C2b true IRQ handoff with blocked cooperative context — 2026-11-14
+
+The first C2a fixture may prove actual IRQ0 saved-frame observation of donation while the owner is RUNNING and a high-priority waiter is BLOCKED, but priority-aware task selection still occurs at a non-IRQ D5.4 safe point. Before claiming true IRQ0 priority-inherited handoff among contended workers, a separate verified IRETQ/RET context interoperability design, real medium CPU preemption, bounded supervisor work and negative recovery must pass. A blocked task must never be an IRETQ destination merely because M10-A wakes it. See ADR-m10-d58c-c2-blocked-irq-observation.md.
