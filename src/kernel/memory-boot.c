@@ -1019,3 +1019,80 @@ bool memory_boot_m10_task_stack_failure_probe(void)
            frame_allocator_check(&boot_allocator);
 }
 #endif
+
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+#include "m10-d59b-context.h"
+/* Qwen-generated single-frame cycle, reviewed to check release status,
+ * initialize outputs, retain failure exclusion, and test denied operations.
+ * Numeric physical frame only, never dereferenced or published. No IRQ use,
+ * allocation retries or whole-pool scans in the hot protected transaction. */
+/**
+ * Tests frame allocation and release within a D59B-protected context.
+ * Captures interrupt state, snapshots allocator before and after,
+ * allocates a kernel-owned frame, verifies counts, releases it,
+ * and restores state. On any error, marks context faulted and returns false.
+ *
+ * @param context Valid D59B context; must be initialized and guard valid
+ * @return true on success, false on any failure including allocation errors
+ */
+bool memory_boot_d59b_frame_cycle(struct d59b_context *context) {
+    uint32_t cookie;
+    if (!d59b_enter(context, &cookie)) {
+        return false;
+    }
+
+    if (!boot_allocator_available) {
+        context->guard->faulted = true;
+        return false;
+    }
+    /* Borrow real boot allocator; each worker serializes through D5.7. */
+    uint64_t ordinary_free_before = boot_allocator.ordinary_free;
+    uint64_t reserve_free_before = boot_allocator.reserve_free;
+    uint64_t kernel_owned_before = boot_allocator.owned[FRAME_OWNER_KERNEL];
+
+    // Allocate a frame
+    uint64_t physical = UINT64_MAX;
+    enum frame_result result = frame_allocate(&boot_allocator, FRAME_OWNER_KERNEL, false, &physical);
+    if (result != FRAME_OK || physical == UINT64_MAX) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    // Verify counts after allocation
+    if (boot_allocator.ordinary_free != ordinary_free_before - 1 ||
+        boot_allocator.reserve_free != reserve_free_before ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned_before + 1) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    /* Wrong-owner and forbidden-reserve failures must preserve the live
+     * allocation and caller output while the same authenticated gate is held. */
+    uint64_t refused = UINT64_MAX;
+    if (frame_release(&boot_allocator, FRAME_OWNER_SESSION, physical) != FRAME_WRONG_OWNER ||
+        frame_allocate(&boot_allocator, FRAME_OWNER_KERNEL, true, &refused) != FRAME_FORBIDDEN ||
+        refused != UINT64_MAX ||
+        boot_allocator.ordinary_free != ordinary_free_before - 1u ||
+        boot_allocator.reserve_free != reserve_free_before ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned_before + 1u) {
+        context->guard->faulted = true;
+        return false;
+    }
+    /* Release only the exact temporary frame, never task/stack backing. */
+    result = frame_release(&boot_allocator, FRAME_OWNER_KERNEL, physical);
+    if (result != FRAME_OK) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    // Verify counts restored after release
+    if (boot_allocator.ordinary_free != ordinary_free_before ||
+        boot_allocator.reserve_free != reserve_free_before ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned_before) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    return d59b_exit(context, cookie);
+}
+#endif

@@ -400,3 +400,10 @@ The four-stack targeted C2b real IRQ0 test addresses the previously open physica
 ## M10-D5.9 remaining production exclusion proofs — 2026-11-14
 
 The prior C2b real-IRQ diagnostic does not instrument production frame_allocator, kernel_heap, memory_service, workspace/editor, keyboard input, timer/IOAPIC, memory mapper and exception paths. Explicit root callers, saved IF, task-generation ownership and the critical-span boundaries remain to be proved before any code activation. Do not infer preemption safety from absence of locks or from documented single-CPU behavior. D5.9-A static inventory is not a concurrency proof. See ADR-m10-d59-production-preemption-boundaries.md.
+
+## D5.9-B authentic context acceptance remains OPEN — 2026-11-15
+
+Owner authorized isolated adapter implementation; hosted tests alone cannot close
+real IRQ/CPU/stack/IF evidence. Complete frame, heap/service, mapping rollback and
+stack-lifetime gates remain open until independently tested. See
+ADR-m10-d59b-authentic-context.md.

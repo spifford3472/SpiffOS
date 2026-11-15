@@ -26,7 +26,10 @@ class AuditGateTest(unittest.TestCase):
 
     def test_normal_inventory(self):
         actual = audit.inventory()
-        self.assertEqual(64, len(actual))
+        # The separately flagged context adapter is one new audited source.
+        self.assertEqual(65, len(actual))
+        self.assertIn("src/kernel/m10-d59b-context.c", actual)
+        self.assertEqual("allocator", actual["src/kernel/m10-d59b-context.c"]["category"])
         audit.verify({
             "schema": 1, "entries": actual,
         }, actual)

@@ -529,3 +529,11 @@ The four independently owned M2-stack diagnostic now passes targeted real IRQ0 t
 ## M10-D5.9 production-preemption safety audit authorization — 2026-11-14
 
 After D5.8c C2b PR #88 passed independent GitHub CI and Forge full acceptance, owner approved the next recommended milestone: D5.9 audits the *ordinary* kernel's actual exclusion/ownership boundaries before enabling any normal EDIT/BASIC preemption. Stage A is read-only source inventory and regression guardrails; future allocator, input/display and interrupt gates are separately verified. No global CLI wrapper, automatic locks, normal program preemption, merge or owner ISO replacement is authorized. See ADR-m10-d59-production-preemption-boundaries.md.
+
+## Owner autonomous development scope — 2026-11-15
+
+The supplied M10-D5.9/M11 handoff authorizes isolated docs-first execution-context
+and allocator integration reusing D5.7, required tests, commits and draft PRs.
+It supersedes the hosted-only next-assignment limitation for development, not
+acceptance. No merge, accepted ISO replacement, unrestricted ordinary preemption,
+privilege, host OS or infrastructure changes. See ADR-m10-d59b-authentic-context.md.

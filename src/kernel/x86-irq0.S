@@ -32,6 +32,9 @@
 .extern m10_d4_complete_irq_select
 #endif
 
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+.extern d59b_irq_depth
+#endif
 .global x86_irq0_entry
 .type x86_irq0_entry,@function
 x86_irq0_entry:
@@ -56,6 +59,11 @@ x86_irq0_entry:
      * already saved and the SysV C callee must preserve it. */
     movq %rsp,%r12
     andq $-16,%rsp
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    /* Actual interrupt entry, before C. IF=0; saved GPRs protect the
+     * interrupted flags/register state from this diagnostic bookkeeping. */
+    incl d59b_irq_depth(%rip)
+#endif
     call x86_irq0_handler
 #ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
     /* D5.5c read-only observation of REAL worker IRQ0 frame, bound to
@@ -115,6 +123,11 @@ x86_irq0_entry:
     movq %r12,%rdi
     call m10_d4_complete_irq_select
     movq %rax,%r12
+#endif
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    /* Keep IRQ provenance active through every selector and clear it
+     * only immediately before restoring the prevalidated return frame. */
+    decl d59b_irq_depth(%rip)
 #endif
     movq %r12,%rsp
     popq %r15

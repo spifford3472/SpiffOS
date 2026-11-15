@@ -23,6 +23,9 @@
 #ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
 #include "m10-d58c-irq-frame.h"
 #endif
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+#include "m10-d59b-context.h"
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -52,6 +55,19 @@ static struct d53_sync d57_sync;
 static struct d57_irq_policy d57_policy;
 static struct d57_preempt_guard d57_guard;
 static uint32_t d57_guard_cookies[D57_MAX_GUARD_DEPTH];
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+static struct d59b_context d59b_context;
+static volatile uint32_t d59b_cycles[D56_WORKERS], d59b_real_irq_entries;
+static uint64_t d59b_max_body_cycles;
+/* LFENCE/RDTSC samples guest TSC cycles, not calibrated wall-clock time.
+ * It measures the held transaction body; adapter entry/exit is excluded. */
+static uint64_t d59b_tsc(void)
+{
+    uint32_t low,high;
+    __asm__ volatile("lfence; rdtsc":"=a"(low),"=d"(high)::"memory");
+    return ((uint64_t)high<<32)|low;
+}
+#endif
 #endif
 #ifdef SPIFFOS_M10_D58_NOTIFY_TEST
 /* Test-only IRQ observation transport; never a lock mutation queue. */
@@ -244,6 +260,24 @@ static bool incoming_safe(unsigned index,const uint64_t *frame)
 uint64_t *m10_d56_irq_select(uint64_t *incoming)
 {
     if(!active) return incoming;
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    /* The word was incremented by actual assembly entry, not C caller
+     * supplied evidence. Never allocate or release a physical frame here. */
+    if(d59b_irq_depth!=1) {
+        failed=true;reason="D59B_IRQ_DEPTH";active=false;return incoming;
+    }
+    ++d59b_real_irq_entries;
+#ifdef SPIFFOS_M10_D59B_BAD_IRQ_TEST
+    uint32_t rejected_cookie=UINT32_C(0xabc);
+    if(d59b_enter(&d59b_context,&rejected_cookie) ||
+       rejected_cookie!=UINT32_C(0xabc) || !d57_guard.faulted) {
+        failed=true;reason="D59B_IRQ_ADMITTED";active=false;return incoming;
+    }
+    /* Deliberate rejected admission occurred before allocator work. The
+     * supervisor is the initial task; disarm without switching stacks. */
+    failed=true;reason="D59B_IRQ_DENIED";active=false;return incoming;
+#endif
+#endif
     const unsigned from=index_of_slot(tasks.current_slot);
     if(from>=D56_STACKS || critical_depth!=0 ||
        !incoming_safe(from,incoming)) {
@@ -424,6 +458,40 @@ __attribute__((noreturn)) static void worker_run(unsigned index)
         work=work*UINT64_C(6364136223846793005)+UINT64_C(1);
         ++iterations[index];
         if((iterations[index]&UINT64_C(0x3fff))==0) {
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+            /* First outer transaction on EACH real worker starts IF=0;
+             * later transactions start IF=1. Verify inherited IF exactly. */
+            const bool inherited_off=d59b_cycles[index]==0;
+            uint64_t inherited_flags=0;
+            if(inherited_off)
+                __asm__ volatile("pushfq; popq %0; cli":"=r"(inherited_flags)::"memory");
+            uint32_t cookie=0;
+            if(!d59b_enter(&d59b_context,&cookie)) {
+                failed=true;reason="D59B_ENTER";
+                for(;;) __asm__ volatile("cli; hlt":::"memory");
+            }
+            const uint64_t before=d59b_tsc();
+            if(!memory_boot_d59b_frame_cycle(&d59b_context)) {
+                failed=true;reason="D59B_FRAME";
+                for(;;) __asm__ volatile("cli; hlt":::"memory");
+            }
+            const uint64_t after=d59b_tsc();
+            if(after>=before && after-before>d59b_max_body_cycles)
+                d59b_max_body_cycles=after-before;
+            ++d59b_cycles[index];
+            if(!d59b_exit(&d59b_context,cookie)) {
+                failed=true;reason="D59B_EXIT";
+                for(;;) __asm__ volatile("cli; hlt":::"memory");
+            }
+            uint64_t restored_flags=0;
+            __asm__ volatile("pushfq; popq %0":"=r"(restored_flags)::"memory");
+            if(((restored_flags&UINT64_C(0x200))==0)!=inherited_off) {
+                failed=true;reason="D59B_IF_RESTORE";
+                for(;;) __asm__ volatile("cli; hlt":::"memory");
+            }
+            if(inherited_off && (inherited_flags&UINT64_C(0x200))!=0)
+                __asm__ volatile("sti":::"memory");
+#endif
             uint64_t outer=enter_critical();
             uint64_t inner=enter_critical();
             for(unsigned i=0;i<40;++i)
@@ -614,6 +682,9 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
     struct kernel_task_handle dispatched={0};
     if(ready) ready=kernel_task_dispatch(&tasks,&dispatched)==KERNEL_TASK_OK &&
         dispatched.slot==handles[D56_SUP_INDEX].slot;
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    if(ready) ready=d59b_context_init(&d59b_context,&d57_guard,&tasks,&owners);
+#endif
     exit_critical(flags);
     if(!ready) {reason="M10_A_SETUP";goto fail_early;}
 
@@ -635,6 +706,11 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         service.service_completions>=D56_MIN_WORKER_TICKS &&
         service.max_observed_gap_ticks<=D56_MAX_SERVICE_GAP &&
         critical_cycles!=0 &&
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+        d59b_cycles[0]!=0 && d59b_cycles[1]!=0 &&
+        d59b_real_irq_entries>=D56_MIN_WORKER_TICKS && d59b_irq_depth==0 &&
+        d59b_max_body_cycles!=0 &&
+#endif
 #ifdef SPIFFOS_M10_D58C_LOCK_IRQ_TEST
         d58c_lock_acquires==1 && d58c_lock_releases==1 &&
         d58c_locked_source_irqs>=3 &&
@@ -700,6 +776,19 @@ static void report_number(bool (*write)(const char *),uint64_t value)
 void m10_d56_report(bool (*write)(const char *))
 {
     if(write==NULL || !returned_to_boot || failed) return;
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    (void)write("D59B_WORKER0_FRAME_CYCLES:");
+    report_number(write,d59b_cycles[0]);
+    (void)write("\r\nD59B_WORKER1_FRAME_CYCLES:");
+    report_number(write,d59b_cycles[1]);
+    (void)write("\r\nD59B_AUTHENTIC_IRQ_ENTRIES:");
+    report_number(write,d59b_real_irq_entries);
+    (void)write("\r\nD59B_MAX_TRANSACTION_BODY_TSC:");
+    report_number(write,d59b_max_body_cycles);
+    (void)write("\r\nD59B_MAX_EXCLUSION_TSC:");
+    report_number(write,d59b_context.max_exclusion_tsc);
+    (void)write("\r\nSPIFFOS_M10_D59B_CONTEXT_IRQ_OK\r\n");
+#endif
     (void)write("D56_WORKER0_TICKS:");
     report_number(write,slices[0]);
     (void)write("\r\nD56_WORKER1_TICKS:");
