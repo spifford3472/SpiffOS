@@ -23,3 +23,13 @@ Next gate: implement a separately owned and independently witnessed non-IRQ IF=0
 ## Safety, rollback, change history
 
 All work is in disposable Forge checkout /tmp/spiffos-d58b-phase1-20261114, with QEMU -net none and no physical drives. No network infrastructure or accepted ISO changes. Discard the feature branch to rollback. 2026-11-14: owner-directed Phase 1 design and hosted gate recorded.
+
+## Phase 1b test-only real x86 BLOCKED-stack handoff (2026-11-14)
+
+The earlier D5.4 guest had a critical IF gap: after d53_acquire changed RUNNING to BLOCKED, it restored IF before switching off the blocked CPU stack. The stable cooperative fixture is intentionally unchanged in its normal unflagged behavior. Under BOTH SPIFFOS_M10_D54_GUEST_TEST and SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST, a new test-only assembly operation x86_d58b_block_switch preserves the existing saved-register layout but deliberately keeps IF=0 from blocked transition through physical stack transfer. This does not broaden the established x86_task_switch caller contract.
+
+In the test-only D5.4 variant, each high/medium waiter checks exact D5.3 M10-A BLOCKED metadata while on its own stack at IF=0, physically switches to surviving bootstrap via the dedicated assembly, and the dispatcher independently reads live RFLAGS and RSP before restoring its own previously enabled IF. It checks actual dispatcher RSP is outside every worker stack, the authoritative task current_slot is SIZE_MAX, and the waiting generation remains BLOCKED/registered. Only after a legitimate ownership transfer/wake does the worker resume and restore its own saved IF. Exactly two independently verified departures are required for fixture success.
+
+Actual make HOST_CC=gcc test-m10-d58b-block-guest on disposable QEMU: PASS at 128, 256 and 512MiB, markers SPIFFOS_M10_D58B_BLOCK_HANDOFF_OK and SPIFFOS_KEYBOARD_READY, no guest exceptions or D54 failure. Full output: /tmp/spiffos-d58b-block-guest.log. Local QWEN qwen3-coder:30b ran again for a tiny pure post-switch admission predicate (60.04s), which was reviewed; coordinator instead used actual live pushfq/RSP assembly observation and exact D5.3 metadata before admission, avoiding an untrusted all-boolean gate. No Codex.
+
+Remaining safety boundary: the dedicated blocked-stack proof is cooperative and non-IRQ. It does not demonstrate full dynamic lock donation/wake during IRQ0-driven scheduling, and it does not permit D5.6/D5.5c frame-check relaxation yet. The ordinary kernel and D5.4 fixture are left unchanged except test-only conditional code.

@@ -10,6 +10,12 @@
 #include "kernel-task-cleanup.h"
 #include "memory-boot.h"
 #include "x86-task-context.h"
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+#include "m10-d58b-admission.h"
+/* Diagnostic-only IF=0 departure. Do not broaden the ordinary M10-B ABI. */
+extern void x86_d58b_block_switch(struct x86_task_context *old_context,
+                                  struct x86_task_context *surviving_context);
+#endif
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -29,6 +35,9 @@ static volatile bool failed;
 static volatile bool done[D54_GUEST_WORKERS];
 static volatile unsigned stage[D54_GUEST_WORKERS];
 static const char *reason="UNSET";
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+static volatile unsigned verified_departures;
+#endif
 
 /* Static diagnostic failure labels remain accessible after stack failure. */
 const char *m10_d54_guest_failure_reason(void) {return reason;}
@@ -104,9 +113,21 @@ __attribute__((noreturn)) static void high(void)
     uint64_t flags=irq_off();
     if(d53_acquire(&locks,&resources,&tasks,0,ids[1])!=D53_BLOCKED)
         failed=true;
-    irq_restore(flags);
     stage[1]=1;
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+    /* D5.3 has made this exact task BLOCKED. Keep IF=0 all the way
+     * through the physical stack transfer; never restore it beforehand. */
+    if(!d58b_blocked_departure_metadata(&tasks,&resources,&locks,
+                                          ids[1],false,true))
+        {failed=true;reason="HIGH_BLOCK_GRAPH";}
+    x86_d58b_block_switch(&context[1],&bootstrap);
+    /* This continuation is reachable only after an explicit owner wake.
+     * Restore the original worker IF, not a borrowed dispatcher flag. */
+    irq_restore(flags);
+#else
+    irq_restore(flags);
     x86_task_switch(&context[1],&bootstrap);
+#endif
     flags=irq_off();
     if(d53_release(&locks,&resources,&tasks,0,ids[1])!=D53_OK)
         failed=true;
@@ -122,9 +143,17 @@ __attribute__((noreturn)) static void medium(void)
     uint64_t flags=irq_off();
     if(d53_acquire(&locks,&resources,&tasks,0,ids[2])!=D53_BLOCKED)
         failed=true;
-    irq_restore(flags);
     stage[2]=1;
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+    if(!d58b_blocked_departure_metadata(&tasks,&resources,&locks,
+                                          ids[2],false,true))
+        {failed=true;reason="MEDIUM_BLOCK_GRAPH";}
+    x86_d58b_block_switch(&context[2],&bootstrap);
+    irq_restore(flags);
+#else
+    irq_restore(flags);
     x86_task_switch(&context[2],&bootstrap);
+#endif
     flags=irq_off();
     if(d53_release(&locks,&resources,&tasks,0,ids[2])!=D53_OK)
         failed=true;
@@ -207,7 +236,44 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         if(selected.slot!=order[turn]) {
             reason="PRIORITY_ORDER";goto fail;
         }
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+        /* The original bootstrap IF is known before entering the task.
+         * On a BLOCKED return it stays zero until these physical proofs
+         * succeed; restore boot IF only AFTER checking the surviving RSP. */
+        uint64_t bootstrap_if;
+        __asm__ volatile("pushfq; popq %0":"=r"(bootstrap_if)::"memory");
+        if((bootstrap_if&UINT64_C(0x200))==0) {
+            reason="BOOT_IF_PRE";goto fail;
+        }
+#endif
         x86_task_switch(&bootstrap,&context[selected.slot]);
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+        if(turn==1 || turn==2) {
+            uintptr_t observed_rsp;
+            uint64_t live_flags;
+            __asm__ volatile("movq %%rsp,%0":"=r"(observed_rsp)::"memory");
+            __asm__ volatile("pushfq; popq %0":"=r"(live_flags)::"memory");
+            bool independent=observed_rsp!=0;
+            for(size_t j=0;j<D54_GUEST_WORKERS;++j) {
+                uintptr_t bottom=(uintptr_t)stack[j];
+                if(bottom>UINTPTR_MAX-X86_TASK_STACK_BYTES ||
+                   (observed_rsp>=bottom &&
+                    observed_rsp<bottom+X86_TASK_STACK_BYTES))
+                    independent=false;
+            }
+            if((live_flags&UINT64_C(0x200))!=0 || !independent ||
+               tasks.current_slot!=SIZE_MAX ||
+               !d58b_blocked_departure_metadata(&tasks,&resources,&locks,
+                                                  ids[selected.slot],false,true)) {
+                reason="BLOCKED_STACK_UNSAFE";
+                /* Restore boot IF before following ordinary error path. */
+                irq_restore(bootstrap_if);
+                goto fail;
+            }
+            ++verified_departures;
+        }
+        irq_restore(bootstrap_if);
+#endif
         flags=irq_off();
         enum kernel_task_resource_result saved=
             kernel_task_resources_saved_rsp(&resources,&tasks,selected,
@@ -253,6 +319,11 @@ bool m10_d54_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             reason="SECOND_TRANSFER";goto fail;
         }
     }
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+    if(verified_departures!=2) {
+        reason="MISSING_BLOCKED_WITNESS";goto fail;
+    }
+#endif
     if(!done[0] || !done[1] || !done[2] ||
        stage[0]!=3 || stage[1]!=2 || stage[2]!=2 ||
        locks.locks[0].owned || resources.task[0].owned_locks ||

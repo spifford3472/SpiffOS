@@ -346,3 +346,7 @@ D5.8 explores deferred IRQ scheduling notifications and actual multiworker prior
 ## M10-D5.8b Phase 1 graph-backed eligibility (test-only)
 
 The D5.8b architecture separates lock graph/ledger admission from real x86 interrupt frame geometry and blocked-stack surrender. Exact RUNNING/RUNNABLE M10-A generation and D5.3 counter-equal graph may prove a lock-holding task *eligible for later frame validation*, but cannot authorize an IRQ handoff or a BLOCKED task to execute. Existing D5.6/D5.5c checks remain unmodified until separately validated. See `../decisions/ADR-m10-d58b-frame-ownership-gate.md`.
+
+## D5.8b exact BLOCKED stack departure diagnostic (QEMU only)
+
+A dedicated D5.8b flag reuses the established D5.4 multiwaiter guest but leaves IF disabled across the RUNNING-to-BLOCKED transition and through a separate, test-only x86 register-context switch. The surviving boot dispatcher reads actual IF and RSP before restoring IF, verifies it is outside all three worker stacks and confirms the exact BLOCKED generation remains registered. Its two worker continuations resume only after real D5.3 wake. This is not IRQ-preemptive lock contention or a production context-switch ABI; see ../decisions/ADR-m10-d58b-frame-ownership-gate.md.

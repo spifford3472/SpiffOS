@@ -1310,6 +1310,9 @@ void kmain(void)
         halt_forever();
     }
     (void)serial_write("SPIFFOS_M10_D54_GUEST_OK\r\n");
+#ifdef SPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST
+    (void)serial_write("SPIFFOS_M10_D58B_BLOCK_HANDOFF_OK\r\n");
+#endif
 #endif
 
 #ifndef SPIFFOS_SCROLL_TEST
