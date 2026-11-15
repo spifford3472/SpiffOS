@@ -893,16 +893,17 @@ bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
     return true;
 }
 
-#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D55C_FRAME_GUEST_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
+#if defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST) || defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D55C_FRAME_GUEST_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
 /* M10-B first owned-stack QEMU proof. Each 16 KiB stack must be made of
  * exactly four contiguous, individually M2-owned ordinary KERNEL frames.
  * Contiguity is NOT assumed from M2's allocation order: it is verified
  * before a single pointer becomes visible to the caller. Allocations occur
  * only with IF=0, after retained-service validation and before its next
  * read-only check; the test returns these frames before keyboard startup. */
-/* Keep older D3/M10-B tests byte-for-byte at two stacks. Only the
- * new D4 completion diagnostic allocates four independent workers. */
-#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST)
+/* Keep older D3/M10-B tests byte-for-byte at two stacks. D4, D5.4,
+ * D5.6 and the isolated C2b real-IRQ fixture need four independently
+ * owned M2 stack slots; the normal kernel does not compile this block. */
+#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST)
 enum { M10_B_TEST_STACKS=4, M10_B_STACK_PAGES=4 };
 #else
 enum { M10_B_TEST_STACKS=2, M10_B_STACK_PAGES=4 };
@@ -997,7 +998,7 @@ bool memory_boot_m10_task_stack_failure_probe(void)
 {
     if(!retained_started || m10_b_stack_active[0] ||
        m10_b_stack_active[1] || m10_b_stack_poisoned ||
-#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST)
+#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST)
        m10_b_stack_active[2] || m10_b_stack_active[3] ||
 #endif
        !frame_allocator_check(&boot_allocator)) return false;

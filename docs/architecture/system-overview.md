@@ -362,3 +362,11 @@ Under a distinct D5.4 guest test flag, an IF-off blocked high-priority waiter re
 ## M10-D5.8c C2b Phase 0 mode-specific execution gate (hosted test only)
 
 A read-only exact-generation context-form validator separates cooperative RET continuations from independently authenticated 20-qword IRETQ frames for M10-A READY targets. Even after a mutex transfer wakes a high-priority RET waiter, it is not an IRQ-return candidate. C2b actual physical IRQ dispatch and disarm/off-ramp remain unproven; see ../decisions/ADR-m10-d58c-c2b-context-modes.md.
+
+## M10-D5.8c C2b Phase 1 proposed physical IRQ bridge
+
+The diagnostic uses four independently owned M2 stacks: low donated owner (cooperative startup then hardware IRQ source), high true BLOCKED RET waiter, medium full IRQ IRETQ task, and reserved supervisor full IRQ IRETQ task. Only exact M10-A IRQ handoff may switch the three eligible IRQ contexts. The owner must disarm IRQ scheduling with IF=0 before lock release/waking high and then transfer to a surviving boot stack, where the RET-only high is resumed cooperatively. This remains an unverified isolated experiment until QEMU, faults, regression and exact-head CI pass; see ../decisions/ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.8c C2b verified test-only physical context integration
+
+A separately flagged x86 IRQ0 test now switches the donated low mutex owner, competing medium CPU worker and independently owned reserved supervisor through actual validated M10-A IRETQ handoffs while the high-priority waiter remains BLOCKED on a genuine cooperative RET stack. The low owner disarms IRQ handoffs IF-off before releasing the lock and waking high; boot dispatcher resumes high through the original RET stack and safely reaps all backing before editor. Positive 128/256/512MiB and 15 injected fail-closed boots have passed; not a production global-preemption guarantee. See ../operations/m10-d58c-c2b-real-irq-20261114.md.
