@@ -47,3 +47,20 @@ clang -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 \
 5. Obtain applicable approval before production wiring/merge/deployment; ordinary editor/BASIC preemption remains disabled.
 
 Rollback: discard this stacked draft branch. No production path, host operating system, physical media or infrastructure modified.
+
+## Phase 0b — real M2 frame allocator hosted fixture (2026-11-15)
+
+Qwen's first small `frame_gate_test.c` draft was rejected at the compilation/review gate: it had Markdown code fences, a nonexistent `struct frame_slot`, wrong gate-enter/exit signatures, a faulty IF restoration assertion, and omitted `main`. The coordinator corrected the isolated fixture against the actual public headers, preserving source-level provenance and not changing the allocator implementation. This is a documented first attempt, **not** a successful Qwen implementation acceptance.
+
+- `tests/m10-d59b-gate/frame_gate_test.c` links unchanged `src/kernel/frame-allocator.c`, `src/kernel/frame-allocate.c`, `src/kernel/memory-map.c` and the hosted gate.
+- The parent branch and `main` have identical Git blob SHAs for all three allocator sources and `src/kernel/frame-allocator.h`. The test compiles the same real implementation instead of a handwritten allocator mock.
+- Hosted fixture-only wrapper denies calls without exact generation-bound gate ownership, and verifies rejected IRQ/untrusted/stale callers do not mutate allocator state. **It is not a production enforcement wrapper.**
+- Tests ordinary frame allocation, release, OOM with untouched output/metadata, reserved-frame preservation, forbidden reserve requests, complete owner/counter invariants, and saved IF on/off restoration. All memory/map addresses are simulated numeric physical addresses and never dereferenced.
+- Strict GCC C11 with ASan+UBSan: **PASS** marker `SPIFFOS_M10_D59B_REAL_FRAME_HOSTED_OK`.
+- Strict Clang C11 (no sanitizers): **PASS**, same marker.
+- Both suites were rerun directly on Forge; working owner checkout remained clean and accepted ISO SHA remained `0f2dbca116bd991cd44ad7b477042a8bf13caae67711819290b30b8b5bdb9cf6`.
+- `Makefile` adds `test-m10-d59b-gate` and `test-m10-d59b-acceptance`, which depends on the inherited `test-m10-d59-acceptance`. `.github/workflows/kernel-ci.yml` now selects the D5.9-B acceptance target if available, requiring `SPIFFOS_M10_D59B_HOSTED_ACCEPTANCE_OK`.
+
+**Still unproven:** direct unsafe production allocator callers remain possible; no true CPU/IF provenance or IRQ gate has been authenticated; no injected faults inside the three-store allocator mutation sequence; no real QEMU IRQ-off latency, scheduler handoff, task stack retirement or production allocator preemption proof. Do not treat these hosted successes as D5.9-B completion.
+
+Change history: 2026-11-15 Phase 0b added a reviewed, real-source hosted fixture and CI target. No merge/deploy.
