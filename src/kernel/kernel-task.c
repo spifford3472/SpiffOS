@@ -205,10 +205,15 @@ enum kernel_task_result kernel_task_dispatch_selected(
 }
 
 /* Privileged IRQ0 handoff of two fully prevalidated task identities.
- * Caller already verified real saved CPU frame/stack bounds, IF=0, no
- * nested interrupt, no preempt-disabled depth and no registered lock refs.
- * No saved frame pointers are consulted here; M10-A is the only mutator
- * of task lifecycle and FIFO membership. Every rejection is immutable. */
+ * Caller already verified actual saved CPU frame/stack bounds, IF=0,
+ * no nested IRQ, no preempt-disabled depth and safe resource references:
+ * D5.6 admits only zero lock/wait refs; D5.8c's isolated diagnostic may
+ * admit graph-proven mutex owners via D5.8b while NEVER admitting a
+ * BLOCKED waiter or mutating D5.3 from IRQ. This M10-A primitive has no
+ * resource authority of its own and must not be invoked without the
+ * caller's separately tested generation/stack/lock admission contract.
+ * No saved frame pointers are consulted here; M10-A alone mutates task
+ * lifecycle and FIFO membership. Every rejection remains immutable. */
 enum kernel_task_result kernel_task_irq_handoff(
     struct kernel_task_table *table,
     struct kernel_task_handle source,

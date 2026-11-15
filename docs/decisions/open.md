@@ -376,3 +376,7 @@ D5.7 exact-head CI passed, but there is no integrated real IRQ lock contention/d
 ## M10-D5.8b Phase 1 remaining x86 handoff boundary — 2026-11-14
 
 A nonzero resource lock count can be legitimate when validated against the full D5.3 graph, but D5.6 and D5.5c still reject such frames. A read-only admission helper cannot itself prove genuine saved IRQ frame geometry, live stack detachment or blocked-task x86 surrender. Before real lock-contention IRQ switching, explicitly validate physical CPU RSP after `d53_acquire()` makes the waiter BLOCKED, transfer to a separate surviving stack at IF=0 non-IRQ safe point, and independently validate READY target frame ownership. No synthetic blocked-stack IRETQ. See `ADR-m10-d58b-frame-ownership-gate.md`.
+
+## M10-D5.8c remaining live-waiter IRQ integration gate — 2026-11-14
+
+D5.8b's cooperative IF-off BLOCKED task context is a saved six-register RET stack, whereas D5.6 IRQ0 task continuation is a full 20-qword IRETQ frame. Their states are NOT interchangeable. Before real-IRQ high-priority wait and low-priority donation, prove handoff between those independent contexts without synthetic frames, running a blocked task, mutating D5.3 in IRQ, or releasing orphaned locks. Stage C1 tests only genuine lock-owning worker frame admission while an IRQ-preemptive competitor and supervisor remain live. See ADR-m10-d58c-real-irq-lock-owner.md.
