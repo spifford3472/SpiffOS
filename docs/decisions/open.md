@@ -413,3 +413,10 @@ ADR-m10-d59b-authentic-context.md.
 One-page/64-record/32-byte diagnostic transactions do not close general heap
 latency, root-reset lifetime, large zeroing, page rollback or caller coverage.
 See ADR-m10-d59b-service-transactions.md.
+
+## D5.9-B runtime admission acceptance — 2026-11-15
+
+Caller coverage, stack-frame release admission, callback-free page initialization
+and actual rollback remain open for the new wiring candidate. Boot-only report,
+reset/snapshot/MMIO APIs must reject active-task use until D5.9-C/D ownership
+models exist. Observed heap timings are not hardware guarantees.

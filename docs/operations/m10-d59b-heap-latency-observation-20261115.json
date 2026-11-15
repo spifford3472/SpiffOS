@@ -1,0 +1,109 @@
+{
+  "root": "/home/rt-remote/workspaces/spiffos-d59b-service-transactions",
+  "temporary_source": "/tmp/spiffos-d59b-latency-bs2kxh39/source",
+  "heap_source_sha256": "ea918031b480424ab48370153e0200826db0640dfe3b440dba82ee719b2756ba",
+  "results": [
+    {
+      "mib": 128,
+      "tsc_per_ms": 4096683,
+      "samples": [
+        {
+          "bytes": 32,
+          "cycles": 212544,
+          "estimated_us": 51,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 4096,
+          "cycles": 175316,
+          "estimated_us": 42,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 65536,
+          "cycles": 593229,
+          "estimated_us": 144,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 1048576,
+          "cycles": 6471481,
+          "estimated_us": 1579,
+          "clock_delta_ms": 0
+        }
+      ],
+      "bulk_cleanup_us": 67,
+      "bulk_clock_delta_ms": 0
+    },
+    {
+      "mib": 256,
+      "tsc_per_ms": 4067752,
+      "samples": [
+        {
+          "bytes": 32,
+          "cycles": 207255,
+          "estimated_us": 50,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 4096,
+          "cycles": 165189,
+          "estimated_us": 40,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 65536,
+          "cycles": 538330,
+          "estimated_us": 132,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 1048576,
+          "cycles": 6411211,
+          "estimated_us": 1576,
+          "clock_delta_ms": 0
+        }
+      ],
+      "bulk_cleanup_us": 64,
+      "bulk_clock_delta_ms": 0
+    },
+    {
+      "mib": 512,
+      "tsc_per_ms": 3910546,
+      "samples": [
+        {
+          "bytes": 32,
+          "cycles": 225090,
+          "estimated_us": 57,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 4096,
+          "cycles": 165845,
+          "estimated_us": 42,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 65536,
+          "cycles": 530827,
+          "estimated_us": 135,
+          "clock_delta_ms": 0
+        },
+        {
+          "bytes": 1048576,
+          "cycles": 6443068,
+          "estimated_us": 1647,
+          "clock_delta_ms": 0
+        }
+      ],
+      "bulk_cleanup_us": 66,
+      "bulk_clock_delta_ms": 0
+    }
+  ],
+  "source_commit": "c0cc335edce315252591dad51781bd9b76b87976",
+  "arena_bytes": 1069024,
+  "metadata_capacity": 1024,
+  "active_records_before_allocation": 1023,
+  "trials_per_allocation_size": 8,
+  "warning": "Observational nominal guest timing; no physical deadline or exhaustive bound."
+}

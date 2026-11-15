@@ -389,3 +389,11 @@ A diagnostic probe invokes the existing service/heap implementation under the
 same authenticated D5.7 guard. Hosted and actual retained-boot instances use
 the same probe code; no parallel memory manager. General service activation
 remains open. See ../decisions/ADR-m10-d59b-service-transactions.md.
+
+## D5.9-B runtime memory integration candidate — 2026-11-15
+
+Thin entry wrappers will reuse the existing implementations and D5.7 guard.
+Explicit boot/runtime/retirement authority avoids a fabricated bootstrap task;
+protected M3 initialization will use a fixed direct zeroing leaf. No additional
+allocator, lock, task table or ownership registry. Implementation/acceptance
+status: docs-first candidate; see ../decisions/ADR-m10-d59b-runtime-memory-wiring.md.

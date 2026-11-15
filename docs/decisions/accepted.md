@@ -544,3 +544,11 @@ Owner autonomous memory-safety scope permits isolated tests of the existing one-
 M6 service through the same D5.7/context adapter. No general heap masking or new
 manager; see ADR-m10-d59b-service-transactions.md. Parent #91 exact-head CI run #108 has passed; this child still requires
 its own independent acceptance.
+
+## D5.9-B runtime admission scope — 2026-11-15
+
+Owner autonomous memory work continues from independently accepted #92 (CI #109).
+The same D5.7 guard may admit known allocator/service entry points in a separate
+flagged profile, with verified bootstrap/runtime/retirement authority and direct
+fixed page initialization. No callback exception or general preemption approval
+is inferred. See ADR-m10-d59b-runtime-memory-wiring.md.
