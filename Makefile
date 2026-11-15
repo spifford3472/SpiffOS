@@ -1092,3 +1092,22 @@ test-m10-d59-audit:
 .PHONY: test-m10-d59-acceptance
 test-m10-d59-acceptance: test-m10-d59-audit test-m10-d58c-c2b-real-acceptance
 	@echo SPIFFOS_M10_D59_AUDIT_ACCEPTANCE_OK
+
+# M10-D5.9-B hosted, opt-in exclusion-gate and real M2 frame fixture.
+# No production kernel object depends on this diagnostic implementation.
+.PHONY: test-m10-d59b-gate
+test-m10-d59b-gate: build/m10-d59b-gate-host-test build/m10-d59b-frame-host-test
+	./build/m10-d59b-gate-host-test
+	./build/m10-d59b-frame-host-test
+
+build/m10-d59b-gate-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h tests/m10-d59b-gate/test_gate.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/test_gate.c -o $@
+
+build/m10-d59b-frame-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h tests/m10-d59b-gate/frame_gate_test.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h src/kernel/memory-map.c src/kernel/memory-map.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Iinclude -Isrc/kernel tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/frame_gate_test.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -o $@
+
+.PHONY: test-m10-d59b-acceptance
+test-m10-d59b-acceptance: test-m10-d59b-gate test-m10-d59-acceptance
+	@echo SPIFFOS_M10_D59B_HOSTED_ACCEPTANCE_OK
