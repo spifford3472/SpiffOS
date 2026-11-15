@@ -1096,9 +1096,10 @@ test-m10-d59-acceptance: test-m10-d59-audit test-m10-d58c-c2b-real-acceptance
 # M10-D5.9-B hosted, opt-in exclusion-gate and real M2 frame fixture.
 # No production kernel object depends on this diagnostic implementation.
 .PHONY: test-m10-d59b-gate
-test-m10-d59b-gate: build/m10-d59b-gate-host-test build/m10-d59b-frame-host-test
+test-m10-d59b-gate: build/m10-d59b-gate-host-test build/m10-d59b-frame-host-test build/m10-d59b-mutation-host-test
 	./build/m10-d59b-gate-host-test
 	./build/m10-d59b-frame-host-test
+	./build/m10-d59b-mutation-host-test
 
 build/m10-d59b-gate-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h tests/m10-d59b-gate/test_gate.c Makefile
 	mkdir -p build
@@ -1107,6 +1108,16 @@ build/m10-d59b-gate-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/ga
 build/m10-d59b-frame-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h tests/m10-d59b-gate/frame_gate_test.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h src/kernel/memory-map.c src/kernel/memory-map.h Makefile
 	mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Iinclude -Isrc/kernel tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/frame_gate_test.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -o $@
+
+# Inject read-only test callbacks at three real frame-allocate metadata writes.
+# A disposable source copy is generated in build; production src stays pristine.
+build/m10-d59b-instrumented-frame-allocate.c: tests/m10-d59b-gate/instrument-frame-mutations.py src/kernel/frame-allocate.c Makefile
+	mkdir -p build
+	python3 tests/m10-d59b-gate/instrument-frame-mutations.py src/kernel/frame-allocate.c $@
+
+build/m10-d59b-mutation-host-test: build/m10-d59b-instrumented-frame-allocate.c tests/m10-d59b-gate/frame_mutation_test.c tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h src/kernel/frame-allocator.c src/kernel/memory-map.c src/kernel/frame-allocator.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/frame_mutation_test.c build/m10-d59b-instrumented-frame-allocate.c src/kernel/frame-allocator.c src/kernel/memory-map.c -o $@
 
 .PHONY: test-m10-d59b-acceptance
 test-m10-d59b-acceptance: test-m10-d59b-gate test-m10-d59-acceptance
