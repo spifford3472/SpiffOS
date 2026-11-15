@@ -384,3 +384,7 @@ D5.8b's cooperative IF-off BLOCKED task context is a saved six-register RET stac
 ## M10-D5.8c C2b true IRQ handoff with blocked cooperative context — 2026-11-14
 
 The first C2a fixture may prove actual IRQ0 saved-frame observation of donation while the owner is RUNNING and a high-priority waiter is BLOCKED, but priority-aware task selection still occurs at a non-IRQ D5.4 safe point. Before claiming true IRQ0 priority-inherited handoff among contended workers, a separate verified IRETQ/RET context interoperability design, real medium CPU preemption, bounded supervisor work and negative recovery must pass. A blocked task must never be an IRETQ destination merely because M10-A wakes it. See ADR-m10-d58c-c2-blocked-irq-observation.md.
+
+## M10-D5.8c C2b physical frame/stack interoperability — 2026-11-14
+
+A pure generation-tagged context-form admission guard can refuse illegal RET-to-IRETQ destinations, but cannot prove that a CPU has left one stack, authenticated a new full saved IRQ frame or safely disarmed IRQ selection before waking a RET-only waiter. A separate QEMU-only physical bridge and supervisor CPU service proof remain OPEN. No blind conversion, synthetic frame or production activation. See ADR-m10-d58c-c2b-context-modes.md.

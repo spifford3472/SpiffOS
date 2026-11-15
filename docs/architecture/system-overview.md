@@ -358,3 +358,7 @@ C1 exercises authentic x86 IRQ0 preemption of a task holding a generation-regist
 ## M10-D5.8c C2a authentic interrupt donation witness (test-only)
 
 Under a distinct D5.4 guest test flag, an IF-off blocked high-priority waiter remains on its exact saved cooperative stack; low-priority mutex owner resumes via M10-A priority dispatch while a medium-priority competitor remains READY. Real x86 IRQ0 may *read* the whole D5.3 graph, verify owner IRQ frame/IF/stack and record effective donation before owner releases and wakes high off-IRQ. The IRQ does not switch task contexts in C2a; full real-IRQ priority handoff C2b remains open. See ../decisions/ADR-m10-d58c-c2-blocked-irq-observation.md.
+
+## M10-D5.8c C2b Phase 0 mode-specific execution gate (hosted test only)
+
+A read-only exact-generation context-form validator separates cooperative RET continuations from independently authenticated 20-qword IRETQ frames for M10-A READY targets. Even after a mutex transfer wakes a high-priority RET waiter, it is not an IRQ-return candidate. C2b actual physical IRQ dispatch and disarm/off-ramp remain unproven; see ../decisions/ADR-m10-d58c-c2b-context-modes.md.

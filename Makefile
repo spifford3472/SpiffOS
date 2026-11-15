@@ -315,6 +315,19 @@ build/m10-d58c-irq-frame-test: tests/m10-d58c-irq-frame-test.c src/kernel/m10-d5
 	@mkdir -p build
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58c-irq-frame-test.c src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
 
+# C2b Phase 0 is pure, hosted context-form validation, not IRQ dispatch.
+.PHONY: test-m10-d58c-c2b-mode
+test-m10-d58c-c2b-mode: build/m10-d58c-c2b-mode-test
+	./build/m10-d58c-c2b-mode-test
+
+build/m10-d58c-c2b-mode-test: tests/m10-d58c-c2b-mode-test.c src/kernel/m10-d58c-c2b-resume-gate.c src/kernel/m10-d58c-c2b-resume-gate.h src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58c-c2b-mode-test.c src/kernel/m10-d58c-c2b-resume-gate.c src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+.PHONY: test-m10-d58c-c2b-acceptance
+test-m10-d58c-c2b-acceptance: test-m10-d58c-c2b-mode test-m10-d58c-c2-acceptance
+	@echo SPIFFOS_M10_D58C_C2B_MODE_OK
+
 .PHONY: test-m10-d58c-c2-acceptance
 test-m10-d58c-c2-acceptance: test-m10-d58c-c2-observe test-m10-d58c-acceptance
 	@echo SPIFFOS_M10_D58C_C2_ACCEPTANCE_OK
