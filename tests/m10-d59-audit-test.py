@@ -26,7 +26,7 @@ class AuditGateTest(unittest.TestCase):
 
     def test_normal_inventory(self):
         actual = audit.inventory()
-        self.assertEqual(33, len(actual))
+        self.assertEqual(64, len(actual))
         audit.verify({
             "schema": 1, "entries": actual,
         }, actual)
@@ -70,6 +70,31 @@ class AuditGateTest(unittest.TestCase):
             self.assertIn(path, actual)
             self.assertEqual([], actual[path]["functions"])
             self.assertEqual("irq-assembly", actual[path]["category"])
+
+    def test_new_source_or_unreviewed_drift_rejected(self):
+        actual = audit.inventory()
+        unreviewed = [
+            key for key, entry in actual.items()
+            if entry["category"] == "unreviewed"
+        ]
+        self.assertEqual(31, len(unreviewed))
+        self.assertTrue(all(
+            actual[key]["state"] == "UNREVIEWED_NO_PREEMPTION"
+            for key in unreviewed
+        ))
+        new_source = "src/kernel/new_irq_driver.c"
+        copied = {key: dict(value) for key, value in actual.items()}
+        copied[new_source] = {
+            "category": "unreviewed",
+            "state": "UNREVIEWED_NO_PREEMPTION",
+            "sha256": "0" * 64, "functions": [], "candidate_calls": [],
+        }
+        with self.assertRaisesRegex(RuntimeError, new_source):
+            audit.verify({"schema": 1, "entries": copied}, actual)
+        copied = {key: dict(value) for key, value in actual.items()}
+        copied[unreviewed[0]]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(RuntimeError, "do NOT auto-accept"):
+            audit.verify({"schema": 1, "entries": copied}, actual)
 
     def test_guard_only_no_production_activation(self):
         # Test flags are in test-only linkage, not preemptible user code.

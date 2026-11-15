@@ -125,6 +125,22 @@ def inventory():
             "functions": [],
             "candidate_calls": [],
         }
+    # No new .c or .S file may escape this gate through an incomplete
+    # category allowlist. Unreviewed paths are hashed but NEVER certified;
+    # the only safe next action on changed bytes is source/caller review.
+    for path in sorted((ROOT / "src/kernel").iterdir()):
+        if path.suffix not in (".c", ".S") or not path.is_file():
+            continue
+        key = f"src/kernel/{path.name}"
+        if key in result:
+            continue
+        result[key] = {
+            "category": "unreviewed",
+            "state": "UNREVIEWED_NO_PREEMPTION",
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "functions": [],
+            "candidate_calls": [],
+        }
     return result
 
 
@@ -165,8 +181,9 @@ def main(argv=None):
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
     print(
-        f"SPIFFOS_M10_D59_AUDIT_GUARD_OK: {len(actual)} reviewed C/ASM "
-        "source files, all REQUIRE explicit exclusion proof; no runtime changes")
+        f"SPIFFOS_M10_D59_AUDIT_GUARD_OK: {len(actual)} tracked C/ASM "
+        "files (33 reviewed path entries, remainder explicitly UNREVIEWED); "
+        "no runtime changes")
     return 0
 
 
