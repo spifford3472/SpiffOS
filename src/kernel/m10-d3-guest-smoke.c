@@ -16,6 +16,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+#include "kernel-priority-policy.h"
+#endif
 
 #ifdef SPIFFOS_M10_D3_PREEMPT_TEST
 enum {
@@ -31,6 +34,19 @@ static uint64_t *d3_frame[D3_CONTEXTS];
 static uint8_t *d3_stack[D3_WORKERS];
 static uint64_t d3_cs, d3_ss;
 static const char *d3_failure="UNSET";
+
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+/* D4 uses only D3's permanent boot context and two already-owned stacks.
+ * All scheduling metadata is preallocated statically; IRQ selection cannot
+ * allocate or free pages, and all state is single-CPU/IF-masked. */
+enum { D4_PHASE_TICKS=80, D4_PHASE_COUNT=4,
+       D4_TOTAL_TICKS=D4_PHASE_TICKS*D4_PHASE_COUNT,
+       D4_MAX_WAIT=64 };
+static uint64_t d4_age[D3_CONTEXTS];
+static volatile uint32_t d4_supervisor_reserved;
+static volatile uint32_t d4_phase_a[D4_PHASE_COUNT];
+static volatile uint32_t d4_worst_wait;
+#endif
 
 /* Owned static string is valid indefinitely, including after task cleanup.
  * Called only on the boot stack, never from an interrupt. */
@@ -141,6 +157,63 @@ static bool d3_valid_frame(unsigned current, const uint64_t *frame)
            (frame[M10_D2_RFLAGS]&UINT64_C(0x202))==UINT64_C(0x202);
 }
 
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+/* Choose among an always-runnable supervisor and two CPU hogs. Map the
+ * existing D3 boot to D1's reserved policy slot 15, worker A to 0 and
+ * worker B to 1. All candidate frames are validated by the D3 caller
+ * before IRETQ; this helper never owns or mutates a task stack. */
+static bool d4_choose_next(unsigned *next)
+{
+    if(next==NULL || d3_ticks==0) return false;
+    uint32_t phase=(d3_ticks-1u)/D4_PHASE_TICKS;
+    if(phase>=D4_PHASE_COUNT) phase=D4_PHASE_COUNT-1u;
+    struct kernel_priority_candidate candidates[D3_CONTEXTS]={
+        {.slot=KERNEL_PRIORITY_SUPERVISOR_SLOT,
+         .priority=KERNEL_PRIORITY_NORMAL,
+         .waiting_dispatches=d4_age[D3_BOOT],
+         .supervisor=true},
+        {.slot=0,
+         .priority=(enum kernel_priority_class)phase,
+         .waiting_dispatches=d4_age[D3_WORKER_A],
+         .supervisor=false},
+        {.slot=1,
+         .priority=KERNEL_PRIORITY_TIME_SENSITIVE,
+         .waiting_dispatches=d4_age[D3_WORKER_B],
+         .supervisor=false}
+    };
+#ifdef SPIFFOS_M10_D4_BAD_PRIORITY_TEST
+    /* Deliberate corruption, isolated to the negative QEMU image only:
+     * the D1 policy MUST reject it and the D3 dispatcher must fail closed. */
+    candidates[1].priority=(enum kernel_priority_class)4;
+#endif
+    uint32_t choice=UINT32_MAX;
+    if(kernel_priority_choose(candidates,D3_CONTEXTS,d3_ticks-1u,
+                              &choice)!=KERNEL_PRIORITY_OK)
+        return false;
+    if(choice==KERNEL_PRIORITY_SUPERVISOR_SLOT) *next=D3_BOOT;
+    else if(choice==0) *next=D3_WORKER_A;
+    else if(choice==1) *next=D3_WORKER_B;
+    else return false;
+    if((d3_ticks-1u)%KERNEL_PRIORITY_SUPERVISOR_INTERVAL==
+            KERNEL_PRIORITY_SUPERVISOR_INTERVAL-1u) {
+        if(*next!=D3_BOOT) return false;
+        ++d4_supervisor_reserved;
+    }
+    if(*next==D3_WORKER_A) ++d4_phase_a[phase];
+    /* The pure D1 selector has no mutations: explicitly update all
+     * three wait ages under the same masked IRQ-exit critical section.
+     * Age saturation prevents wraparound and false starvation relief. */
+    for(unsigned index=0;index<D3_CONTEXTS;++index) {
+        if(index==*next) d4_age[index]=0;
+        else if(d4_age[index]!=UINT64_MAX) ++d4_age[index];
+        if(d4_age[index]>d4_worst_wait)
+            d4_worst_wait=(uint32_t)(d4_age[index]>UINT32_MAX ?
+                                    UINT32_MAX:d4_age[index]);
+    }
+    return d4_worst_wait<D4_MAX_WAIT;
+}
+#endif
+
 /* Called by test-only assembly AFTER the existing C IRQ0 handler has
  * accounted its tick and written exactly one LAPIC EOI. The IRQ gate keeps
  * IF=0, no nested IRQ occurs and this selector performs no I/O, allocation,
@@ -163,10 +236,18 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
     ++d3_ticks;
     ++d3_slices[current];
     if(d3_ticks>D3_MAX_IRQ_SLICES) d3_failed=true;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* Complete only after all four priority epochs and real supervisor
+     * opportunities have elapsed. Progress is rechecked on the boot stack
+     * before any worker-owned backing is released. */
+    if(current==D3_BOOT && d3_ticks>=D4_TOTAL_TICKS)
+        d3_done=true;
+#else
     if(current==D3_BOOT &&
        d3_slices[D3_WORKER_A]>=D3_REQUIRED_SLICES &&
        d3_slices[D3_WORKER_B]>=D3_REQUIRED_SLICES)
         d3_done=true;
+#endif
     if(d3_done || d3_failed) {
         /* All stacks remain allocated; boot code will release them only
          * after this IRQ has IRETQ'd to its surviving dispatcher frame. */
@@ -175,6 +256,14 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
         return d3_frame[D3_BOOT];
     }
     unsigned next=(current+1u)%D3_CONTEXTS;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    if(!d4_choose_next(&next)) {
+        d3_failed=true;
+        d3_active=false;
+        d3_running=D3_BOOT;
+        return d3_frame[D3_BOOT];
+    }
+#endif
     if(d3_frame[next]==NULL ||
        !d3_valid_frame(next,d3_frame[next])) {
         d3_failed=true;
@@ -182,7 +271,9 @@ uint64_t *m10_d3_irq_select(uint64_t *interrupted_frame)
         d3_running=D3_BOOT;
         return d3_frame[D3_BOOT];
     }
-    ++d3_switches;
+    /* Choosing the currently executing frame is valid, but it is NOT
+     * a cross-task handoff. Only count actual stack/context changes. */
+    if(next!=current) ++d3_switches;
     d3_running=next;
     return d3_frame[next];
 }
@@ -260,6 +351,17 @@ bool m10_d3_guest_smoke(bool (*clock_ms)(uint64_t *))
     for(size_t i=0;i<D3_WORKERS;++i)
         for(size_t byte=0;byte<D3_CANARY_BYTES;++byte)
             if(d3_stack[i][byte]!=UINT8_C(0xa7)) valid=false;
+#ifdef SPIFFOS_M10_D4_PRIORITY_TEST
+    /* The CPU hogs cannot return or yield: the only route back to this
+     * verification code is a true timer-driven supervisor dispatch.
+     * Check all four changing priority bands got real worker service. */
+    valid=valid && d3_ticks>=D4_TOTAL_TICKS &&
+        d4_supervisor_reserved>=D4_TOTAL_TICKS/
+                                  KERNEL_PRIORITY_SUPERVISOR_INTERVAL &&
+        d4_worst_wait<D4_MAX_WAIT;
+    for(size_t phase=0;phase<D4_PHASE_COUNT;++phase)
+        if(d4_phase_a[phase]==0) valid=false;
+#endif
     bool released_b=memory_boot_m10_task_stack_release(1);
     bool released_a=memory_boot_m10_task_stack_release(0);
     d3_irq_restore(end_flags);

@@ -643,3 +643,45 @@ laziness and F10 restoration. `make -B iso` and QEMU at
 128/256/512MiB should emit `SPIFFOS_WORKSPACES_READY_9` before
 `SPIFFOS_KEYBOARD_READY`. The full M10-D3 acceptance suite must continue
 to pass. This is a diagnostic foundation, not D4 task scheduling.
+
+
+## M10-D4 first real-priority IRQ test — not production scheduling
+
+The D1 hosted selector `kernel_priority_choose` takes a short,
+caller-owned READY-candidate snapshot. It does not schedule or own
+stacks. The first D4 diagnostic reuses the D3 **test-only** IRQ-exit
+frame handoff and calls that pure selector after the timer C callback
+has accounted a tick and issued the one LAPIC EOI, while the hardware
+IRQ gate keeps IF=0 on the single boot CPU. The ordinary kernel and
+the F10 editor never call this selector asynchronously.
+
+The D3 permanent boot dispatcher maps to the policy's reserved
+supervisor descriptor slot **15**. Two mapped worker stacks are
+represented by slots **0** and **1**, and retain their validated
+20-word long-mode IRETQ frames until the boot dispatcher has returned
+and released their backing. Priority class selects only the next
+frame, not task lifetime. Wait ages saturate and are updated exactly
+once after each accepted dispatch, and every fourth opportunity must
+select the supervisor. A selected current task is permitted to
+continue; the diagnostic only increments the cross-task handoff
+counter when the selected owner differs from the interrupted owner.
+
+The two workers never call yield. One stays Time-sensitive; the
+other cycles through Background, Normal, Interactive and
+Time-sensitive in deterministic 80-tick intervals. Internal
+validation requires the lower-priority worker to receive service
+in every interval, supervisor reserved selection at least 80
+times over the 320-tick run, no age above 63, both worker
+progress counters, canary integrity and exact stack cleanup.
+This first gate is *sequential* priority-class exposure; four
+simultaneously runnable priority classes, blocked/wakeup transitions
+and generalized preemptive editor tasks are still future D4/D5 gates.
+
+`make HOST_CC=gcc test-m10-d4-guest` builds private QEMU images
+for all three RAM sizes and requires correct priority/supervisor
+selection, a deliberate invalid-priority negative and an
+IRQ0-disabled negative. `make HOST_CC=gcc test-m10-d4-acceptance`
+adds the full D1–D3 and older IRQ/editor/fault/memory/APIC/MMIO
+regression tests. The normal ISO includes **no** D4 policy or
+preemptive IRQ handoff code. A failed test cannot change the
+installed Forge ISO or physical laptop media.
