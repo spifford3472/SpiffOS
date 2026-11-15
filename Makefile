@@ -1082,3 +1082,13 @@ test-memory: test-scheduler-clock
 .PHONY: test-m10-c-guest
 test-m10-c-guest:
 	python3 scripts/test-m10-c-guest.py
+
+# M10-D5.9-A: read-only audited-source drift gate, NOT runtime preemption.
+.PHONY: test-m10-d59-audit
+test-m10-d59-audit:
+	python3 scripts/audit-m10-d59.py
+	python3 tests/m10-d59-audit-test.py
+
+.PHONY: test-m10-d59-acceptance
+test-m10-d59-acceptance: test-m10-d59-audit test-m10-d58c-c2b-real-acceptance
+	@echo SPIFFOS_M10_D59_AUDIT_ACCEPTANCE_OK

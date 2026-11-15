@@ -525,3 +525,7 @@ Owner's continuation authorizes isolated test-only real IRQ0 handoff between a d
 ## M10-D5.8c C2b physical IRQ experiment checkpoint — 2026-11-14
 
 The four independently owned M2-stack diagnostic now passes targeted real IRQ0 tests at 128/256/512 MiB: medium worker preempted by donated low owner via actual M10-A handoff, reserved supervisor completes bounded service, and high genuine BLOCKED waiter is woken only AFTER an IF-off IRQ-selector disarm and resumes via its original RET context. Five fault categories at three QEMU sizes also fail closed. These observations are isolated development evidence, not merge/release authorization. Full inherited acceptance and independent exact-head CI must still pass. See ../operations/m10-d58c-c2b-real-irq-20261114.md.
+
+## M10-D5.9 production-preemption safety audit authorization — 2026-11-14
+
+After D5.8c C2b PR #88 passed independent GitHub CI and Forge full acceptance, owner approved the next recommended milestone: D5.9 audits the *ordinary* kernel's actual exclusion/ownership boundaries before enabling any normal EDIT/BASIC preemption. Stage A is read-only source inventory and regression guardrails; future allocator, input/display and interrupt gates are separately verified. No global CLI wrapper, automatic locks, normal program preemption, merge or owner ISO replacement is authorized. See ADR-m10-d59-production-preemption-boundaries.md.
