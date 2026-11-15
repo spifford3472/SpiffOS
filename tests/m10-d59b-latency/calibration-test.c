@@ -8,7 +8,10 @@
 #include <stdio.h>
 static uint64_t calls,base_ms;
 static unsigned mode;
+/* Fake ordered cycle sample; mode 3 forces an invalid zero elapsed span. */
 static uint64_t read_tsc(void) {return mode==3?1u:calls*1000u;}
+/* Emit deterministic milliseconds with unavailable/rollback edge cases.
+ * Test-owned out is written only for available samples; no hardware access. */
 static bool fake_clock(uint64_t *out)
 {
     ++calls;
@@ -19,6 +22,8 @@ static bool fake_clock(uint64_t *out)
 }
 #include "calibrate.c"
 
+/* Verify independent arithmetic, unavailable samples and untouched outputs.
+ * These synthetic tests do not provide clock or hardware timing evidence. */
 int main(void)
 {
     for(mode=0;mode<4;++mode) {

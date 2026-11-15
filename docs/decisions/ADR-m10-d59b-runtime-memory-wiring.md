@@ -83,3 +83,23 @@ Rollback: discard isolated branch; parent #92 and owner D4 remain. No physical
 disk, network, OPNsense, host package/privilege or other-project changes.
 
 Change history: 2026-11-15 docs-first integration contract and measured limits.
+
+
+## Incremental implementation boundary
+
+The first child commit implements ONLY the callback-free page claim/fixed-leaf
+diagnostic, behind SPIFFOS_M10_D59B_PAGE_CLAIM_TEST requiring the authentic
+context flag. General memory entry wrappers, binding lifecycle and stack-frame
+release admission described above remain pending; MEMORY_WIRING_TEST is not
+implemented or enabled by this child. Both task workers retain their existing
+outer D5.7 transaction and call the same real M2/M3 code against boot RAM.
+Claims never leave that transaction. The original callback-based M3 interfaces
+and the unflagged kernel are unchanged. They are NOT admitted for task runtime.
+
+The fixed kernel zero leaf can fail only on an invalid length, which is checked
+before its first write. Its 4096-byte path has no recoverable backend failure.
+The guest deliberately tests length 4095 without touching the poisoned page,
+then requires all 4096 bytes zero after the valid direct call. No injectable
+function pointer is added just to manufacture a kernel backend failure.
+Authorization failure after allocation exercises exact-owner rollback; native
+link-only release failure injection verifies uncertain rollback retains storage.

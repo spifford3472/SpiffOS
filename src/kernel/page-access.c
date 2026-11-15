@@ -247,3 +247,47 @@ enum page_access_result page_access_allocate_zero(
     *physical_address = allocated_address;
     return PAGE_ACCESS_OK;
 }
+
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+/* Allocate and authorize one ordinary page without calling an indirect backend.
+ * allocator/policy/owner are borrowed exclusive authority; claim borrows two
+ * disjoint uint64_t outputs. Success publishes an UNINITIALIZED numeric page;
+ * failure preserves outputs and restores exact ownership unless rollback fails.
+ * Caller holds the SAME outer exclusion through fixed direct initialization
+ * and release/publication. No IRQ entry, pointer dereference, logging or heap.
+ * Provenance: Qwen one-function draft; coordinator reviewed alias and rollback. */
+enum page_access_result page_access_claim(struct frame_allocator *allocator,
+    const struct page_access_policy *policy, enum frame_owner owner,
+    struct page_access_claim *claim)
+{
+    if (allocator == NULL || policy == NULL || claim == NULL ||
+        policy->allocator != allocator || !frame_owner_valid(owner)) {
+        return PAGE_ACCESS_INVALID;
+    }
+
+    if (!frame_allocator_check(allocator) ||
+        !page_access_output_disjoint(policy, &claim->physical_address) ||
+        !page_access_output_disjoint(policy, &claim->mapped_address)) {
+        return PAGE_ACCESS_INVALID;
+    }
+
+    uint64_t localphysical;
+    if (frame_allocate(allocator, owner, false, &localphysical) != FRAME_OK) {
+        return PAGE_ACCESS_ALLOCATION_FAILED;
+    }
+
+    uint64_t localmapped;
+    enum page_access_result resolve_result = page_access_resolve(
+        policy, owner, localphysical, &localmapped);
+    if (resolve_result != PAGE_ACCESS_OK) {
+        if (frame_release(allocator, owner, localphysical) != FRAME_OK) {
+            return PAGE_ACCESS_ROLLBACK_FAILED;
+        }
+        return resolve_result;
+    }
+
+    claim->physical_address = localphysical;
+    claim->mapped_address = localmapped;
+    return PAGE_ACCESS_OK;
+}
+#endif

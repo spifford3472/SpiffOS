@@ -3,8 +3,11 @@
  * Invariants: IF already enabled; no CLI/STI/allocation or output on failure.
  * Provenance: Qwen helper, coordinator overflow/rollback/C11 corrections.
  * Reference: ADR-m10-d59b-runtime-memory-wiring.md and AGENTS.md. */
-// Calibrate TSC to milliseconds ratio using bounded polling.
-// Returns true on success, false on failure. Uses read_tsc() and clock_ms().
+/* Borrow clock_ms and output for one bounded observation. IRQs are already
+ * enabled; the diagnostic never changes IF. Ignore unavailable samples, reject
+ * clock/TSC rollback or zero ratio, and preserve output on every failure.
+ * Success publishes nominal guest cycles per millisecond, not a CPU guarantee.
+ * Neither callback may allocate, mutate scheduler state or retain output. */
 static bool calibrate(bool (*clock_ms)(uint64_t *), uint64_t *cycles_per_ms) {
     uint64_t start_ms, end_ms, start_tsc, end_tsc;
     uint64_t iter = 0;

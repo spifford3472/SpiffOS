@@ -397,3 +397,9 @@ Explicit boot/runtime/retirement authority avoids a fabricated bootstrap task;
 protected M3 initialization will use a fixed direct zeroing leaf. No additional
 allocator, lock, task table or ownership registry. Implementation/acceptance
 status: docs-first candidate; see ../decisions/ADR-m10-d59b-runtime-memory-wiring.md.
+
+
+Page subgate now has a private callback-free M3 claim and fixed direct zero
+leaf in the authentic-context QEMU workers. No claim escapes its outer guard.
+This does not activate the broader runtime binding/wrapper candidate above.
+See ../operations/m10-d59b-page-claim-20261115.md.
