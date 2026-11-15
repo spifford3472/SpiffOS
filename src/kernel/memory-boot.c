@@ -1096,3 +1096,13 @@ bool memory_boot_d59b_frame_cycle(struct d59b_context *context) {
     return d59b_exit(context, cookie);
 }
 #endif
+
+#ifdef SPIFFOS_M10_D59B_SERVICE_TEST
+#include "m10-d59b-service.h"
+/* The bridge borrows the actual boot service without reading live metadata;
+ * the shared probe authenticates execution and takes D5.7 before all reads. */
+bool memory_boot_d59b_service_cycle(struct d59b_context *context,unsigned index)
+{
+    return d59b_service_probe(context,&retained_service,index);
+}
+#endif

@@ -897,3 +897,15 @@ supply the hardware evidence. TSC samples measure observed exclusion cycles,
 not a calibrated physical latency guarantee. See
 [execution evidence](operations/m10-d59b-authentic-context-20261115.md) and
 [adapter contract](decisions/ADR-m10-d59b-authentic-context.md).
+
+
+## D5.9-B: a measured small service is not the general heap
+
+The service transaction probe reuses real M6/M4 code and the same D5.7 guard.
+It admits one 4096-byte arena, 64 metadata records and a 32-byte temporary
+client. Check those limits before traversing metadata: a general heap can have
+1024 records and clear up to 1MiB of payload, so wrapping that entire operation
+in CLI would hide a different latency problem. The probe checks recoverable OOM,
+protected roots, ownership rejection and all client bytes, then disposes the
+client before leaving the guard. It is diagnostic code, not a public malloc.
+See [service evidence](operations/m10-d59b-service-transactions-20261115.md).

@@ -102,5 +102,10 @@ struct d59b_context;
  * No mapped payload/stack is freed; caller is a registered RUNNING task.
  * Failure retains IF=0 and forbids automatic retry of uncertain work. */
 bool memory_boot_d59b_frame_cycle(struct d59b_context *context);
+#ifdef SPIFFOS_M10_D59B_SERVICE_TEST
+/* Same synchronous probe over the real retained boot service; no client
+ * payload or root pointer survives this call. Requires registered task. */
+bool memory_boot_d59b_service_cycle(struct d59b_context *context,unsigned index);
+#endif
 #endif
 #endif
