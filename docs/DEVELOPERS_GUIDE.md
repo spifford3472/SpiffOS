@@ -926,3 +926,26 @@ rather than retrying a guessed release. The QEMU memory-boot probe keeps the
 claim on its own stack and directly calls the existing kernel zero leaf; no
 page address escapes. See ADR-m10-d59b-runtime-memory-wiring.md. General caller
 admission and active-stack lifetime protection remain separate unfinished gates.
+
+
+## D5.9-B admitted memory entries
+
+The diagnostic MEMORY_WIRING_TEST profile protects the existing M2/M3/M4/M6
+bodies at their public entry points. Do not call d59b_private implementation
+names from another translation unit. The adapter captures real IF/CPU/IRQ/RSP
+and uses the existing D5.7 generation/cookie authority. A caller-owned token
+cannot enable runtime IF: only the existing trusted d59b_context may do that.
+No shared state is inspected after final exit may enable interrupts.
+
+Generic zero backends and boot reports/snapshots/MMIO/lifecycle APIs are refused
+at runtime before callbacks or publication. Void retirement misuse stops
+IF-off; it cannot pretend storage was retired and let backing be released.
+Uninitialized page claims require an existing caller-owned transaction through
+the fixed direct zero leaf. Ordinary heap clients keep their documented borrow
+lifetimes; neither task death nor this guard automatically frees clients.
+
+Stack backing is classified through existing D5.2b bindings and validated HHDM.
+A partial release retains uncertain page identities, poisons further attempts
+and quarantines the owner. Even an allocator slot marked FREE cannot be reused
+while its retained binding covers it. See the memory-admission operations report
+for exact tests and the distinction between this candidate and normal release.

@@ -5,6 +5,13 @@
  * Provenance: Codex fallback after the one-function Qwen job timed out. */
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+/* One authoritative body, renamed only in this translation unit. Public
+ * entries below authenticate before inspecting its borrowed metadata.
+ * Same-file internal calls stay inside their already-admitted outer scope. */
+#define frame_allocate d59b_private_frame_allocate
+#endif
 #include "frame-allocator.h"
 
 /* Allocate one frame for a valid owner. Reserve requests require SUPERVISOR;
@@ -47,6 +54,11 @@ enum frame_result frame_allocate(struct frame_allocator *allocator,
         if (!frame_allocator_address(allocator, index, &selected)) {
             return FRAME_MAP_ERROR;
         }
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+        /* Retained/quarantined binding still owns backing even if a corrupt
+         * or partially retired M2 slot appears FREE. Do not recycle it. */
+        if(d59b_memory_frame_bound(selected)) continue;
+#endif
         if (allocator->owned[owner] >= allocator->total_frames) {
             return FRAME_INVALID;
         }
@@ -58,3 +70,27 @@ enum frame_result frame_allocate(struct frame_allocator *allocator,
     }
     return FRAME_OOM;
 }
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#undef frame_allocate
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum frame_result frame_allocate(struct frame_allocator *allocator, enum frame_owner owner, bool reserve_request, uint64_t *address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return FRAME_INVALID;
+    /* Only the measured <=512MiB tracking profile is admitted at runtime.
+     * Bootstrap still handles its original capacity/unavailable contract. */
+    if(scope.context!=NULL && allocator!=NULL &&
+       allocator->total_frames>512u*1024u*1024u/MEMORY_PAGE_BYTES) {
+        if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+        return FRAME_INVALID;
+    }
+    enum frame_result result=d59b_private_frame_allocate(allocator,owner,reserve_request,address);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+#endif

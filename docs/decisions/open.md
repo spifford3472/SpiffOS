@@ -420,3 +420,10 @@ Caller coverage, stack-frame release admission, callback-free page initializatio
 and actual rollback remain open for the new wiring candidate. Boot-only report,
 reset/snapshot/MMIO APIs must reject active-task use until D5.9-C/D ownership
 models exist. Observed heap timings are not hardware guarantees.
+
+
+D5.9-B memory-entry candidate now has real caller gates, trusted runtime IF
+restoration and off-stack physical retirement. Full Forge acceptance passes; child exact-head CI is
+pending. Root-reset concurrent lifetime and ordinary keyboard/display/driver
+activation remain separate open C/D/E release gates; rejected legacy APIs are
+not silently made concurrent. No Ring 3/process allocation ABI is implied.

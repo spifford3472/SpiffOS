@@ -2,6 +2,11 @@
  * Dependencies: stable borrowed M1 regions and caller-owned uint8_t slots.
  * Invariants: one CPU, interrupts disabled, no frame contents/mappings accessed.
  * Reference: docs/decisions/ADR-frame-allocator.md. */
+/* In the isolated MEMORY_WIRING_TEST profile, public entries establish and
+ * restore the actual boot/task exclusion described above before the same body
+ * runs. Unsupported bootstrap/lifetime/callback operations reject runtime.
+ * This adds no default-kernel preemption or new allocator API; see
+ * docs/decisions/ADR-m10-d59b-runtime-memory-wiring.md. */
 #ifndef SPIFFOS_FRAME_ALLOCATOR_H
 #define SPIFFOS_FRAME_ALLOCATOR_H
 #include <stdbool.h>

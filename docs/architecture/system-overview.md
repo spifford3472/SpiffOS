@@ -410,3 +410,12 @@ authentic-context adapter, preserving a single authoritative manager per
 subsystem. Bootstrap/retirement remains single-CPU and off every retained task
 stack; all independently scheduled runtime callers require D5.7 admission.
 This is an isolated candidate, not a released or ordinary-preemption kernel.
+
+
+D5.9-B memory wiring is implemented in its isolated diagnostic profile: public
+M2/M3/M4/M6 entries reuse the existing bodies and sole D5.7 guard; boot-only
+legacy APIs reject runtime. Actual boot/SUP bind and off-stack unbind borrow
+the existing D5.2b ledger, including quarantine and nonreuse of retained stacks.
+Trusted d59b_context is the sole runtime IF-restoration authority. The default
+D4 binary stays unchanged. See ../operations/m10-d59b-memory-admission-20261115.md
+for tests, restrictions and final acceptance status.

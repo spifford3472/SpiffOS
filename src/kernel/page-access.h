@@ -5,6 +5,11 @@
  * Invariants: borrowed metadata stays stable; one boot CPU, IRQs disabled;
  * numeric physical/direct-map addresses are never authority by themselves.
  * Reference: docs/decisions/ADR-memory-services.md, M3. */
+/* In the isolated MEMORY_WIRING_TEST profile, public entries establish and
+ * restore the actual boot/task exclusion described above before the same body
+ * runs. Unsupported bootstrap/lifetime/callback operations reject runtime.
+ * This adds no default-kernel preemption or new allocator API; see
+ * docs/decisions/ADR-m10-d59b-runtime-memory-wiring.md. */
 #ifndef SPIFFOS_PAGE_ACCESS_H
 #define SPIFFOS_PAGE_ACCESS_H
 

@@ -50,4 +50,48 @@ bool d59b_enter(struct d59b_context *context,uint32_t *cookie);
 /* Exact RUNNING owner releases top D5.7 cookie. Only successful final exit
  * may restore original IF. Failure retains exclusion; never force-unlock. */
 bool d59b_exit(struct d59b_context *context,uint32_t cookie);
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+/* Internal structured irq-save token. Runtime cookies belong ONLY to D5.7.
+ * Zero-initialize before entry; never copy, forge or retain past matching exit. */
+struct d59b_memory_scope {
+    struct d59b_context *context;
+    uint64_t previous_flags;
+    uint32_t cookie;
+    bool active;
+};
+#ifdef SPIFFOS_D59B_HOSTED
+/* Install native CPU samples before bootstrap ONLY; absent from kernel. */
+bool d59b_memory_host_backend(const struct d59b_host_backend *backend);
+#endif
+/* Once-only real boot CPU initialization, IF=0/off IRQ before allocator use. */
+bool d59b_memory_bootstrap(void);
+/* Bind once from surviving boot stack after reserved SUP dispatch, IF=0. */
+bool d59b_memory_bind(struct d59b_context *context);
+/* Disarm handoff first; require no RUNNING task and actual RSP off all stacks. */
+bool d59b_memory_unbind(struct d59b_context *context);
+/* Clear borrowed retired context only after ALL installed stacks are gone. */
+bool d59b_memory_retirement_complete(struct d59b_context *context);
+/* Read-only selector predicate; caller already owns real IRQ exclusion. */
+bool d59b_memory_is_bound(const struct d59b_context *context);
+/* Internal allocator wrappers enter before shared metadata inspection.
+ * Success publishes token; refusal preserves token/output and retains IF=0. */
+bool d59b_memory_scope_enter(struct d59b_memory_scope *scope);
+/* Exact structured exit; only success may restore original IF.
+ * Wrappers MUST stop instead of returning after an uncertain exit. */
+bool d59b_memory_scope_leave(struct d59b_memory_scope *scope);
+/* Query only inside an admitted scope; legacy callbacks/lifecycle stay boot. */
+bool d59b_memory_boot_only(void);
+/* Bounded boot-API admission check. It releases the check scope before long
+ * legacy reports/snapshots: unbound mode has NO independently scheduled task.
+ * Runtime returns false before any callback, borrowed output or mutation. */
+bool d59b_memory_boot_admit(void);
+/* Query existing D5.2b bindings using validated HHDM, under admitted scope.
+ * Bound FREE storage is not reusable; no duplicate ownership table exists. */
+bool d59b_memory_frame_bound(uint64_t physical);
+/* Exact TERMINATED/off-stack/no-ref retirement only; runtime release denied. */
+bool d59b_memory_frame_release_allowed(uint64_t physical);
+/* Nonreturning IF-off failure; never publish a false recoverable result. */
+_Noreturn void d59b_memory_stop(void);
+#endif
+
 #endif

@@ -564,3 +564,12 @@ D5.9-B isolated memory-admission child proceeds under the existing runtime
 wiring ADR after the callback-free page diagnostic. Bootstrap is not a fake
 task identity; runtime uses the same generation-keyed D5.7 cookies. Exact
 entry-point/lifetime validation is required before any ordinary activation.
+
+
+D5.9-B memory-entry integration now wires 24 existing allocator/service/page
+entries and 17 boot-only gates in the isolated MEMORY_WIRING_TEST profile.
+Actual boot/SUP/off-stack lifecycle and existing D5.2b stack protection are
+implemented; the earlier scope-only checkpoint is superseded by this candidate.
+Targeted native/QEMU validation and full Forge acceptance pass (627.34 seconds,
+exit 0); child exact-head CI remains the independent publication gate. Normal preemption/M11 remain unreleased. See
+../operations/m10-d59b-memory-admission-20261115.md.

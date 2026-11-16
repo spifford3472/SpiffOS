@@ -7,6 +7,17 @@
  * Reference: docs/decisions/ADR-memory-services.md, M3 page-access contract. */
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+/* One authoritative body, renamed only in this translation unit. Public
+ * entries below authenticate before inspecting its borrowed metadata.
+ * Same-file internal calls stay inside their already-admitted outer scope. */
+#define page_access_resolve d59b_private_page_access_resolve
+#define page_access_zero d59b_private_page_access_zero
+#define page_access_allocate_zero d59b_private_page_access_allocate_zero
+/* Function-like rename preserves the distinct struct page_access_claim tag. */
+#define page_access_claim(...) d59b_private_page_access_claim(__VA_ARGS__)
+#endif
 #include "page-access.h"
 
 /* Describe one nonempty half-open object-address range without overflowing.
@@ -289,5 +300,67 @@ enum page_access_result page_access_claim(struct frame_allocator *allocator,
     claim->physical_address = localphysical;
     claim->mapped_address = localmapped;
     return PAGE_ACCESS_OK;
+}
+#endif
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#undef page_access_resolve
+#undef page_access_zero
+#undef page_access_allocate_zero
+#undef page_access_claim
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_resolve(const struct page_access_policy *policy, enum frame_owner owner, uint64_t physical_address, uint64_t *mapped_address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=d59b_private_page_access_resolve(policy,owner,physical_address,mapped_address);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_zero(const struct page_access_policy *policy, enum frame_owner owner, uint64_t physical_address, page_access_zero_backend backend, void *backend_context)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=d59b_memory_boot_only() ?
+        d59b_private_page_access_zero(policy,owner,physical_address,backend,backend_context) : PAGE_ACCESS_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_allocate_zero(struct frame_allocator *allocator, const struct page_access_policy *policy, enum frame_owner owner, page_access_zero_backend backend, void *backend_context, uint64_t *physical_address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=d59b_memory_boot_only() ?
+        d59b_private_page_access_allocate_zero(allocator,policy,owner,backend,backend_context,physical_address) : PAGE_ACCESS_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_claim(struct frame_allocator *allocator, const struct page_access_policy *policy, enum frame_owner owner, struct page_access_claim *claim)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=(d59b_memory_boot_only() || (scope.context!=NULL && scope.context->guard->depth>=2u)) ?
+        d59b_private_page_access_claim(allocator,policy,owner,claim) : PAGE_ACCESS_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
 }
 #endif
