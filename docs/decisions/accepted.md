@@ -558,3 +558,9 @@ D5.9-B page subgate: callback-free M3 claim and direct kernel zeroing are
 implemented ONLY in the authentic-context diagnostic. General wrappers and
 stack lifetime admission remain pending, as do D5.9-C/D/E and M11.
 See ../operations/m10-d59b-page-claim-20261115.md for measured evidence.
+
+
+D5.9-B isolated memory-admission child proceeds under the existing runtime
+wiring ADR after the callback-free page diagnostic. Bootstrap is not a fake
+task identity; runtime uses the same generation-keyed D5.7 cookies. Exact
+entry-point/lifetime validation is required before any ordinary activation.

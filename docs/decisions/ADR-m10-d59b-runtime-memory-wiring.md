@@ -103,3 +103,26 @@ then requires all 4096 bytes zero after the valid direct call. No injectable
 function pointer is added just to manufacture a kernel backend failure.
 Authorization failure after allocation exercises exact-owner rollback; native
 link-only release failure injection verifies uncertain rollback retains storage.
+
+
+## Runtime admission implementation phase
+
+The next isolated child installs the previously documented memory wiring:
+bootstrap once after real CLI, bind once to the registered reserved supervisor
+from the surviving boot stack, enter scopes using existing D5.7 cookies,
+and unbind only after IRQ handoff is disarmed and no task is RUNNING. Keep
+retired bindings borrowed until every installed stack is safely retired.
+No new lock, scheduler, allocator or ownership registry is introduced.
+
+Bootstrap/retirement scopes are structured internal C irq-save calls on the
+same verified boot CPU, off IRQ and off every retained installed task stack.
+They have no synthetic task handle. Nested runtime scopes use D5.7 strict LIFO.
+Unexpected exit corruption stops IF-off, rather than returning after a public
+API already published a value. Entry refusal occurs before metadata mutation
+and preserves each existing API's outputs. Header/source wrappers keep the
+unflagged implementation unchanged.
+
+Root reset/retire, caller-provided page callbacks, boot reports, workspace
+snapshots, MMIO setup and stack preparation are not admitted during runtime.
+The page diagnostic remains the fixed direct-leaf path from the preceding
+child. Later owner-specific C/D gates may extend admission with separate tests.

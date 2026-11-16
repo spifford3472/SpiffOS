@@ -403,3 +403,10 @@ Page subgate now has a private callback-free M3 claim and fixed direct zero
 leaf in the authentic-context QEMU workers. No claim escapes its outer guard.
 This does not activate the broader runtime binding/wrapper candidate above.
 See ../operations/m10-d59b-page-claim-20261115.md.
+
+
+The memory-admission child wires existing allocator bodies through the
+authentic-context adapter, preserving a single authoritative manager per
+subsystem. Bootstrap/retirement remains single-CPU and off every retained task
+stack; all independently scheduled runtime callers require D5.7 admission.
+This is an isolated candidate, not a released or ordinary-preemption kernel.
