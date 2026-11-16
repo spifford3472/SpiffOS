@@ -106,6 +106,11 @@ bool memory_boot_d59b_frame_cycle(struct d59b_context *context);
 /* Callback-free M3 claim/fixed zero/exact release on real boot-owned RAM.
  * All addresses stay transaction-local; errors retain IF=0 and live storage. */
 bool memory_boot_d59b_page_cycle(struct d59b_context *context);
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+/* Actual caller admission/refusal outside any preexisting D5.7 transaction.
+ * Only read-only/refused operations; no live resource spans an IF-on gap. */
+bool memory_boot_d59b_direct_refusals(struct d59b_context *context,unsigned index);
+#endif
 #endif
 #ifdef SPIFFOS_M10_D59B_SERVICE_TEST
 /* Same synchronous probe over the real retained boot service; no client

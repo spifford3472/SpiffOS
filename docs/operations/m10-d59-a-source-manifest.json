@@ -101,10 +101,14 @@
       "functions": [
         {
           "function": "frame_allocate",
-          "line": 14
+          "line": 21
+        },
+        {
+          "function": "frame_allocate",
+          "line": 81
         }
       ],
-      "sha256": "75de65a3b4c4a62b701ca66452337a5a836a235a73176ac15212b9e7b1d84a76",
+      "sha256": "0304e948c008dc1e7b07ccb6096650b5bc10e8ef72d7521513589bda162cf187",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/frame-allocator.c": {
@@ -115,34 +119,50 @@
       "functions": [
         {
           "function": "frame_owner_valid",
-          "line": 10
+          "line": 20
         },
         {
           "function": "region_frames",
-          "line": 18
+          "line": 28
         },
         {
           "function": "frame_allocator_initialize",
-          "line": 37
+          "line": 47
         },
         {
           "function": "frame_allocator_address",
-          "line": 73
+          "line": 83
         },
         {
           "function": "address_ordinal",
-          "line": 101
+          "line": 111
         },
         {
           "function": "frame_release",
-          "line": 130
+          "line": 140
         },
         {
           "function": "frame_allocator_check",
-          "line": 171
+          "line": 184
+        },
+        {
+          "function": "frame_allocator_initialize",
+          "line": 233
+        },
+        {
+          "function": "frame_allocator_address",
+          "line": 247
+        },
+        {
+          "function": "frame_release",
+          "line": 267
+        },
+        {
+          "function": "frame_allocator_check",
+          "line": 287
         }
       ],
-      "sha256": "f68e7329073f10b89bccfda7383ce6da7590efb888588697e9009f71d0db72c5",
+      "sha256": "aab22687a2d0ba071dfca128f14c8738f0100350a76686ffa434b00b0da34d67",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/framebuffer.c": {
@@ -223,62 +243,86 @@
       "functions": [
         {
           "function": "kernel_heap_range",
-          "line": 17
-        },
-        {
-          "function": "kernel_heap_ranges_overlap",
           "line": 29
         },
         {
+          "function": "kernel_heap_ranges_overlap",
+          "line": 41
+        },
+        {
           "function": "kernel_heap_storage_valid",
-          "line": 38
+          "line": 50
         },
         {
           "function": "kernel_heap_descriptor_zeroed",
-          "line": 72
+          "line": 84
         },
         {
           "function": "kernel_heap_output_disjoint",
-          "line": 93
+          "line": 105
         },
         {
           "function": "kernel_heap_check",
-          "line": 117
+          "line": 129
         },
         {
           "function": "kernel_heap_initialize",
-          "line": 223
+          "line": 235
         },
         {
           "function": "kernel_heap_owner_valid",
-          "line": 264
+          "line": 276
         },
         {
           "function": "kernel_heap_allocate",
-          "line": 274
+          "line": 286
         },
         {
           "function": "kernel_heap_retire_block",
-          "line": 374
+          "line": 386
         },
         {
           "function": "kernel_heap_release",
-          "line": 391
+          "line": 403
         },
         {
           "function": "kernel_heap_release_owner",
-          "line": 496
+          "line": 508
         },
         {
           "function": "kernel_heap_release_workspace",
-          "line": 549
+          "line": 561
         },
         {
           "function": "kernel_heap_release_session",
-          "line": 561
+          "line": 573
+        },
+        {
+          "function": "kernel_heap_initialize",
+          "line": 590
+        },
+        {
+          "function": "kernel_heap_allocate",
+          "line": 604
+        },
+        {
+          "function": "kernel_heap_release",
+          "line": 617
+        },
+        {
+          "function": "kernel_heap_release_workspace",
+          "line": 630
+        },
+        {
+          "function": "kernel_heap_release_session",
+          "line": 644
+        },
+        {
+          "function": "kernel_heap_check",
+          "line": 658
         }
       ],
-      "sha256": "ea918031b480424ab48370153e0200826db0640dfe3b440dba82ee719b2756ba",
+      "sha256": "d3fa06af780d692ebe9be29947b17ef8b170d296d5fb77a6406f378e6cbfacac",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/kernel-preempt-safety-d55.c": {
@@ -804,7 +848,7 @@
       "candidate_calls": [],
       "category": "unreviewed",
       "functions": [],
-      "sha256": "d89bfbf694e109096b17103512f36516c47b09606b870470e312817eef58a695",
+      "sha256": "4d54a4226713c8548bf670f67d767364a26bcb97c0a74ba9e90ec01db58db8ed",
       "state": "UNREVIEWED_NO_PREEMPTION"
     },
     "src/kernel/m10-d57-safety.c": {
@@ -911,9 +955,77 @@
         {
           "function": "d59b_exit",
           "line": 211
+        },
+        {
+          "function": "memory_off_registered_stacks",
+          "line": 248
+        },
+        {
+          "function": "memory_reject",
+          "line": 269
+        },
+        {
+          "function": "d59b_memory_host_backend",
+          "line": 278
+        },
+        {
+          "function": "memory_cpu_valid",
+          "line": 288
+        },
+        {
+          "function": "d59b_memory_bootstrap",
+          "line": 297
+        },
+        {
+          "function": "d59b_memory_bind",
+          "line": 311
+        },
+        {
+          "function": "d59b_memory_unbind",
+          "line": 344
+        },
+        {
+          "function": "d59b_memory_retirement_complete",
+          "line": 361
+        },
+        {
+          "function": "d59b_memory_is_bound",
+          "line": 384
+        },
+        {
+          "function": "d59b_memory_boot_only",
+          "line": 392
+        },
+        {
+          "function": "memory_bound_record",
+          "line": 400
+        },
+        {
+          "function": "d59b_memory_frame_bound",
+          "line": 431
+        },
+        {
+          "function": "d59b_memory_frame_release_allowed",
+          "line": 440
+        },
+        {
+          "function": "d59b_memory_stop",
+          "line": 459
+        },
+        {
+          "function": "d59b_memory_scope_enter",
+          "line": 472
+        },
+        {
+          "function": "d59b_memory_scope_leave",
+          "line": 502
+        },
+        {
+          "function": "d59b_memory_boot_admit",
+          "line": 542
         }
       ],
-      "sha256": "b7115f34dbc9c93149f2ccd75c74eee31d8147afaf24421cc904e2fa217dae79",
+      "sha256": "d2857781186926bf42528196d113c636e783b253a2b70e62d4fe1d14cdafc231",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/m10-d59b-service.c": {
@@ -937,154 +1049,154 @@
       "functions": [
         {
           "function": "port_write",
-          "line": 100
+          "line": 103
         },
         {
           "function": "port_read",
-          "line": 107
+          "line": 110
         },
         {
           "function": "serial_initialize",
-          "line": 117
+          "line": 120
         },
         {
           "function": "serial_write",
-          "line": 135
+          "line": 138
         },
         {
           "function": "halt_forever",
-          "line": 153
+          "line": 156
         },
         {
           "function": "console_write_number",
-          "line": 164
+          "line": 167
         },
         {
           "function": "console_scroll_demo",
-          "line": 179
+          "line": 182
         },
         {
           "function": "keyboard_port_read",
-          "line": 200
+          "line": 203
         },
         {
           "function": "keyboard_port_write",
-          "line": 206
+          "line": 209
         },
         {
           "function": "keyboard_submit_diagnostic",
-          "line": 220
+          "line": 223
         },
         {
           "function": "indicator_clock_start",
-          "line": 242
+          "line": 245
         },
         {
           "function": "indicator_clock_stop",
-          "line": 250
+          "line": 253
         },
         {
           "function": "pit_read_counter",
-          "line": 254
+          "line": 257
         },
         {
           "function": "acpi_map_read_only",
-          "line": 270
+          "line": 273
         },
         {
           "function": "boot_table_map",
-          "line": 296
+          "line": 299
         },
         {
           "function": "apic_boot_pages_present",
-          "line": 324
+          "line": 327
         },
         {
           "function": "mmio_boot_cpu_policy",
-          "line": 364
+          "line": 367
         },
         {
           "function": "mmio_boot_root_ready",
-          "line": 408
+          "line": 411
         },
         {
           "function": "mmio_boot_acquire",
-          "line": 442
+          "line": 445
         },
         {
           "function": "mmio_boot_release",
-          "line": 457
+          "line": 460
         },
         {
           "function": "mmio_boot_invlpg",
-          "line": 465
+          "line": 468
         },
         {
           "function": "mmio_boot_map_apic",
-          "line": 477
+          "line": 480
         },
         {
           "function": "apic_alias_checked_table",
-          "line": 534
+          "line": 537
         },
         {
           "function": "apic_boot_cache_gate",
-          "line": 544
+          "line": 547
         },
         {
           "function": "apic_hw_lapic_id_read",
-          "line": 621
+          "line": 624
         },
         {
           "function": "apic_hw_ioapic_index_read",
-          "line": 636
+          "line": 639
         },
         {
           "function": "apic_boot_readonly_probe",
-          "line": 655
+          "line": 658
         },
         {
           "function": "apic_boot_io_read",
-          "line": 672
+          "line": 675
         },
         {
           "function": "apic_boot_io_write",
-          "line": 687
+          "line": 690
         },
         {
           "function": "x86_irq0_handler",
-          "line": 703
+          "line": 706
         },
         {
           "function": "apic_boot_pit0_100hz",
-          "line": 715
+          "line": 718
         },
         {
           "function": "x86_irq0_handler",
-          "line": 727
+          "line": 730
         },
         {
           "function": "apic_boot_irq0_activate",
-          "line": 737
+          "line": 740
         },
         {
           "function": "acpi_boot_discover",
-          "line": 783
+          "line": 786
         },
         {
           "function": "keyboard_run",
-          "line": 805
+          "line": 808
         },
         {
           "function": "x86_exception_panic",
-          "line": 997
+          "line": 1000
         },
         {
           "function": "kmain",
-          "line": 1014
+          "line": 1017
         }
       ],
-      "sha256": "25383d3bf1dd23a6db56309913e0de8d6acca2324bf646d04622f2fc78c38053",
+      "sha256": "8680d80c391e8c5938489fa5fdb8482d83c2e6d891f2e6b521b685e667c91ff4",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-boot.c": {
@@ -1099,142 +1211,154 @@
       "functions": [
         {
           "function": "write_number",
-          "line": 49
+          "line": 52
         },
         {
           "function": "write_region",
-          "line": 64
+          "line": 67
         },
         {
           "function": "memory_boot_report",
-          "line": 76
+          "line": 79
         },
         {
           "function": "allocator_failure",
-          "line": 124
+          "line": 130
         },
         {
           "function": "memory_boot_allocator_probe",
-          "line": 134
+          "line": 140
         },
         {
           "function": "memory_boot_page_policy",
-          "line": 219
+          "line": 228
         },
         {
           "function": "kernel_page_zero",
-          "line": 250
+          "line": 262
         },
         {
           "function": "kernel_page_has_value",
-          "line": 268
+          "line": 280
         },
         {
           "function": "kernel_page_write_and_verify",
-          "line": 283
+          "line": 295
         },
         {
           "function": "page_probe_release",
-          "line": 294
+          "line": 306
         },
         {
           "function": "page_probe_failure",
-          "line": 302
+          "line": 314
         },
         {
           "function": "memory_boot_page_probe",
-          "line": 313
+          "line": 325
         },
         {
           "function": "heap_bytes_write_and_verify",
-          "line": 377
+          "line": 392
         },
         {
           "function": "heap_bytes_have_value",
-          "line": 394
+          "line": 409
         },
         {
           "function": "heap_probe_failure",
-          "line": 415
+          "line": 430
         },
         {
           "function": "heap_probe_retire_descriptor",
-          "line": 438
+          "line": 453
         },
         {
           "function": "memory_boot_heap_probe",
-          "line": 466
+          "line": 481
         },
         {
           "function": "retained_failure",
-          "line": 639
+          "line": 657
         },
         {
           "function": "retained_valid",
-          "line": 652
+          "line": 670
         },
         {
           "function": "memory_boot_service_start",
-          "line": 684
+          "line": 702
         },
         {
           "function": "memory_boot_service_check",
-          "line": 740
+          "line": 761
         },
         {
           "function": "memory_boot_service_editor_check",
-          "line": 750
+          "line": 774
         },
         {
           "function": "memory_boot_select_workspace",
-          "line": 760
+          "line": 787
         },
         {
           "function": "memory_boot_reset_workspace",
-          "line": 767
+          "line": 797
         },
         {
           "function": "memory_boot_mmio_table_acquire",
-          "line": 777
+          "line": 810
         },
         {
           "function": "memory_boot_mmio_table_release",
-          "line": 808
+          "line": 844
         },
         {
           "function": "memory_boot_snapshot_prepare",
-          "line": 841
+          "line": 880
         },
         {
           "function": "m10_b_stack_rollback",
-          "line": 919
+          "line": 961
         },
         {
           "function": "memory_boot_m10_task_stack_prepare",
-          "line": 934
-        },
-        {
-          "function": "memory_boot_m10_task_stack_release",
           "line": 984
         },
         {
+          "function": "memory_boot_m10_task_stack_release",
+          "line": 1037
+        },
+        {
           "function": "memory_boot_m10_task_stack_failure_probe",
-          "line": 997
+          "line": 1053
         },
         {
           "function": "memory_boot_d59b_frame_cycle",
-          "line": 1038
+          "line": 1097
         },
         {
           "function": "memory_boot_d59b_service_cycle",
-          "line": 1104
+          "line": 1163
         },
         {
           "function": "memory_boot_d59b_page_cycle",
-          "line": 1120
+          "line": 1179
+        },
+        {
+          "function": "memory_boot_d59b_scope_policy",
+          "line": 1256
+        },
+        {
+          "function": "d59b_refused_backend",
+          "line": 1274
+        },
+        {
+          "function": "memory_boot_d59b_direct_refusals",
+          "line": 1287
         }
       ],
-      "sha256": "c31e5feb2227f86289ea6b6c96d37954f7a2e5222f53427cda934885e850fc97",
+      "sha256": "8bf444bb2a5c1cbdf44256d0015a5eb238d6da26345f8c5b3f6976d44354f01c",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-map.c": {
@@ -1254,90 +1378,126 @@
       "functions": [
         {
           "function": "memory_service_range",
-          "line": 19
+          "line": 34
         },
         {
           "function": "memory_service_ranges_overlap",
-          "line": 30
+          "line": 45
         },
         {
           "function": "memory_service_storage_valid",
-          "line": 39
+          "line": 54
         },
         {
           "function": "memory_service_is_zeroed",
-          "line": 63
+          "line": 78
         },
         {
           "function": "memory_service_workspace_owner",
-          "line": 101
+          "line": 116
         },
         {
           "function": "memory_service_rounded_size",
-          "line": 111
+          "line": 126
         },
         {
           "function": "memory_service_heap_result",
-          "line": 127
+          "line": 142
         },
         {
           "function": "memory_service_owner_valid",
-          "line": 160
+          "line": 175
         },
         {
           "function": "memory_service_root_block_valid",
-          "line": 169
+          "line": 184
         },
         {
           "function": "memory_service_output_valid",
-          "line": 211
+          "line": 226
         },
         {
           "function": "memory_service_validate",
-          "line": 236
+          "line": 251
         },
         {
           "function": "memory_service_retire",
-          "line": 324
+          "line": 339
         },
         {
           "function": "memory_service_initialize",
-          "line": 364
+          "line": 379
         },
         {
           "function": "memory_service_check",
-          "line": 454
+          "line": 469
         },
         {
           "function": "memory_service_select_workspace",
-          "line": 463
+          "line": 478
         },
         {
           "function": "memory_service_get_session",
-          "line": 476
+          "line": 491
         },
         {
           "function": "memory_service_get_workspace",
-          "line": 493
+          "line": 508
         },
         {
           "function": "memory_service_allocate",
-          "line": 514
+          "line": 529
         },
         {
           "function": "memory_service_is_root",
-          "line": 534
+          "line": 549
         },
         {
           "function": "memory_service_release",
-          "line": 551
+          "line": 566
         },
         {
           "function": "memory_service_reset_workspace",
-          "line": 575
+          "line": 590
+        },
+        {
+          "function": "memory_service_initialize",
+          "line": 657
+        },
+        {
+          "function": "memory_service_check",
+          "line": 671
+        },
+        {
+          "function": "memory_service_select_workspace",
+          "line": 684
+        },
+        {
+          "function": "memory_service_get_session",
+          "line": 697
+        },
+        {
+          "function": "memory_service_get_workspace",
+          "line": 710
+        },
+        {
+          "function": "memory_service_allocate",
+          "line": 723
+        },
+        {
+          "function": "memory_service_release",
+          "line": 736
+        },
+        {
+          "function": "memory_service_reset_workspace",
+          "line": 749
+        },
+        {
+          "function": "memory_service_retire",
+          "line": 763
         }
       ],
-      "sha256": "555839af6605bbe7b15b6f86c9aa9623cbb8ab3b2efa49cba1a01ec4137eb15f",
+      "sha256": "2177960f94f7e847af0e8918efab81a65bac7792f8b7bf7bbbca3fed7ea17468",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/mmio-page-policy.c": {
@@ -1369,38 +1529,54 @@
       "functions": [
         {
           "function": "page_access_object_range",
-          "line": 15
+          "line": 26
         },
         {
           "function": "page_access_output_disjoint",
-          "line": 31
+          "line": 42
         },
         {
           "function": "page_access_find_ordinal",
-          "line": 67
+          "line": 78
         },
         {
           "function": "page_access_is_canonical",
-          "line": 113
+          "line": 124
         },
         {
           "function": "page_access_resolve",
-          "line": 127
+          "line": 138
         },
         {
           "function": "page_access_zero",
-          "line": 192
+          "line": 203
         },
         {
           "function": "page_access_allocate_zero",
-          "line": 217
+          "line": 228
         },
         {
           "function": "page_access_claim",
-          "line": 259
+          "line": 270
+        },
+        {
+          "function": "page_access_resolve",
+          "line": 316
+        },
+        {
+          "function": "page_access_zero",
+          "line": 329
+        },
+        {
+          "function": "page_access_allocate_zero",
+          "line": 343
+        },
+        {
+          "function": "page_access_claim",
+          "line": 357
         }
       ],
-      "sha256": "04bdb801e97bda9ca481fec09e331a4b86c48b834db575ac96b1cea822f499a9",
+      "sha256": "2b273acea8b2259564d62ebf5ca1b9d72ec9ec9b32ba38414e97262a03759769",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/screen-editor.c": {

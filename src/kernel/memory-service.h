@@ -9,6 +9,11 @@
  * partial; caller storage remains stable and disjoint for the service lifetime.
  * Concurrency: one CPU with interrupts disabled; no locks or IRQ-context use.
  * References: ADR-persistent-memory-service and ADR-memory-services. */
+/* In the isolated MEMORY_WIRING_TEST profile, public entries establish and
+ * restore the actual boot/task exclusion described above before the same body
+ * runs. Unsupported bootstrap/lifetime/callback operations reject runtime.
+ * This adds no default-kernel preemption or new allocator API; see
+ * docs/decisions/ADR-m10-d59b-runtime-memory-wiring.md. */
 #ifndef SPIFFOS_MEMORY_SERVICE_H
 #define SPIFFOS_MEMORY_SERVICE_H
 

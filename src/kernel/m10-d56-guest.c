@@ -61,6 +61,9 @@ static volatile uint32_t d59b_cycles[D56_WORKERS], d59b_real_irq_entries;
 static uint64_t d59b_max_body_cycles;
 #ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
 static volatile uint32_t d59b_page_cycles[D56_WORKERS];
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+static volatile uint32_t d59b_direct_cycles[D56_WORKERS];
+#endif
 #endif
 #ifdef SPIFFOS_M10_D59B_SERVICE_TEST
 static volatile uint32_t d59b_service_cycles[D56_WORKERS];
@@ -266,6 +269,11 @@ static bool incoming_safe(unsigned index,const uint64_t *frame)
 uint64_t *m10_d56_irq_select(uint64_t *incoming)
 {
     if(!active) return incoming;
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_is_bound(&d59b_context)) {
+        failed=true;reason="D59B_MEMORY_UNBOUND";active=false;return incoming;
+    }
+#endif
 #ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
     /* The word was incremented by actual assembly entry, not C caller
      * supplied evidence. Never allocate or release a physical frame here. */
@@ -512,6 +520,13 @@ __attribute__((noreturn)) static void worker_run(unsigned index)
             }
             if(inherited_off && (inherited_flags&UINT64_C(0x200))!=0)
                 __asm__ volatile("sti":::"memory");
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+            if(!memory_boot_d59b_direct_refusals(&d59b_context,index)) {
+                failed=true;reason="D59B_DIRECT_CALL";
+                for(;;) __asm__ volatile("cli; hlt":::"memory");
+            }
+            ++d59b_direct_cycles[index];
+#endif
 #endif
             uint64_t outer=enter_critical();
             uint64_t inner=enter_critical();
@@ -705,6 +720,10 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         dispatched.slot==handles[D56_SUP_INDEX].slot;
 #ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
     if(ready) ready=d59b_context_init(&d59b_context,&d57_guard,&tasks,&owners);
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    /* Actual RSP is still the surviving boot stack; selector inactive. */
+    if(ready) ready=d59b_memory_bind(&d59b_context);
+#endif
 #endif
     exit_critical(flags);
     if(!ready) {reason="M10_A_SETUP";goto fail_early;}
@@ -720,6 +739,15 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
     const uint64_t clean=enter_critical();
     uintptr_t actual_rsp;
     __asm__ volatile("mov %%rsp,%0":"=r"(actual_rsp)::"memory");
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    /* No stack release is attempted if exact off-stack unbind is uncertain.
+     * Preserve deliberate IRQ-negative reason; never repair a faulted guard. */
+    if(!d59b_memory_unbind(&d59b_context)) {
+        if(!failed) reason="D59B_MEMORY_UNBIND";
+        exit_critical(clean);
+        return false;
+    }
+#endif
     bool good=returned_to_boot && done && !failed &&
         irq_switches>=D56_MIN_WORKER_TICKS &&
         slices[0]>=D56_MIN_WORKER_TICKS &&
@@ -766,6 +794,9 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
                actual_rsp,memory_boot_m10_task_stack_release)!=
                    KERNEL_RESOURCE_OK) good=false;
     }
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_retirement_complete(&d59b_context)) good=false;
+#endif
     exit_critical(clean);
     if(!good) {reason=failed?reason:"QUOTA_OR_REAP";return false;}
     return true;
@@ -812,6 +843,13 @@ void m10_d56_report(bool (*write)(const char *))
     (void)write("\r\nD59B_WORKER1_PAGE_CYCLES:");
     report_number(write,d59b_page_cycles[1]);
     (void)write("\r\nSPIFFOS_M10_D59B_PAGE_IRQ_OK\r\n");
+#endif
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    (void)write("D59B_WORKER0_DIRECT_CYCLES:");
+    report_number(write,d59b_direct_cycles[0]);
+    (void)write("\r\nD59B_WORKER1_DIRECT_CYCLES:");
+    report_number(write,d59b_direct_cycles[1]);
+    (void)write("\r\nSPIFFOS_M10_D59B_MEMORY_BINDING_OK\r\n");
 #endif
     (void)write("D59B_WORKER0_FRAME_CYCLES:");
     report_number(write,d59b_cycles[0]);

@@ -81,6 +81,16 @@ $(error D59B_PAGE_CLAIM_TEST requires D59B_CONTEXT_TEST)
 endif
 endif
 
+# Runtime memory wiring must keep the proven context/service/page profile.
+ifneq ($(findstring -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_MEMORY_WIRING_TEST requires D59B_PAGE_CLAIM_TEST)
+endif
+ifeq ($(findstring -DSPIFFOS_M10_D59B_SERVICE_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_MEMORY_WIRING_TEST requires D59B_SERVICE_TEST)
+endif
+endif
+
 # D5.8b separately flagged IF=0 blocked-stack handoff fixture.
 # Never link into unflagged kernel or change normal cooperative ABI.
 M10D58B_BLOCK_OBJECTS :=
@@ -1224,3 +1234,37 @@ test-m10-d59b-latency-math: build/m10-d59b-latency-math-test
 	./build/m10-d59b-latency-math-test
 
 test-m10-d59b-acceptance: test-m10-d59b-latency-math
+
+
+.PHONY: test-m10-d59b-memory-scope-host
+build/m10-d59b-memory-scope-host-test: tests/m10-d59b-memory-scope-test.c tests/m10-d59b-test-cpu.h src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_D59B_HOSTED -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-memory-scope-test.c src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -Wl,--gc-sections -o $@
+
+test-m10-d59b-memory-scope-host: build/m10-d59b-memory-scope-host-test
+	python3 -c "import subprocess; [subprocess.run(['./build/m10-d59b-memory-scope-host-test', case], check=True) for case in ('happy','boot-if','bind-stack','irq','cpu','rsp','early-unbind','cookie','nested-if','retire-stack','token-enable','token-hide')]"
+
+test-m10-d59b-acceptance: test-m10-d59b-memory-scope-host
+
+# Native white-box harness includes memory-boot.c ONCE, allowing actual private
+# boot RAM/stack records to be initialized without a production injection API.
+D59B_MEMORY_HOST_SOURCES := src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c src/kernel/page-access.c src/kernel/kernel-heap.c src/kernel/memory-service.c src/kernel/m10-d59b-service.c
+D59B_MEMORY_HOST_FLAGS := -DSPIFFOS_D59B_HOSTED -DSPIFFOS_M10_D56_IRQ_TEST -DSPIFFOS_M10_D59B_CONTEXT_TEST -DSPIFFOS_M10_D59B_SERVICE_TEST -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+
+.PHONY: test-m10-d59b-memory-direct-host test-m10-d59b-memory-admission-guest
+build/m10-d59b-memory-direct-host-test: tests/m10-d59b-memory-admission-test.c tests/m10-d59b-test-cpu.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/m10-d59b-context.h src/kernel/frame-allocator.h src/kernel/page-access.h src/kernel/kernel-heap.h src/kernel/memory-service.h $(D59B_MEMORY_HOST_SOURCES) Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 $(D59B_MEMORY_HOST_FLAGS) -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Iinclude -Isrc/kernel tests/m10-d59b-memory-admission-test.c $(D59B_MEMORY_HOST_SOURCES) -Wl,--gc-sections -Wl,--wrap=frame_release -o $@
+
+test-m10-d59b-memory-direct-host: build/m10-d59b-memory-direct-host-test
+	python3 scripts/test-m10-d59b-memory-direct-host.py
+
+test-m10-d59b-memory-admission-guest:
+	python3 scripts/test-m10-d59b-memory-admission-guest.py
+
+test-m10-d59b-acceptance: test-m10-d59b-memory-direct-host test-m10-d59b-memory-admission-guest
+
+
+build/m10-d59b-context.o: src/kernel/memory-map.h
+build/main.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o: src/kernel/m10-d59b-context.h
+build/m10-d59b-memory-direct-host-test: $(wildcard src/kernel/*.h)

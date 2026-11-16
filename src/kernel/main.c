@@ -16,6 +16,9 @@
 #include "keyboard-ps2.h"
 #include "screen-editor.h"
 #include "memory-boot.h"
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+#endif
 #include "workspace-manager.h"
 #include "x86-idt.h"
 #include "x86-pic.h"
@@ -1017,6 +1020,13 @@ void kmain(void)
     /* The exception-only IDT has no external IRQ gates. Keep IF cleared and
      * preserve PS/2 polling and PIT2 overlay timing. */
     __asm__ volatile ("cli" : : : "memory");
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    /* Establish real boot CPU before any allocator-domain operation. */
+    if(!d59b_memory_bootstrap()) {
+        (void)serial_write("SPIFFOS_D59B_MEMORY_BOOT_ERROR\r\n");
+        halt_forever();
+    }
+#endif
     if (!x86_idt_initialize()) {
         (void)serial_write("SPIFFOS_IDT_ERROR\r\n");
         halt_forever();

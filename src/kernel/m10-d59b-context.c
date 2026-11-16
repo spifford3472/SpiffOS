@@ -234,3 +234,317 @@ bool d59b_exit(struct d59b_context *context,uint32_t cookie)
     }
     return true;
 }
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "memory-map.h"
+#ifdef SPIFFOS_D59B_HOSTED
+#include <stdlib.h>
+#endif
+/* Direct trusted bridge, never caller-supplied policy or function pointer. */
+extern bool memory_boot_d59b_scope_policy(uint64_t *offset,uint64_t *frames);
+/* Qwen predicate: borrow exact D5.2b bindings under IF=0 and reject actual RSP
+ * inside ANY installed range, including quarantine. Read-only; no stack
+ * dereference, ownership transfer, allocation or synthetic CPU witness. */
+static bool memory_off_registered_stacks(const struct d59b_context *context, uintptr_t actual_rsp) {
+    if (!context || !kernel_task_resources_check(context->resources, context->tasks))
+        return false;
+
+    for (size_t i = 0; i < KERNEL_TASK_CAPACITY; ++i) {
+        const struct kernel_task_resource_record *record = &context->resources->task[i];
+        if (!record->installed) continue;
+        uintptr_t bottom = record->stack.bottom;
+        size_t bytes = record->stack.bytes;
+        if (bytes == 0 || bytes > UINTPTR_MAX-bottom) return false;
+        if (actual_rsp >= bottom && actual_rsp - bottom < bytes) return false;
+    }
+    return true;
+}
+static struct d59b_context memory_cpu;
+static struct d59b_context *memory_bound,*memory_retired;
+static bool memory_ready,memory_faulted,memory_ever_bound;
+static uint32_t memory_boot_cpu;
+static uint64_t memory_hhdm;
+
+/* Latch irreversible domain failure. No reset, recovery or IF restoration. */
+static bool memory_reject(void)
+{
+    memory_faulted=true;
+    if(memory_bound!=NULL && memory_bound->guard!=NULL)
+        memory_bound->guard->faulted=true;
+    return false;
+}
+#ifdef SPIFFOS_D59B_HOSTED
+/* Test-only CPU substitution before bootstrap; no kernel injection seam. */
+bool d59b_memory_host_backend(const struct d59b_host_backend *backend)
+{
+    if(memory_ready || memory_faulted || memory_cpu.host!=NULL) return false;
+    memory_cpu.host=backend;
+    return backend_valid(&memory_cpu);
+}
+#endif
+
+/* Caller already owns actual IF=0. Require the original boot CPU, off IRQ,
+ * and a healthy initialized domain before interpreting lifecycle metadata. */
+static bool memory_cpu_valid(void)
+{
+    return memory_ready && !memory_faulted &&
+        (cpu_flags(&memory_cpu)&D59B_IF_MASK)==0 && d59b_irq_depth==0 &&
+        cpu_id(&memory_cpu)==memory_boot_cpu;
+}
+
+/* Initialize the allocator-domain lifecycle once before any shared allocator
+ * use. No synthetic task identity, guard reset, heap or register assumptions. */
+bool d59b_memory_bootstrap(void)
+{
+    if(!backend_valid(&memory_cpu)) return false;
+    const uint64_t entry=cpu_save_disable(&memory_cpu);
+    if(memory_ready || memory_faulted || (entry&D59B_IF_MASK)!=0 ||
+       d59b_irq_depth!=0) return memory_reject();
+    memory_boot_cpu=cpu_id(&memory_cpu);
+    memory_ready=true;
+    return true;
+}
+
+/* Bind actual task authority once from the surviving bootstrap stack.
+ * SUP has been selected in M10-A but no hardware task handoff is active yet.
+ * Trusted retained policy is borrowed directly; no input HHDM witness is used. */
+bool d59b_memory_bind(struct d59b_context *context)
+{
+    if(!backend_valid(&memory_cpu)) return false;
+    const uint64_t entry=cpu_save_disable(&memory_cpu);
+    if((entry&D59B_IF_MASK)!=0 || !memory_cpu_valid() || memory_bound!=NULL ||
+       memory_retired!=NULL || memory_ever_bound || context==NULL ||
+       !context->initialized || context->expected_cpu!=memory_boot_cpu ||
+       context->guard==NULL || !context->guard->initialized ||
+       context->guard->faulted || context->guard->depth!=0 ||
+       !memory_off_registered_stacks(context,cpu_rsp(&memory_cpu)) ||
+       context->tasks->current_slot!=KERNEL_TASK_SUPERVISOR_SLOT)
+        return memory_reject();
+    const struct kernel_task_record *supervisor=
+        &context->tasks->tasks[KERNEL_TASK_SUPERVISOR_SLOT];
+    const struct kernel_task_resource_record *binding=
+        &context->resources->task[KERNEL_TASK_SUPERVISOR_SLOT];
+    if(!binding->installed || binding->quarantined ||
+       binding->handle.generation!=supervisor->generation)
+        return memory_reject();
+    uint64_t offset=0,frames=0;
+    if(!supervisor->supervisor || supervisor->state!=KERNEL_TASK_RUNNING ||
+       !memory_boot_d59b_scope_policy(&offset,&frames) || frames==0 ||
+       frames>512u*1024u*1024u/MEMORY_PAGE_BYTES)
+        return memory_reject();
+    memory_hhdm=offset;
+    memory_bound=context;
+    memory_ever_bound=true;
+    return true;
+}
+
+/* Require complete task quiescence on the surviving stack before retirement.
+ * Caller must disarm IRQ selection first; selector independently requires bind.
+ * Retain the exact ledger pointer until all installed bindings are retired. */
+bool d59b_memory_unbind(struct d59b_context *context)
+{
+    if(!backend_valid(&memory_cpu)) return false;
+    const uint64_t entry=cpu_save_disable(&memory_cpu);
+    if((entry&D59B_IF_MASK)!=0 || !memory_cpu_valid() ||
+       context==NULL || memory_bound!=context || context->guard==NULL ||
+       context->guard->faulted || context->guard->depth!=0 ||
+       context->tasks->current_slot!=SIZE_MAX ||
+       !memory_off_registered_stacks(context,cpu_rsp(&memory_cpu)))
+        return memory_reject();
+    memory_retired=context;
+    memory_bound=NULL;
+    return true;
+}
+
+/* Forget borrowed ledger only after successful exact-owner retirement of all
+ * rows; never erase a quarantined binding to manufacture reuse permission. */
+bool d59b_memory_retirement_complete(struct d59b_context *context)
+{
+    if(!backend_valid(&memory_cpu)) return false;
+    const uint64_t entry=cpu_save_disable(&memory_cpu);
+    if((entry&D59B_IF_MASK)!=0 || !memory_cpu_valid() ||
+       context==NULL || memory_bound!=NULL || memory_retired!=context ||
+       context->tasks->current_slot!=SIZE_MAX || context->tasks->ready_count!=0 ||
+       !memory_off_registered_stacks(context,cpu_rsp(&memory_cpu)))
+        return memory_reject();
+    for(size_t i=0;i<KERNEL_TASK_CAPACITY;++i)
+        if(context->resources->task[i].installed) return memory_reject();
+    for(size_t i=0;i<KERNEL_TASK_CAPACITY;++i) {
+        const struct kernel_task_record *task=&context->tasks->tasks[i];
+        if(task->state!=KERNEL_TASK_FREE &&
+           !(task->state==KERNEL_TASK_TERMINATED && task->reclaimed))
+            return memory_reject();
+    }
+    memory_retired=NULL;
+    return true;
+}
+
+/* IRQ selector observes only binding identity under already-disabled IF.
+ * No allocation, callback, guard mutation or alternate scheduling authority. */
+bool d59b_memory_is_bound(const struct d59b_context *context)
+{
+    return memory_ready && !memory_faulted && context!=NULL &&
+        memory_bound==context;
+}
+
+/* Query only inside a valid admitted scope. It grants no task identity or
+ * ability to rebind after the diagnostic lifecycle has completed. */
+bool d59b_memory_boot_only(void)
+{
+    return memory_cpu_valid() && memory_bound==NULL;
+}
+
+/* Resolve a physical frame against EXISTING immutable stack ranges only.
+ * Overflow/corrupt authority conservatively denies all frame reuse/release.
+ * Requires scope ownership; no stack contents are read, no new registry. */
+static bool memory_bound_record(uint64_t physical,
+    const struct kernel_task_resource_record **record)
+{
+    const struct d59b_context *context=
+        memory_bound!=NULL?memory_bound:memory_retired;
+    *record=NULL;
+    if(!memory_cpu_valid()) { (void)memory_reject();return true; }
+    if(context==NULL) return false;
+    if(!kernel_task_resources_check(context->resources,context->tasks) ||
+       physical>UINT64_MAX-memory_hhdm) {
+        (void)memory_reject();return true;
+    }
+    const uint64_t mapped=physical+memory_hhdm;
+    if(mapped>UINT64_MAX-MEMORY_PAGE_BYTES) {
+        (void)memory_reject();return true;
+    }
+    for(size_t i=0;i<KERNEL_TASK_CAPACITY;++i) {
+        const struct kernel_task_resource_record *r=&context->resources->task[i];
+        if(!r->installed) continue;
+        const uint64_t bottom=r->stack.bottom;
+        if(r->stack.bytes==0 || bottom>UINT64_MAX-r->stack.bytes) {
+            (void)memory_reject();return true;
+        }
+        if(mapped<bottom+r->stack.bytes && bottom<mapped+MEMORY_PAGE_BYTES) {
+            *record=r;return true;
+        }
+    }
+    return false;
+}
+
+/* Do not recycle a FREE allocator slot still covered by retained binding. */
+bool d59b_memory_frame_bound(uint64_t physical)
+{
+    const struct kernel_task_resource_record *record=NULL;
+    return memory_bound_record(physical,&record);
+}
+
+/* Runtime cannot free ANY bound stack. Boot retirement requires exact
+ * terminated generation, zero references and actual RSP outside ALL bindings.
+ * D5.2b remains final release/quarantine authority; no bypass is installed. */
+bool d59b_memory_frame_release_allowed(uint64_t physical)
+{
+    const struct kernel_task_resource_record *record=NULL;
+    if(!memory_bound_record(physical,&record)) return true;
+    if(memory_faulted || record==NULL || memory_bound!=NULL ||
+       memory_retired==NULL || record->quarantined || record->owned_locks!=0 ||
+       record->registered_waiters!=0 ||
+       memory_retired->tasks->current_slot!=SIZE_MAX ||
+       !memory_off_registered_stacks(memory_retired,cpu_rsp(&memory_cpu)))
+        return false;
+    const struct kernel_task_record *task=
+        kernel_task_get(memory_retired->tasks,record->handle);
+    return task!=NULL && task->state==KERNEL_TASK_TERMINATED &&
+        !task->reclaimed;
+}
+
+/* Uncertain exit cannot return a recoverable error after mutation/publication.
+ * Native abort is test-only; real kernel retains CLI/HLT without allocating,
+ * invoking a reporter/backend or attempting a forced task/guard recovery. */
+_Noreturn void d59b_memory_stop(void)
+{
+#ifdef SPIFFOS_D59B_HOSTED
+    abort();
+#else
+    for(;;) __asm__ volatile("cli; hlt":::"memory");
+#endif
+}
+
+/* Qwen entry glue: capture actual IF/CLI before inspecting shared domain
+ * state. Runtime reuses D5.7 exact-generation cookies; bootstrap is a verified
+ * single CPU with no independent task. Token is published ONLY on success.
+ * Caller owns a zeroed token; refusal latches fault and retains IF=0. */
+bool d59b_memory_scope_enter(struct d59b_memory_scope *scope) {
+    if (!backend_valid(&memory_cpu)) return false;
+    uint64_t entry = cpu_save_disable(&memory_cpu);
+    if (!scope || scope->active || !memory_ready || memory_faulted || d59b_irq_depth != 0 ||
+        cpu_id(&memory_cpu) != memory_boot_cpu)
+        return memory_reject();
+    uint32_t cookie = 0;
+    if (memory_bound != NULL) {
+        if (!memory_bound->guard || (memory_bound->guard->depth != 0 && (entry & D59B_IF_MASK)))
+            return memory_reject();
+        if (!d59b_enter(memory_bound, &cookie))
+            return memory_reject();
+        /* Record the actual IF captured before domain CLI in the EXISTING
+         * trusted adapter, not in a second caller-owned restoration authority. */
+        if(memory_bound->guard->depth==1u)
+            memory_bound->original_if=(entry&D59B_IF_MASK)!=0;
+    } else if (memory_retired != NULL) {
+        if (memory_retired->tasks->current_slot != SIZE_MAX ||
+            !memory_off_registered_stacks(memory_retired, cpu_rsp(&memory_cpu)))
+            return memory_reject();
+    }
+    *scope = (struct d59b_memory_scope){memory_bound, entry, cookie, true};
+    return true;
+}
+
+/* Qwen matching exit: reject unexpected IF/CPU/IRQ/identity/depth/cookie.
+ * Runtime restoration belongs ONLY to the existing trusted adapter, never a
+ * caller-owned token flag. Mark token inactive BEFORE a final exit may STI;
+ * do not inspect shared context after another task can legitimately execute.
+ * Errors retain IF=0/token for diagnosis; wrappers stop on uncertain exit. */
+bool d59b_memory_scope_leave(struct d59b_memory_scope *scope) {
+    if (!backend_valid(&memory_cpu)) return false;
+    uint64_t entry = cpu_save_disable(&memory_cpu);
+    if ((entry & D59B_IF_MASK) || !scope || !scope->active || !memory_cpu_valid())
+        return memory_reject();
+    if (scope->context != memory_bound)
+        return memory_reject();
+    if (scope->context != NULL) {
+        if (!scope->context->guard)
+            return memory_reject();
+        bool tokenIF = (scope->previous_flags & D59B_IF_MASK) != 0;
+        if (scope->context->guard->depth == 1) {
+            if (tokenIF != scope->context->original_if)
+                return memory_reject();
+        } else if (tokenIF) {
+            return memory_reject();
+        }
+        scope->active = false;
+        if (!d59b_exit(scope->context, scope->cookie)) {
+            scope->active = true;
+            return memory_reject();
+        }
+        return true;
+    } else {
+        if (memory_retired != NULL &&
+            (memory_retired->tasks->current_slot != SIZE_MAX ||
+             !memory_off_registered_stacks(memory_retired, cpu_rsp(&memory_cpu))))
+            return memory_reject();
+    }
+    bool restore = (scope->previous_flags & D59B_IF_MASK) != 0;
+    scope->active = false;
+    if (restore)
+        cpu_enable(&memory_cpu);
+    return true;
+}
+/* Check actual execution and lifecycle BEFORE a legacy boot-only API body.
+ * Do not mask interrupts across a multi-page snapshot/report merely to add
+ * a gate. Once unbound, selector cannot dispatch any independent task and
+ * tagged IRQs cannot enter allocators; original boot borrowing contract stays.
+ * No callback or state publication occurs in this bounded admission check. */
+bool d59b_memory_boot_admit(void)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return false;
+    const bool allowed=d59b_memory_boot_only();
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return allowed;
+}
+#endif

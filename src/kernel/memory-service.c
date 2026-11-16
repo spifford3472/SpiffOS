@@ -11,6 +11,21 @@
  * References: ADR-persistent-memory-service and ADR-memory-services. */
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+/* One authoritative body, renamed only in this translation unit. Public
+ * entries below authenticate before inspecting its borrowed metadata.
+ * Same-file internal calls stay inside their already-admitted outer scope. */
+#define memory_service_initialize d59b_private_memory_service_initialize
+#define memory_service_check d59b_private_memory_service_check
+#define memory_service_select_workspace d59b_private_memory_service_select_workspace
+#define memory_service_get_session d59b_private_memory_service_get_session
+#define memory_service_get_workspace d59b_private_memory_service_get_workspace
+#define memory_service_allocate d59b_private_memory_service_allocate
+#define memory_service_release d59b_private_memory_service_release
+#define memory_service_reset_workspace d59b_private_memory_service_reset_workspace
+#define memory_service_retire d59b_private_memory_service_retire
+#endif
 #include "memory-service.h"
 
 /* Build a nonempty half-open numeric range without an overflowing addition.
@@ -623,3 +638,134 @@ enum memory_service_result memory_service_reset_workspace(
     }
     return MEMORY_SERVICE_OK;
 }
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#undef memory_service_initialize
+#undef memory_service_check
+#undef memory_service_select_workspace
+#undef memory_service_get_session
+#undef memory_service_get_workspace
+#undef memory_service_allocate
+#undef memory_service_release
+#undef memory_service_reset_workspace
+#undef memory_service_retire
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_initialize(struct memory_service *service, void *arena, size_t arena_bytes)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_memory_boot_only() ?
+        d59b_private_memory_service_initialize(service,arena,arena_bytes) : MEMORY_SERVICE_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_check(const struct memory_service *service)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_private_memory_service_check(service);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_select_workspace(struct memory_service *service, size_t workspace_id)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_private_memory_service_select_workspace(service,workspace_id);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_get_session(const struct memory_service *service, const struct memory_service_session **session)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_private_memory_service_get_session(service,session);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_get_workspace(const struct memory_service *service, size_t workspace_id, const struct memory_service_workspace **workspace)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_private_memory_service_get_workspace(service,workspace_id,workspace);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_allocate(struct memory_service *service, enum kernel_heap_owner owner, size_t size_bytes, void **allocation)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_private_memory_service_allocate(service,owner,size_bytes,allocation);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_release(struct memory_service *service, enum kernel_heap_owner owner, void *allocation)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_private_memory_service_release(service,owner,allocation);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum memory_service_result memory_service_reset_workspace(struct memory_service *service, size_t workspace_id)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return MEMORY_SERVICE_INVALID;
+    enum memory_service_result result=d59b_memory_boot_only() ?
+        d59b_private_memory_service_reset_workspace(service,workspace_id) : MEMORY_SERVICE_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+void memory_service_retire(struct memory_service *service)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) d59b_memory_stop();
+    if(!d59b_memory_boot_only()) d59b_memory_stop();
+    d59b_private_memory_service_retire(service);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+}
+#endif
