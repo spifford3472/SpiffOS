@@ -433,3 +433,12 @@ not silently made concurrent. No Ring 3/process allocation ABI is implied.
 Foreground ownership, IRQ and supervisor integration, off-stack retirement,
 the separate launcher and exact-head acceptance remain pending. See
 [the preview ADR](ADR-m10-d59-multitasking-preview.md).
+
+## M11 first Ring 3 diagnostic proposal — 2026-11-22
+
+The owner-tested D5.9 preview provides the baseline. Its editor and IRQ
+workers run in Ring 0. The proposed first proof uses a separate QEMU
+profile, bounded private user mappings, a protected kernel entry stack
+and a private completion gate. It needs explicit scope approval before
+implementation. O-003 and O-004 remain open for production contracts.
+See [the proposed ADR](ADR-m11-ring3-diagnostic.md).

@@ -427,3 +427,12 @@ foreground owner, two workers and the reserved supervisor. Snapshot backing
 is prepared before the runtime starts. Foreground pixel writes may be
 interrupted by IRQ0 while the scheduler uses the existing exact-generation
 ownership checks. See [the preview ADR](../decisions/ADR-m10-d59-multitasking-preview.md).
+
+## Proposed M11 privilege-transition proof
+
+The first Ring 3 experiment would run a bounded diagnostic before the
+preview starts IRQ scheduling. M10-A retains lifecycle authority. The
+diagnostic uses a separate address-space root and enters the kernel on a
+protected stack. The surviving dispatcher restores the boot address space
+and retires the task before interactive preview startup. Proposed design
+and open approval are recorded in [the M11 ADR](../decisions/ADR-m11-ring3-diagnostic.md).
