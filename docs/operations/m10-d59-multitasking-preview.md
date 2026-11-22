@@ -86,3 +86,29 @@ Independent run #112 passed inherited acceptance and all three interactive
 preview runs. Its launcher test stopped because the disposable runner had
 QEMU's core package without the separate GTK module. The CI dependency now
 includes `qemu-system-gui` so the same launch validation can run in CI.
+
+## Workspace banner and monitor follow-up
+
+The owner requested the initial `<number>MB Available` and `Ready...` lines
+with the cursor on the following row. Each workspace reads shared ordinary
+free frames at first initialization. Workspace 1 samples after all preview
+snapshot backing is reserved. The other workspaces sample on first activation.
+The existing D5.9-B scope protects one counter read, then restores IF before
+formatting or painting. The number is rounded down in 1,048,576-byte units
+and displayed with the requested MB label. It describes a shared pool.
+
+F10 groups workspace state, task activity, and supervisor counters. The
+worker rows display actual iterations and IRQ0 slice counts in separate
+columns. F10 refreshes the sample on demand. The foreground remains the
+sole framebuffer writer. The static preview glyphs support the requested
+mixed-case labels. A later live graph can use timed samples of ordinary
+free frames and deltas in IRQ0 slices, with an explicit time window.
+
+Forge Qwen supplied the monitor grouping and the second draft of the banner
+helper. The coordinator checked the seeded line lengths against C array
+sizes, connected the memory sample and verified the layout. Qwen's three
+glyph attempts produced repeated or malformed rows, so the coordinator
+supplied the bounded lowercase table and verified its rendering. The
+keyboard regression checks the banner and cursor pixels in all nine
+workspaces, checks F10 against the sampled serial counters, and verifies
+exact restoration after returning from the monitor.

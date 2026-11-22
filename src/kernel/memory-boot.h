@@ -69,6 +69,9 @@ bool memory_boot_service_check(bool (*writer)(const char *));
 bool memory_boot_service_editor_check(bool (*writer)(const char *));
 /* Switch retained active workspace after full service validation; does not
  * change the display. False leaves session untouched. Boot CPU only. */
+#ifdef SPIFFOS_M10_D59_PREVIEW
+bool memory_boot_preview_available_mib(uint64_t *out);
+#endif
 bool memory_boot_select_workspace(size_t workspace_id);
 /* Reset only one retained workspace root/owner; preserves session and others. */
 bool memory_boot_reset_workspace(size_t workspace_id);

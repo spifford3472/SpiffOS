@@ -18,7 +18,7 @@ def wait_until(predicate, description, seconds=5):
     raise RuntimeError("Timed out: " + description)
 
 
-def verify_screen(path, text, row, initial, cursor, extra_lines=()):
+def verify_screen(path, text, row, initial, cursor, extra_lines=(), initial_lines=None):
     """Compare every RGB byte to independent text/font/logo/cursor reference data."""
     magic, size, maximum, actual = path.read_bytes().split(b"\n", 3)
     width, height = map(int, size.split())
@@ -34,6 +34,8 @@ def verify_screen(path, text, row, initial, cursor, extra_lines=()):
             expected[start:start+1200] = logo[y*1200:(y+1)*1200]
     font = json.loads((ROOT / "tests/fixtures/console-font.json").read_text())
     lines = [(13, "SPIFFOS WORKSPACE"), (14, "OUTPUT SCROLLS THE LOGO.")] if initial else []
+    if initial_lines is not None:
+        lines = list(initial_lines)
     lines.append((row, text))
     lines.extend(extra_lines)
     for screen_row, line in lines:
@@ -44,20 +46,67 @@ def verify_screen(path, text, row, initial, cursor, extra_lines=()):
                 cell = b"".join((ink if bit == "1" else navy) * 2 for bit in bits)
                 start = ((screen_row*16+y)*width+column*16)*3
                 expected[start:start+48] = cell
-    cursor_row, cursor_column, cursor_mode = cursor
-    cursor_y = cursor_row * 16
-    y_range = range(cursor_y, cursor_y + 16)
-    if cursor_mode == "insert":
-        y_range = range(cursor_y + 14, cursor_y + 16)
-    for y in y_range:
-        for x in range(cursor_column * 16, cursor_column * 16 + 16):
-            offset = (y * width + x) * 3
-            expected[offset:offset+3] = bytes(255-value for value in expected[offset:offset+3])
+    if cursor is not None:
+        cursor_row, cursor_column, cursor_mode = cursor
+        cursor_y = cursor_row * 16
+        y_range = range(cursor_y, cursor_y + 16)
+        if cursor_mode == "insert":
+            y_range = range(cursor_y + 14, cursor_y + 16)
+        for y in y_range:
+            for x in range(cursor_column * 16, cursor_column * 16 + 16):
+                offset = (y * width + x) * 3
+                expected[offset:offset+3] = bytes(255-value for value in expected[offset:offset+3])
     if actual != expected:
         index = next(i for i, (a,b) in enumerate(zip(actual, expected)) if a != b)
         raise RuntimeError(f"Unexpected keyboard screenshot pixel {index//3%width},{index//3//width}")
     print(f"PASS every keyboard screenshot pixel: {path.name} ({width}x{height})")
     return height // 16
+
+
+def preview_startup_lines(path):
+    """Read the decimal prefix independently, then verify both banner rows."""
+    _, size, _, rgb = path.read_bytes().split(b"\n", 3)
+    width, _ = map(int, size.split())
+    font = json.loads((ROOT / "tests/fixtures/console-font.json").read_text())
+    digits_by_glyph = {tuple(font[digit]): digit for digit in "0123456789"}
+    digits = []
+    for column in range(20):
+        glyph = []
+        for y in range(7):
+            row = 0
+            for x in range(5):
+                offset = ((13 * 16 + y * 2) * width + column * 16 + (x + 1) * 2) * 3
+                row = (row << 1) | (rgb[offset:offset + 3] == bytes((160, 160, 255)))
+            glyph.append(row)
+        digit = digits_by_glyph.get(tuple(glyph))
+        if digit is None:
+            break
+        digits.append(digit)
+    assert digits and int("".join(digits)) > 0, "missing workspace memory count"
+    lines = [(13, "".join(digits) + "MB Available"), (14, "Ready...")]
+    verify_screen(path, "", 15, True, (15, 0, "overwrite"), initial_lines=lines)
+    return lines
+
+
+def verify_preview_monitor(path, serial):
+    """Compare the entire F10 frame with independently placed metric rows."""
+    sample = [line for line in serial.read_text().splitlines() if line.startswith("D59_PREVIEW:")][-1]
+    values = dict(field.split("=") for field in sample.split(":", 1)[1].split(","))
+    lines = [
+        (0, "SPIFFOS SYSTEM MONITOR"), (2, "WORKSPACES"),
+        (3, "  Active workspace     1 / 9"), (4, "  Prepared             9 / 9"),
+        (5, "  Opened               9 / 9"), (6, "  Saved views          9 / 9"),
+        (7, "  IRQ0 ticks           " + values["TICKS"]),
+        (9, "TASK ACTIVITY"), (10, "  Task           IRQ slices  Iterations"),
+        (11, "  Foreground     " + values["FG"]),
+        (12, ("  Worker 1       " + values["W1IRQ"]).ljust(29) + values["W1"]),
+        (13, ("  Worker 2       " + values["W2IRQ"]).ljust(29) + values["W2"]),
+        (15, "SUPERVISOR"), (16, "  Completions          " + values["SUP"]),
+        (17, "  Max gap (ticks)      " + values["GAP"]),
+        (18, "  IRQ switches         " + values["SW"]),
+        (20, "F1-F9 Workspaces"), (21, "F10 Refresh   F12 Identify"),
+    ]
+    verify_screen(path, "", 0, False, None, lines)
 
 
 def run_keyboard_test(socket_path, serial, build):
@@ -125,10 +174,15 @@ def run_keyboard_test(socket_path, serial, build):
             # images, editor state, and existing boot workspace unchanged.
             initial_path = build / "m7-initial.ppm"
             rpc("screendump", {"filename":str(initial_path)})
+            preview = b"SPIFFOS_D59_PREVIEW_READY" in serial.read_bytes().splitlines()
+            startup_lines = preview_startup_lines(initial_path) if preview else None
             key(["f2"], named="WORKSPACE_OK")
             second_path = build / "m7-second.ppm"
             rpc("screendump", {"filename":str(second_path)})
-            assert initial_path.read_bytes() != second_path.read_bytes()
+            if preview:
+                preview_startup_lines(second_path)
+            else:
+                assert initial_path.read_bytes() != second_path.read_bytes()
             key(["z"], "Z")
             key(["f1"], named="WORKSPACE_OK")
             restored_path = build / "m7-restored.ppm"
@@ -142,6 +196,10 @@ def run_keyboard_test(socket_path, serial, build):
             print("PASS M8 real QEMU F1/F2, framebuffer restore and independent text")
             for workspace_id in range(3, 10):
                 key([f"f{workspace_id}"], named="WORKSPACE_OK")
+                if preview:
+                    opened_path = build / f"preview-workspace-{workspace_id}.ppm"
+                    rpc("screendump", {"filename":str(opened_path)})
+                    preview_startup_lines(opened_path)
                 key(["f1"], named="WORKSPACE_OK")
                 restored_nine = build / f"m7-return-{workspace_id}.ppm"
                 rpc("screendump", {"filename":str(restored_nine)})
@@ -163,7 +221,8 @@ def run_keyboard_test(socket_path, serial, build):
             system_path = build / "m8-system.ppm"
             rpc("screendump", {"filename":str(system_path)})
             assert system_path.read_bytes() != initial_path.read_bytes()
-            if b"SPIFFOS_D59_PREVIEW_READY" in serial.read_bytes().splitlines():
+            if preview:
+                verify_preview_monitor(system_path, serial)
                 # Keep F10 visible and refresh from a later coherent sample.
                 time.sleep(0.2)
                 key(["f10"], named="SYSTEM_OK")
@@ -207,7 +266,7 @@ def run_keyboard_test(socket_path, serial, build):
             path = build / "keyboard-typed.ppm"
             rpc("screendump", {"filename":str(path)})
             rows = verify_screen(path, "SPIFFOS 123.:?", 15, True,
-                                 (15, 14, "overwrite"))
+                                 (15, 14, "overwrite"), initial_lines=startup_lines)
 
             key(["left"], named="LEFT")
             key(["left"], named="LEFT")
@@ -215,7 +274,7 @@ def run_keyboard_test(socket_path, serial, build):
             path = build / "keyboard-insert.ppm"
             rpc("screendump", {"filename":str(path)})
             verify_screen(path, "SPIFFOS 123.:?", 15, True,
-                          (15, 12, "insert"))
+                          (15, 12, "insert"), initial_lines=startup_lines)
             key(["x"], "X")
             key(["insert"], named="INSERT")
             key(["y"], "Y")
