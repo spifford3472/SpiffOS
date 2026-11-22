@@ -1302,6 +1302,11 @@ void kmain(void)
     }
     (void)serial_write("SPIFFOS_IRQ0_DISABLED_CLOCK_UNAVAILABLE\r\n");
 #endif
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    /* Boot is complete only after the preview's synchronous reservation.
+     * The launcher can then wait briefly for the first foreground slice. */
+    preview_prepare_foreground(&console);
+#endif
     if (!serial_write("\r\nSPIFFOS_BOOT_OK\r\n")) {
         halt_forever();
     }
@@ -1369,7 +1374,6 @@ void kmain(void)
 #ifdef SPIFFOS_M10_D59_PREVIEW
     extern bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *),
                                    void (*foreground)(void));
-    preview_prepare_foreground(&console);
     if(!m10_d56_guest_smoke(kernel_timer_boot_now_ms, keyboard_run)) {
 #else
     extern bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *));
