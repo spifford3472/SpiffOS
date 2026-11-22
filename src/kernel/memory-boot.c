@@ -786,7 +786,9 @@ bool memory_boot_service_editor_check(bool (*writer)(const char *))
  * other workspace roots. The display manager prepares its target first. */
 bool memory_boot_select_workspace(size_t workspace_id)
 {
-#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#if defined(SPIFFOS_M10_D59B_MEMORY_WIRING_TEST) && !defined(SPIFFOS_M10_D59_PREVIEW)
+    /* The preview foreground selects through the existing guarded service
+     * transaction below. The retained service stays initialized and pinned. */
     if(!d59b_memory_boot_admit()) return false;
 #endif
     return retained_started &&

@@ -91,6 +91,14 @@ $(error D59B_MEMORY_WIRING_TEST requires D59B_SERVICE_TEST)
 endif
 endif
 
+# The interactive preview extends the complete isolated D5.9-B profile.
+D59_PREVIEW_FLAGS := -DSPIFFOS_M10_D56_IRQ_TEST -DSPIFFOS_M10_D57_IRQ_TEST -DSPIFFOS_M10_D59B_CONTEXT_TEST -DSPIFFOS_M10_D59B_SERVICE_TEST -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST -DSPIFFOS_M10_D59_PREVIEW
+ifneq ($(filter -DSPIFFOS_M10_D59_PREVIEW,$(BOOT_TEST_FLAGS)),)
+ifeq ($(filter -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59_PREVIEW requires D59B_MEMORY_WIRING_TEST)
+endif
+endif
+
 # D5.8b separately flagged IF=0 blocked-stack handoff fixture.
 # Never link into unflagged kernel or change normal cooperative ABI.
 M10D58B_BLOCK_OBJECTS :=
@@ -1268,3 +1276,14 @@ test-m10-d59b-acceptance: test-m10-d59b-memory-direct-host test-m10-d59b-memory-
 build/m10-d59b-context.o: src/kernel/memory-map.h
 build/main.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o: src/kernel/m10-d59b-context.h
 build/m10-d59b-memory-direct-host-test: $(wildcard src/kernel/*.h)
+
+
+build/main.o build/workspace-manager.o build/m10-d56-guest.o: src/kernel/m10-d59-preview.h
+
+.PHONY: iso-m10-d59-preview
+iso-m10-d59-preview:
+	$(MAKE) -B BOOT_TEST_FLAGS="$(D59_PREVIEW_FLAGS)" iso
+
+.PHONY: test-m10-d59-preview-acceptance
+test-m10-d59-preview-acceptance: test-m10-d59b-acceptance
+	python3 scripts/test-m10-d59-preview.py

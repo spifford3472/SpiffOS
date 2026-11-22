@@ -163,6 +163,10 @@ def run_keyboard_test(socket_path, serial, build):
             system_path = build / "m8-system.ppm"
             rpc("screendump", {"filename":str(system_path)})
             assert system_path.read_bytes() != initial_path.read_bytes()
+            if b"SPIFFOS_D59_PREVIEW_READY" in serial.read_bytes().splitlines():
+                # Keep F10 visible and refresh from a later coherent sample.
+                time.sleep(0.2)
+                key(["f10"], named="SYSTEM_OK")
             key(["f1"], named="WORKSPACE_OK")
             system_return = build / "m8-system-return.ppm"
             rpc("screendump", {"filename":str(system_return)})

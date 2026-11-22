@@ -848,7 +848,7 @@
       "candidate_calls": [],
       "category": "unreviewed",
       "functions": [],
-      "sha256": "4d54a4226713c8548bf670f67d767364a26bcb97c0a74ba9e90ec01db58db8ed",
+      "sha256": "af4c0a31198808d47cfaa2f1d09d8adeee24df7c46558405a96d26955df9d2bf",
       "state": "UNREVIEWED_NO_PREEMPTION"
     },
     "src/kernel/m10-d57-safety.c": {
@@ -1049,154 +1049,166 @@
       "functions": [
         {
           "function": "port_write",
-          "line": 103
+          "line": 106
         },
         {
           "function": "port_read",
-          "line": 110
+          "line": 113
         },
         {
           "function": "serial_initialize",
-          "line": 120
+          "line": 123
         },
         {
           "function": "serial_write",
-          "line": 138
+          "line": 141
         },
         {
           "function": "halt_forever",
-          "line": 156
+          "line": 159
         },
         {
           "function": "console_write_number",
-          "line": 167
+          "line": 170
         },
         {
           "function": "console_scroll_demo",
-          "line": 182
+          "line": 185
         },
         {
           "function": "keyboard_port_read",
-          "line": 203
+          "line": 206
         },
         {
           "function": "keyboard_port_write",
-          "line": 209
+          "line": 212
         },
         {
           "function": "keyboard_submit_diagnostic",
-          "line": 223
+          "line": 226
         },
         {
           "function": "indicator_clock_start",
-          "line": 245
+          "line": 249
         },
         {
           "function": "indicator_clock_stop",
-          "line": 253
-        },
-        {
-          "function": "pit_read_counter",
           "line": 257
         },
         {
+          "function": "pit_read_counter",
+          "line": 261
+        },
+        {
           "function": "acpi_map_read_only",
-          "line": 273
+          "line": 278
         },
         {
           "function": "boot_table_map",
-          "line": 299
+          "line": 304
         },
         {
           "function": "apic_boot_pages_present",
-          "line": 327
+          "line": 332
         },
         {
           "function": "mmio_boot_cpu_policy",
-          "line": 367
+          "line": 372
         },
         {
           "function": "mmio_boot_root_ready",
-          "line": 411
+          "line": 416
         },
         {
           "function": "mmio_boot_acquire",
-          "line": 445
+          "line": 450
         },
         {
           "function": "mmio_boot_release",
-          "line": 460
+          "line": 465
         },
         {
           "function": "mmio_boot_invlpg",
-          "line": 468
+          "line": 473
         },
         {
           "function": "mmio_boot_map_apic",
-          "line": 480
+          "line": 485
         },
         {
           "function": "apic_alias_checked_table",
-          "line": 537
+          "line": 542
         },
         {
           "function": "apic_boot_cache_gate",
-          "line": 547
+          "line": 552
         },
         {
           "function": "apic_hw_lapic_id_read",
-          "line": 624
+          "line": 629
         },
         {
           "function": "apic_hw_ioapic_index_read",
-          "line": 639
+          "line": 644
         },
         {
           "function": "apic_boot_readonly_probe",
-          "line": 658
+          "line": 663
         },
         {
           "function": "apic_boot_io_read",
-          "line": 675
+          "line": 680
         },
         {
           "function": "apic_boot_io_write",
-          "line": 690
+          "line": 695
         },
         {
           "function": "x86_irq0_handler",
-          "line": 706
+          "line": 711
         },
         {
           "function": "apic_boot_pit0_100hz",
-          "line": 718
+          "line": 723
         },
         {
           "function": "x86_irq0_handler",
-          "line": 730
+          "line": 735
         },
         {
           "function": "apic_boot_irq0_activate",
-          "line": 740
+          "line": 745
         },
         {
           "function": "acpi_boot_discover",
-          "line": 786
+          "line": 791
+        },
+        {
+          "function": "preview_prepare_foreground",
+          "line": 813
+        },
+        {
+          "function": "preview_serial_metric",
+          "line": 828
+        },
+        {
+          "function": "preview_system_view",
+          "line": 844
         },
         {
           "function": "keyboard_run",
-          "line": 808
+          "line": 868
         },
         {
           "function": "x86_exception_panic",
-          "line": 1000
+          "line": 1108
         },
         {
           "function": "kmain",
-          "line": 1017
+          "line": 1125
         }
       ],
-      "sha256": "8680d80c391e8c5938489fa5fdb8482d83c2e6d891f2e6b521b685e667c91ff4",
+      "sha256": "002aa3320aafe454b416d5a8202d93f67592010a6cbbaab9b62aac20c25803e7",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-boot.c": {
@@ -1303,62 +1315,62 @@
         },
         {
           "function": "memory_boot_reset_workspace",
-          "line": 797
+          "line": 799
         },
         {
           "function": "memory_boot_mmio_table_acquire",
-          "line": 810
+          "line": 812
         },
         {
           "function": "memory_boot_mmio_table_release",
-          "line": 844
+          "line": 846
         },
         {
           "function": "memory_boot_snapshot_prepare",
-          "line": 880
+          "line": 882
         },
         {
           "function": "m10_b_stack_rollback",
-          "line": 961
+          "line": 963
         },
         {
           "function": "memory_boot_m10_task_stack_prepare",
-          "line": 984
+          "line": 986
         },
         {
           "function": "memory_boot_m10_task_stack_release",
-          "line": 1037
+          "line": 1039
         },
         {
           "function": "memory_boot_m10_task_stack_failure_probe",
-          "line": 1053
+          "line": 1055
         },
         {
           "function": "memory_boot_d59b_frame_cycle",
-          "line": 1097
+          "line": 1099
         },
         {
           "function": "memory_boot_d59b_service_cycle",
-          "line": 1163
+          "line": 1165
         },
         {
           "function": "memory_boot_d59b_page_cycle",
-          "line": 1179
+          "line": 1181
         },
         {
           "function": "memory_boot_d59b_scope_policy",
-          "line": 1256
+          "line": 1258
         },
         {
           "function": "d59b_refused_backend",
-          "line": 1274
+          "line": 1276
         },
         {
           "function": "memory_boot_d59b_direct_refusals",
-          "line": 1287
+          "line": 1289
         }
       ],
-      "sha256": "8bf444bb2a5c1cbdf44256d0015a5eb238d6da26345f8c5b3f6976d44354f01c",
+      "sha256": "b17aaf7673dd7e8457d98744457e1ca7fc51b10c34733090697706dbb5a0df38",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/memory-map.c": {
@@ -1707,54 +1719,62 @@
       "functions": [
         {
           "function": "snapshot_supported",
-          "line": 28
+          "line": 31
+        },
+        {
+          "function": "workspace_manager_preview_prepare",
+          "line": 45
         },
         {
           "function": "snapshot_transfer",
-          "line": 38
+          "line": 60
         },
         {
           "function": "workspace_manager_initialize",
-          "line": 68
+          "line": 96
         },
         {
           "function": "workspace_manager_hide_indicator",
-          "line": 109
+          "line": 137
         },
         {
           "function": "workspace_manager_identify",
-          "line": 126
+          "line": 154
         },
         {
           "function": "workspace_manager_fade_indicator",
-          "line": 156
+          "line": 184
         },
         {
           "function": "system_write_unsigned",
-          "line": 188
+          "line": 216
+        },
+        {
+          "function": "preview_write_metrics",
+          "line": 234
         },
         {
           "function": "workspace_manager_system_diagnostics",
-          "line": 207
-        },
-        {
-          "function": "workspace_manager_system",
-          "line": 256
-        },
-        {
-          "function": "workspace_manager_switch",
           "line": 263
         },
         {
+          "function": "workspace_manager_system",
+          "line": 328
+        },
+        {
+          "function": "workspace_manager_switch",
+          "line": 339
+        },
+        {
           "function": "workspace_manager_active",
-          "line": 306
+          "line": 382
         },
         {
           "function": "workspace_manager_reset",
-          "line": 316
+          "line": 392
         }
       ],
-      "sha256": "1644108f5322e53112a1ee5cd9faf08fcdfb7f026d19bb2ac25681cbcfde60eb",
+      "sha256": "b7e43794b9c125c34bc48111cc81c710b16a251dc4e38fcec697d1f65ba6852e",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
     "src/kernel/x86-exceptions.S": {

@@ -20,6 +20,9 @@
 #include "m10-d59b-context.h"
 #endif
 #include "workspace-manager.h"
+#ifdef SPIFFOS_M10_D59_PREVIEW
+#include "m10-d59-preview.h"
+#endif
 #include "x86-idt.h"
 #include "x86-pic.h"
 #include "kernel-timer.h"
@@ -236,6 +239,7 @@ static bool keyboard_submit_diagnostic(
     return serial_write("\r\n");
 }
 
+#ifndef SPIFFOS_M10_D59_PREVIEW
 /* Use PIT channel 2 as a private read-only-in-loop elapsed-time source.
  * Unlike firmware channel 0, its mode is explicitly set to mode 2, with a
  * 65536-tick reload and a count that decrements by ONE per 1.193 MHz tick.
@@ -261,6 +265,7 @@ static uint16_t pit_read_counter(void)
     uint16_t high = port_read(0x42);
     return (uint16_t)(low | (high << 8));
 }
+#endif
 
 /* Map only complete ACPI reclaimable/NVS byte spans using Limine's known
  * HHDM. This is read-only firmware discovery, NOT a generic MMIO mapper.
@@ -801,17 +806,79 @@ static bool acpi_boot_discover(struct acpi_apic_topology *topology)
     return acpi_discover_madt(&mapper, xsdt_address, topology);
 }
 
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Boot owns the initialized display until the foreground is scheduled.
+ * Reserve immutable snapshot backing and initialize PS/2 before binding.
+ * False setup halts on the surviving boot stack without starting workers. */
+static void preview_prepare_foreground(const struct text_console *console)
+{
+    const struct keyboard_io io = {keyboard_port_read, keyboard_port_write, NULL};
+    if (!keyboard_ps2_initialize(&io) ||
+        !workspace_manager_initialize(&boot_workspaces, console,
+            keyboard_submit_diagnostic, NULL) ||
+        !memory_boot_service_editor_check(serial_write) ||
+        !workspace_manager_preview_prepare(&boot_workspaces)) {
+        (void)serial_write("SPIFFOS_D59_PREVIEW_FOREGROUND_SETUP_ERROR\r\n");
+        halt_forever();
+    }
+}
+
+/* Emit one decimal field on the foreground-owned UART after the snapshot
+ * guard is released. This diagnostic writer allocates nothing. */
+static void preview_serial_metric(const char *field, uint64_t value)
+{
+    char digits[21];
+    size_t first = sizeof digits - 1;
+    digits[first] = '\0';
+    do {
+        digits[--first] = (char)('0' + value % 10);
+        value /= 10;
+    } while (value != 0);
+    (void)serial_write(field);
+    (void)serial_write(digits + first);
+}
+
+/* Borrow the active framebuffer and render one coherent snapshot from the
+ * existing scheduler. Only the foreground calls this off IRQ; the guard
+ * protects sampling, with display and serial work after IF restoration. */
+static bool preview_system_view(void)
+{
+    struct m10_d59_preview_metrics metrics;
+    if (!m10_d59_preview_snapshot(&metrics) ||
+        !workspace_manager_system_diagnostics(&boot_workspaces, true,
+            metrics.ticks, &metrics)) return false;
+    preview_serial_metric("D59_PREVIEW:TICKS=", metrics.ticks);
+    preview_serial_metric(",W1=", metrics.worker_iterations[0]);
+    preview_serial_metric(",W2=", metrics.worker_iterations[1]);
+    preview_serial_metric(",W1IRQ=", metrics.worker_ticks[0]);
+    preview_serial_metric(",W2IRQ=", metrics.worker_ticks[1]);
+    preview_serial_metric(",FG=", metrics.foreground_ticks);
+    preview_serial_metric(",SW=", metrics.irq_switches);
+    preview_serial_metric(",SUP=", metrics.supervisor_completions);
+    preview_serial_metric(",GAP=", metrics.max_supervisor_gap);
+    (void)serial_write("\r\n");
+    return true;
+}
+#endif
+
 /* Run the diagnostic input loop. The decoder emits named navigation/mode
  * events; the editor owns pixels and stored lines. Text keys retain hexadecimal
  * serial evidence while named keys use readable EVENT records. */
 __attribute__((noreturn))
-static void keyboard_run(struct text_console *console)
+static void keyboard_run(
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    void
+#else
+    struct text_console *console
+#endif
+)
 {
     const struct keyboard_io io = {
         keyboard_port_read, keyboard_port_write, NULL
     };
     struct keyboard_decoder decoder;
     keyboard_decoder_reset(&decoder);
+#ifndef SPIFFOS_M10_D59_PREVIEW
     if (!keyboard_ps2_initialize(&io) ||
         !workspace_manager_initialize(&boot_workspaces, console,
             keyboard_submit_diagnostic, NULL)) {
@@ -819,11 +886,19 @@ static void keyboard_run(struct text_console *console)
         halt_forever();
     }
     if (!memory_boot_service_editor_check(serial_write)) halt_forever();
+#endif
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    (void)serial_write("SPIFFOS_D59_PREVIEW_READY\r\n");
+#endif
     (void)serial_write("SPIFFOS_KEYBOARD_READY\r\n");
     bool first = true;
     bool indicator_timed = false;
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    uint64_t indicator_started_ms = 0;
+#else
     uint16_t previous_pit = 0;
     uint32_t elapsed_pit = 0;
+#endif
     unsigned int indicator_fade_step = 0;
 #ifdef SPIFFOS_IRQ0_TIMING_TEST
     /* Independent real-QEMU wall-clock test observes serial milestones while
@@ -864,6 +939,23 @@ static void keyboard_run(struct text_console *console)
         }
 #endif
         if (indicator_timed) {
+#ifdef SPIFFOS_M10_D59_PREVIEW
+            uint64_t now_ms;
+            if (kernel_timer_boot_now_ms(&now_ms)) {
+                const uint64_t elapsed_ms = now_ms - indicator_started_ms;
+                if (elapsed_ms >= 1000u) {
+                    workspace_manager_hide_indicator(&boot_workspaces);
+                    indicator_timed = false;
+                    (void)serial_write("EVENT:INDICATOR_HIDDEN\r\n");
+                } else if (elapsed_ms >= 950u && indicator_fade_step < 2) {
+                    workspace_manager_fade_indicator(&boot_workspaces, 2);
+                    indicator_fade_step = 2;
+                } else if (elapsed_ms >= 850u && indicator_fade_step < 1) {
+                    workspace_manager_fade_indicator(&boot_workspaces, 1);
+                    indicator_fade_step = 1;
+                }
+            }
+#else
             uint16_t current = pit_read_counter();
             elapsed_pit += (uint16_t)(previous_pit - current);
             previous_pit = current;
@@ -880,6 +972,7 @@ static void keyboard_run(struct text_console *console)
                 indicator_timed = false;
                 (void)serial_write("EVENT:INDICATOR_HIDDEN\r\n");
             }
+#endif
         }
         uint8_t byte = 0;
         enum keyboard_poll poll = keyboard_ps2_poll(&io, &byte);
@@ -895,12 +988,20 @@ static void keyboard_run(struct text_console *console)
             if (keyboard_decode_event(&decoder, byte, &event)) {
                 if (event.type == KEYBOARD_EVENT_IDENTIFY) {
                     workspace_manager_hide_indicator(&boot_workspaces);
+#ifndef SPIFFOS_M10_D59_PREVIEW
                     if (indicator_timed) indicator_clock_stop();
+#endif
                     indicator_timed = false;
-                    if (workspace_manager_identify(&boot_workspaces)) {
+                    if (
+#ifdef SPIFFOS_M10_D59_PREVIEW
+                        kernel_timer_boot_now_ms(&indicator_started_ms) &&
+#endif
+                        workspace_manager_identify(&boot_workspaces)) {
+#ifndef SPIFFOS_M10_D59_PREVIEW
                         indicator_clock_start();
                         previous_pit = pit_read_counter();
                         elapsed_pit = 0;
+#endif
                         indicator_fade_step = 0;
                         indicator_timed = true;
                         (void)serial_write("EVENT:INDICATOR_OK\r\n");
@@ -909,10 +1010,16 @@ static void keyboard_run(struct text_console *console)
                 }
                 if (indicator_timed) {
                     workspace_manager_hide_indicator(&boot_workspaces);
+#ifndef SPIFFOS_M10_D59_PREVIEW
                     indicator_clock_stop();
+#endif
                     indicator_timed = false;
                 }
                 if (event.type == KEYBOARD_EVENT_SYSTEM) {
+#ifdef SPIFFOS_M10_D59_PREVIEW
+                    (void)serial_write(preview_system_view() ?
+                        "EVENT:SYSTEM_OK\r\n" : "EVENT:SYSTEM_UNAVAILABLE\r\n");
+#else
                     /* F10 takes a read-only tick snapshot on the boot CPU,
                      * outside IRQ context. Missing first-tick evidence is
                      * displayed as UNAVAILABLE, never as zero uptime. */
@@ -922,6 +1029,7 @@ static void keyboard_run(struct text_console *console)
                     (void)serial_write(workspace_manager_system_diagnostics(
                         &boot_workspaces,clock_available,debug_ticks) ?
                         "EVENT:SYSTEM_OK\r\n" : "EVENT:SYSTEM_UNAVAILABLE\r\n");
+#endif
                     continue;
                 }
                 if (boot_workspaces.system_visible &&
@@ -1257,9 +1365,16 @@ void kmain(void)
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
     /* Real non-yielding M10-A worker preemption, reserved owned-stack
      * supervisor and verified IRQ0 frames; isolated diagnostic only. */
-    extern bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *));
     extern const char *m10_d56_failure_reason(void);
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    extern bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *),
+                                   void (*foreground)(void));
+    preview_prepare_foreground(&console);
+    if(!m10_d56_guest_smoke(kernel_timer_boot_now_ms, keyboard_run)) {
+#else
+    extern bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *));
     if(!m10_d56_guest_smoke(kernel_timer_boot_now_ms)) {
+#endif
         (void)serial_write("SPIFFOS_M10_D56_IRQ_ERROR:");
         (void)serial_write(m10_d56_failure_reason());
         (void)serial_write("\r\n");
@@ -1270,6 +1385,10 @@ void kmain(void)
     extern void m10_d56_report(bool (*write)(const char *));
     m10_d56_report(serial_write);
     (void)serial_write("SPIFFOS_M10_D56_IRQ_OK\r\n");
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    (void)serial_write("SPIFFOS_D59_PREVIEW_RETIREMENT_OK\r\n");
+    halt_forever();
+#endif
 #endif
 #ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
     /* D5.5c: real CPU IRQ0 frame from an actual M10-A-owned task stack.
@@ -1346,7 +1465,7 @@ void kmain(void)
 #endif
 #endif
 
-#ifndef SPIFFOS_SCROLL_TEST
+#if !defined(SPIFFOS_SCROLL_TEST) && !defined(SPIFFOS_M10_D59_PREVIEW)
     if (console.initialized) {
         keyboard_run(&console);
     }
