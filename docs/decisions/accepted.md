@@ -581,3 +581,7 @@ existing editor as sole foreground owner, two preempted background workers
 and a reserved supervisor. See [the preview ADR](ADR-m10-d59-multitasking-preview.md)
 for the execution boundary and acceptance matrix. Approval covers development
 and testing through a candidate ISO.
+
+## Hosted interactive BASIC preview — 2026-11-22
+
+Geoff authorized implementation and hosted verification of the signed-integer interactive BASIC contract on 2026-11-22. Use the bounded, device-independent evaluator and the separate host harness specified in [the contract](../basic/interactive-preview.md).
