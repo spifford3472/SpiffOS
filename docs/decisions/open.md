@@ -433,3 +433,7 @@ not silently made concurrent. No Ring 3/process allocation ABI is implied.
 Foreground ownership, IRQ and supervisor integration, off-stack retirement,
 the separate launcher and exact-head acceptance remain pending. See
 [the preview ADR](ADR-m10-d59-multitasking-preview.md).
+
+## M11 diagnostic acceptance — 2026-11-22
+
+The fixed QEMU diagnostic is approved for development. Real privilege transition, effective mapping permission checks, off-stack retirement and continued preview responsiveness require evidence. The public syscall and production user scheduling contracts, and the first interactive console contract, remain open.

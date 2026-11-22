@@ -581,3 +581,7 @@ existing editor as sole foreground owner, two preempted background workers
 and a reserved supervisor. See [the preview ADR](ADR-m10-d59-multitasking-preview.md)
 for the execution boundary and acceptance matrix. Approval covers development
 and testing through a candidate ISO.
+
+## M11 isolated Ring 3 diagnostic — 2026-11-22
+
+Geoff authorized implementation and testing of the separately flagged, single-CPU QEMU diagnostic in [the M11 ADR](ADR-m11-ring3-diagnostic.md). The fixed task uses a private address space, protected RSP0 entry stack and pointer-free completion gate. Restore the bootstrap root and retire from the surviving stack before the editor preview takes over.
