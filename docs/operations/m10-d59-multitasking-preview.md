@@ -73,3 +73,16 @@ progress in two F10 samples, with a maximum unserviced gap of four IRQ ticks.
 The unflagged debug-stripped executable during integration matched D4
 `82628f2e640bb4a56f8c5f18f75c2e1da43ec5e3fdaee2caad921ef03d48f2fb`.
 Candidate acceptance requires the complete matrix and independent CI.
+
+The final Forge preview matrix passed at 128, 256 and 512 MiB. It verified
+keyboard events, workspace restoration, two advancing F10 snapshots, F12
+timing, launcher close and signal cleanup, four exact off-stack retirements,
+and fail-closed worker #UD at each guest memory size. Forge also passed the
+full inherited GCC sanitizer and QEMU suite in 635.42 seconds. Native Clang
+editor tests passed without sanitizers because that Forge Clang installation
+lacks the sanitizer runtime. The freestanding Clang default build matched D4.
+
+Independent run #112 passed inherited acceptance and all three interactive
+preview runs. Its launcher test stopped because the disposable runner had
+QEMU's core package without the separate GTK module. The CI dependency now
+includes `qemu-system-gui` so the same launch validation can run in CI.

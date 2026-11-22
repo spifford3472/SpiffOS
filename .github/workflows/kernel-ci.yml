@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential clang lld git make python3 qemu-system-x86 ovmf xorriso binutils
+            build-essential clang lld git make python3 qemu-system-x86 qemu-system-gui ovmf xorriso binutils
 
       - name: Fetch the audited Limine commit at expected path
         shell: bash
