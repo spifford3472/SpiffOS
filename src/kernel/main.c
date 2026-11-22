@@ -821,6 +821,7 @@ static void preview_prepare_foreground(const struct text_console *console)
         (void)serial_write("SPIFFOS_D59_PREVIEW_FOREGROUND_SETUP_ERROR\r\n");
         halt_forever();
     }
+    (void)serial_write("SPIFFOS_TEXT_OK\r\nSPIFFOS_CONSOLE_OK\r\n");
 }
 
 /* Emit one decimal field on the foreground-owned UART after the snapshot
@@ -1269,6 +1270,7 @@ void kmain(void)
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_OK\r\n");
         bool logo_ok = boot_workspace_reset(&console, screen);
         (void)serial_write(logo_ok ? "SPIFFOS_LOGO_OK\r\n" : "SPIFFOS_LOGO_UNAVAILABLE\r\n");
+#ifndef SPIFFOS_M10_D59_PREVIEW
         bool console_ok = false;
         if (logo_ok) {
 #ifdef SPIFFOS_SCROLL_TEST
@@ -1288,6 +1290,7 @@ void kmain(void)
         } else {
             (void)serial_write("SPIFFOS_CONSOLE_UNAVAILABLE\r\n");
         }
+#endif
     } else {
         (void)serial_write("\r\nSPIFFOS_FRAMEBUFFER_UNAVAILABLE\r\n");
     }

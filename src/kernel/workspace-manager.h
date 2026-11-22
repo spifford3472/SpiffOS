@@ -33,7 +33,7 @@ bool workspace_manager_initialize(struct workspace_manager *manager,
     logical_line_submit_fn submit, void *submit_context);
 #ifdef SPIFFOS_M10_D59_PREVIEW
 struct m10_d59_preview_metrics;
-bool workspace_manager_preview_prepare(const struct workspace_manager *manager);
+bool workspace_manager_preview_prepare(struct workspace_manager *manager);
 #endif
 /* Render a read-only monitor from the foreground owner's sampled metrics. */
 bool workspace_manager_system_diagnostics(struct workspace_manager *manager,

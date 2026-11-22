@@ -782,6 +782,26 @@ bool memory_boot_service_editor_check(bool (*writer)(const char *))
     return writer("SPIFFOS_MEMORY_EDITOR_OK\r\n");
 }
 
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Sample whole MiB available to any workspace from the shared ordinary
+ * frame pool. Reserved frames never enter this count. The boot allocator
+ * publishes readiness once, before any preview task starts. Caller owns
+ * the output, which stays unchanged if entry fails. Never use from IRQ. */
+bool memory_boot_preview_available_mib(uint64_t *out)
+{
+    enum { BYTES_PER_MIB = 1024 * 1024 };
+    struct d59b_memory_scope scope = {0};
+    if (out == NULL || !boot_allocator_available ||
+        !d59b_memory_scope_enter(&scope)) return false;
+    /* Round down without multiplying a potentially wider frame count. */
+    uint64_t available = boot_allocator.ordinary_free /
+        (BYTES_PER_MIB / MEMORY_PAGE_BYTES);
+    if (!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    *out = available;
+    return true;
+}
+#endif
+
 /* Mutate only the retained session root, preserving M6 ownership and all
  * other workspace roots. The display manager prepares its target first. */
 bool memory_boot_select_workspace(size_t workspace_id)
