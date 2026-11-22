@@ -5,8 +5,25 @@
  * Reference: docs/decisions/ADR-m9-3d6-irq0-delivery.md. */
 .section .text
 .extern x86_irq0_handler
-#ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
+#if defined(SPIFFOS_M10_D2_IRQ_FRAME_TEST) || defined(SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST)
 .extern m10_d2_probe_on_irq
+#endif
+#ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
+.extern m10_d55b_observe_irq
+#endif
+#ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
+.extern m10_d55c_frame_irq_observe
+#endif
+#ifdef SPIFFOS_M10_D56_IRQ_TEST
+.extern m10_d56_irq_select
+#endif
+#ifdef SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST
+/* Separate C2b-only authentic hardware-frame selector; no D5.6 selector
+ * or unrelated test flag may be combined with this test-only mode. */
+.extern m10_d58c_c2b_real_irq_select
+#endif
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+.extern m10_d58c_c2_irq_observe
 #endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
 .extern m10_d3_irq_select
@@ -15,6 +32,9 @@
 .extern m10_d4_complete_irq_select
 #endif
 
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+.extern d59b_irq_depth
+#endif
 .global x86_irq0_entry
 .type x86_irq0_entry,@function
 x86_irq0_entry:
@@ -39,13 +59,54 @@ x86_irq0_entry:
      * already saved and the SysV C callee must preserve it. */
     movq %rsp,%r12
     andq $-16,%rsp
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    /* Actual interrupt entry, before C. IF=0; saved GPRs protect the
+     * interrupted flags/register state from this diagnostic bookkeeping. */
+    incl d59b_irq_depth(%rip)
+#endif
     call x86_irq0_handler
-#ifdef SPIFFOS_M10_D2_IRQ_FRAME_TEST
+#ifdef SPIFFOS_M10_D55C_FRAME_GUEST_TEST
+    /* D5.5c read-only observation of REAL worker IRQ0 frame, bound to
+     * exact M10-A current task plus D5.2b stack. No task state edits,
+     * scheduling or additional EOI inside the interrupt. */
+    movq %r12,%rdi
+    call m10_d55c_frame_irq_observe
+#endif
+#ifdef SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST
+    /* D5.5b-only: real entry R12 points to the immutable saved frame.
+     * Observer checks live IF=0 and CPU-saved fields; never changes R12,
+     * IRQ0 callback, EOI count, or selected execution context. */
+    movq %r12,%rdi
+    call m10_d55b_observe_irq
+#endif
+#if defined(SPIFFOS_M10_D2_IRQ_FRAME_TEST) || defined(SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST)
     /* Test-only: check immutable saved frame AFTER normal tick and EOI.
      * R12 was saved in the trap frame; SysV C preserves our temporary
      * pointer. Normal production IRQ assembly contains no extra call. */
     movq %r12,%rdi
     call m10_d2_probe_on_irq
+#endif
+#ifdef SPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST
+    /* C2a only: observe the *authentic* IRQ0 saved frame, after the
+     * regular handler/EOI; this must NOT mutate M10-A or select RSP. */
+    movq %r12,%rdi
+    call m10_d58c_c2_irq_observe
+#endif
+#ifdef SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST
+    /* After the normal IRQ0 accounting/EOI, pass only the REAL complete
+     * CPU-saved 20-qword frame at R12. The validator may hand off the
+     * sole M10-A RUNNING identity to an independently owned IRQ frame. */
+    movq %r12,%rdi
+    call m10_d58c_c2b_real_irq_select
+    movq %rax,%r12
+#endif
+#ifdef SPIFFOS_M10_D56_IRQ_TEST
+    /* D5.6 diagnostic: C prevalidates exact M10-A generation and both
+     * independently owned IRQ frames before a single atomic task handoff.
+     * No other IRQ selector may be enabled with this test-only flag. */
+    movq %r12,%rdi
+    call m10_d56_irq_select
+    movq %rax,%r12
 #endif
 #if defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST)
     /* D3-only: normal bounded IRQ0 callback and EOI already completed.
@@ -62,6 +123,11 @@ x86_irq0_entry:
     movq %r12,%rdi
     call m10_d4_complete_irq_select
     movq %rax,%r12
+#endif
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+    /* Keep IRQ provenance active through every selector and clear it
+     * only immediately before restoring the prevalidated return frame. */
+    decl d59b_irq_depth(%rip)
 #endif
     movq %r12,%rsp
     popq %r15

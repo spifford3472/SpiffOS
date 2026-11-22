@@ -4,8 +4,9 @@
  * Dependencies: stdbool/stdint, no host OS services, heap or hardware.
  * Invariants: at most one RUNNING task, FIFO contains exactly RUNNABLE tasks,
  * each task gets one unique live handle; ordinary tasks cannot use slot 15.
- * IRQ/concurrency: caller serializes operations with interrupts disabled when
- * embedded in kernel; no operation is safe to call from IRQ context.
+ * IRQ/concurrency: caller serializes operations with interrupts disabled.
+ * Cooperative APIs are forbidden from IRQ; the privileged D5.6 handoff is
+ * the sole exception after trusted frame/owner/critical prevalidation.
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #ifndef SPIFFOS_KERNEL_TASK_H
 #define SPIFFOS_KERNEL_TASK_H
@@ -52,6 +53,8 @@ struct kernel_task_record {
     enum kernel_task_state state;
     uint32_t generation;
     bool supervisor;
+    /* Set only after a surviving reaper confirms all execution resources detached. */
+    bool reclaimed;
     uint64_t dispatches;
     uint64_t total_ticks;
 };
@@ -89,6 +92,31 @@ enum kernel_task_result kernel_task_make_runnable(
 enum kernel_task_result kernel_task_dispatch(struct kernel_task_table *table,
     struct kernel_task_handle *out);
 
+/* Select a particular exact-generation RUNNABLE task inside M10-A's sole
+ * authoritative ready queue. The caller (bounded D5.4 policy adapter) may
+ * choose its priority, but only M10-A performs the RUNNING transition.
+ * Reject stale/missing identities without modifying queue, record or output.
+ * Caller owns IF=0; not an IRQ context or separate scheduler. */
+enum kernel_task_result kernel_task_dispatch_selected(
+    struct kernel_task_table *table,
+    struct kernel_task_handle selected,
+    struct kernel_task_handle *out);
+
+/* Privileged IRQ-exit handoff: only a trusted boot-CPU IRQ0 adapter after
+ * BOTH real source/destination saved frames, lock/preempt nesting and stack
+ * owners have been validated may call this. Changes *only* M10-A state.
+ * Prevalidates exact source RUNNING and destination RUNNABLE generations,
+ * queue capacity and membership, without intermediate invalid public states.
+ * Rejected request leaves table and output byte-identical. No allocations,
+ * callbacks, locks, frame access, EOIs, or nested interrupts; IF=0.
+ * A source==destination exact identity is an explicit OK no-op. Diagnostic
+ * before normal-kernel activation; reference ADR-m10-d56-irq-handoff.md. */
+enum kernel_task_result kernel_task_irq_handoff(
+    struct kernel_task_table *table,
+    struct kernel_task_handle source,
+    struct kernel_task_handle destination,
+    struct kernel_task_handle *out);
+
 /* Current RUNNING -> RUNNABLE at FIFO tail; requires exact current handle.
  * This changes policy metadata only: no actual context switch occurs in A. */
 enum kernel_task_result kernel_task_yield(struct kernel_task_table *table,
@@ -105,6 +133,16 @@ enum kernel_task_result kernel_task_wake(struct kernel_task_table *table,
 /* CREATED/RUNNABLE/RUNNING/BLOCKED -> TERMINATED; removing queue/current
  * references before exposing termination. Never frees a stack or descriptor. */
 enum kernel_task_result kernel_task_terminate(struct kernel_task_table *table,
+    struct kernel_task_handle handle);
+
+/* Mark a terminated descriptor reusable ONLY after the owning reaper has
+ * verified task execution moved to a surviving stack and detached all saved
+ * frames, wait registrations, locks and owned resources. This metadata-only
+ * API cannot perform or verify physical detachment; the caller must do so.
+ * Caller must serialize with interrupts disabled and never call from an IRQ.
+ * Rejects uninitialized tables, invalid handles and double reclamation
+ * without mutation. No memory is freed here. */
+enum kernel_task_result kernel_task_reap(struct kernel_task_table *table,
     struct kernel_task_handle handle);
 
 /* Read a valid live/terminated record by handle; caller does not own returned

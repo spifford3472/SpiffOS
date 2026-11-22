@@ -8,6 +8,8 @@
 #include "x86-task-context.h"
 #include "memory-boot.h"
 #include "kernel-task.h"
+#include "kernel-task-cleanup.h"
+#include "kernel-task-mutex.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -21,6 +23,10 @@ static volatile uint32_t task_step[TEST_STACKS];
 static volatile bool task_done[TEST_STACKS];
 static volatile bool task_failed;
 static struct kernel_task_table task_table;
+static struct kernel_task_resources resource_owners;
+static struct kernel_task_cleanup_queue cleanup_queue;
+static struct kernel_task_mutex test_mutex;
+static volatile uint32_t mutex_stage[TEST_STACKS];
 static struct kernel_task_handle task_handles[TEST_STACKS];
 static const char *failure_reason = "UNSET";
 
@@ -61,6 +67,18 @@ static void guest_task_exit(size_t index)
     uint64_t flags=save_and_disable_irq();
     enum kernel_task_result result=kernel_task_terminate(
         &task_table,task_handles[index]);
+    /* A TERMINATED task is still running on its own 16KiB stack.
+     * Verify that even a privileged reaper request MUST reject self-free.
+     * No frame is released before switching to the surviving boot stack. */
+    uintptr_t running_rsp;
+    __asm__ volatile("mov %%rsp,%0" : "=r"(running_rsp) : : "memory");
+    /* A worker cannot supply a forged stack binding: the ledger uses the
+     * exact pre-dispatch owner registered on the boot stack. */
+    if(result==KERNEL_TASK_OK &&
+       kernel_task_resources_retire(&resource_owners,
+           &task_table,task_handles[index],running_rsp,
+           memory_boot_m10_task_stack_release)!=KERNEL_RESOURCE_BAD_STATE)
+        task_failed=true;
     restore_irq(flags);
     if(result!=KERNEL_TASK_OK) task_failed=true;
 }
@@ -70,6 +88,24 @@ static void guest_task_exit(size_t index)
 __attribute__((noreturn))
 static void task_one(void)
 {
+    /* The owner takes the mutex, yields to a real independent worker and
+     * later releases it after that worker has actually blocked on its stack. */
+    uint64_t mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result got=kernel_task_mutex_acquire(
+        &test_mutex,&resource_owners,&task_table,task_handles[0]);
+    restore_irq(mutex_flags);
+    if(got!=KERNEL_MUTEX_OK) task_failed=true;
+    mutex_stage[0]=1;
+    guest_task_yield(0);
+    x86_task_switch(&task_context[0],&boot_context);
+    mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result released=kernel_task_mutex_release(
+        &test_mutex,&resource_owners,&task_table,task_handles[0]);
+    restore_irq(mutex_flags);
+    if(released!=KERNEL_MUTEX_OK) task_failed=true;
+    mutex_stage[0]=2;
+    guest_task_yield(0);
+    x86_task_switch(&task_context[0],&boot_context);
     for(uint32_t i=0;i<TEST_ROUNDS;++i) {
         if(task_step[0]!=i) task_failed=true;
         task_step[0]=i+1;
@@ -86,6 +122,24 @@ static void task_one(void)
 __attribute__((noreturn))
 static void task_two(void)
 {
+    /* Contention changes this RUNNING task to BLOCKED before switching its
+     * actual execution stack back to the permanent dispatcher. Its saved
+     * C continuation resumes only after owner has transferred and woken it. */
+    uint64_t mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result blocked=kernel_task_mutex_acquire(
+        &test_mutex,&resource_owners,&task_table,task_handles[1]);
+    restore_irq(mutex_flags);
+    if(blocked!=KERNEL_MUTEX_BLOCKED) task_failed=true;
+    mutex_stage[1]=1;
+    x86_task_switch(&task_context[1],&boot_context);
+    mutex_flags=save_and_disable_irq();
+    enum kernel_task_mutex_result released=kernel_task_mutex_release(
+        &test_mutex,&resource_owners,&task_table,task_handles[1]);
+    restore_irq(mutex_flags);
+    if(released!=KERNEL_MUTEX_OK) task_failed=true;
+    mutex_stage[1]=2;
+    guest_task_yield(1);
+    x86_task_switch(&task_context[1],&boot_context);
     for(uint32_t i=0;i<TEST_ROUNDS;++i) {
         if(task_step[1]!=i) task_failed=true;
         task_step[1]=i+1;
@@ -134,7 +188,10 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
     task_stacks[1]=(uint8_t *)owned1;
     bool success=false;
     flags=save_and_disable_irq();
-    bool policy_ready=kernel_task_init(&task_table);
+    bool policy_ready=kernel_task_init(&task_table) &&
+        kernel_task_resources_init(&resource_owners) &&
+        kernel_task_cleanup_init(&cleanup_queue) &&
+        kernel_task_mutex_init(&test_mutex);
     for(size_t i=0;i<TEST_STACKS && policy_ready;++i)
         policy_ready=kernel_task_create(&task_table,false,
                          &task_handles[i])==KERNEL_TASK_OK &&
@@ -155,6 +212,63 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
         failure_reason="CONTEXT_INIT";
         goto cleanup;
     }
+    /* Register complete immutable backing after context initialization
+     * but before allowing the first dispatch to execute on those stacks. */
+    flags=save_and_disable_irq();
+    bool registered=true;
+    for(size_t index=0;index<TEST_STACKS && registered;++index) {
+        struct kernel_task_stack_binding binding={
+            .bottom=(uintptr_t)task_stacks[index],
+            .bytes=X86_TASK_STACK_BYTES,
+            .saved_rsp=(uintptr_t)task_context[index].saved_rsp,
+            .owner_index=index
+        };
+        registered=kernel_task_resources_bind(
+            &resource_owners,&task_table,task_handles[index],&binding)==
+            KERNEL_RESOURCE_OK;
+    }
+    restore_irq(flags);
+    if(!registered) {
+        failure_reason="RESOURCE_BIND";
+        goto cleanup;
+    }
+    /* Four real CPU context handoffs: owner acquire/yield, waiter
+     * RUNNING->BLOCKED and switch away, owner transfer/wake, waiter resumes
+     * saved instruction stream and unlocks. Ready FIFO must return to the
+     * same two-worker ordering before the inherited 1026-turn churn. */
+    for(size_t turn=0;turn<4;++turn) {
+        struct kernel_task_handle selected={0};
+        flags=save_and_disable_irq();
+        enum kernel_task_result chosen=kernel_task_dispatch(
+            &task_table,&selected);
+        restore_irq(flags);
+        if(chosen!=KERNEL_TASK_OK || selected.slot!=(turn%2)) {
+            failure_reason="MUTEX_DISPATCH";
+            goto cleanup;
+        }
+        x86_task_switch(&boot_context,&task_context[selected.slot]);
+        flags=save_and_disable_irq();
+        enum kernel_task_resource_result saved=
+            kernel_task_resources_saved_rsp(&resource_owners,&task_table,
+                selected,(uintptr_t)task_context[selected.slot].saved_rsp);
+        bool valid=kernel_task_resources_check(&resource_owners,&task_table) &&
+            kernel_task_check(&task_table);
+        restore_irq(flags);
+        if(saved!=KERNEL_RESOURCE_OK || !valid || task_failed ||
+           mutex_stage[selected.slot]!=(turn/2)+1 ||
+           (turn==1 && task_table.tasks[1].state!=KERNEL_TASK_BLOCKED) ||
+           (turn==2 && task_table.tasks[1].state!=KERNEL_TASK_RUNNABLE)) {
+            failure_reason="MUTEX_HANDOFF";
+            goto cleanup;
+        }
+    }
+    if(test_mutex.owned || test_mutex.waiting ||
+       resource_owners.task[0].owned_locks ||
+       resource_owners.task[1].owned_locks ||
+       resource_owners.task[1].registered_waiters) {
+        failure_reason="MUTEX_REFS";
+        goto cleanup;
+    }
     uint64_t first_tick=0,last_tick=0;
     bool clock_available=read_clock_ms(&first_tick);
     /* The dispatcher, not a fixed test ordering, selects all 1026
@@ -170,7 +284,15 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
             goto cleanup;
         }
         x86_task_switch(&boot_context,&task_context[selected.slot]);
-        if(task_failed || !kernel_task_check(&task_table)) {
+        /* The scheduler has regained its own boot stack. Record the actual
+         * saved cooperative context, never a task-provided stack pointer. */
+        flags=save_and_disable_irq();
+        enum kernel_task_resource_result saved=
+            kernel_task_resources_saved_rsp(&resource_owners,&task_table,
+                selected,(uintptr_t)task_context[selected.slot].saved_rsp);
+        restore_irq(flags);
+        if(saved!=KERNEL_RESOURCE_OK || task_failed ||
+           !kernel_task_resources_check(&resource_owners,&task_table)) {
             failure_reason="POLICY_OR_PROGRESS";
             goto cleanup;
         }
@@ -198,9 +320,41 @@ bool m10_b_guest_smoke(bool (*read_clock_ms)(uint64_t *))
                 goto cleanup;
             }
     success=true;
+    /* All task exits have returned to the surviving boot stack. The actual
+     * RSP is read HERE and cannot be supplied by the terminated task.
+     * The memory service releases its exact owner backing before D5.1
+     * marks that generation-tagged descriptor reusable. */
+    for(size_t index=0;index<TEST_STACKS;++index) {
+        flags=save_and_disable_irq();
+        uintptr_t boot_rsp;
+        __asm__ volatile("mov %%rsp,%0" : "=r"(boot_rsp) : : "memory");
+        /* Registered binding is authoritative: a forged owner index or
+         * stale pointer cannot direct the physical frame release. */
+        /* A surviving boot dispatcher first enqueues exact-generation
+         * retirement; the bounded queue verifies registered references and
+         * performs the exact-owner release. This is not an IRQ callback. */
+        enum kernel_cleanup_result enqueued=kernel_task_cleanup_enqueue(
+            &cleanup_queue,&resource_owners,&task_table,task_handles[index]);
+        enum kernel_cleanup_result reaped=enqueued==KERNEL_CLEANUP_OK ?
+            kernel_task_cleanup_service(&cleanup_queue,&resource_owners,
+                &task_table,boot_rsp,memory_boot_m10_task_stack_release) :
+            KERNEL_CLEANUP_INVALID;
+        restore_irq(flags);
+        if(reaped!=KERNEL_CLEANUP_OK) {
+            /* Never attempt a second free after uncertain release state. */
+            failure_reason="EXECUTION_REAPER_REJECTED";
+            return false;
+        }
+    }
+    if(cleanup_queue.count!=0 || cleanup_queue.completed!=TEST_STACKS) {
+        failure_reason="SUPERVISOR_QUEUE_ACCOUNTING";
+        return false;
+    }
+    return true;
 cleanup:
-    /* Task exit has already returned to the boot stack. Releasing either
-     * frame group while executing on it would be a use-after-free. */
+    /* Diagnostic error before normal exit: task execution has returned to
+     * the permanent boot stack, so release backing without publishing a
+     * reclaimed descriptor. No context can be dispatched after failure. */
     flags=save_and_disable_irq();
     bool released1=memory_boot_m10_task_stack_release(1);
     bool released0=memory_boot_m10_task_stack_release(0);

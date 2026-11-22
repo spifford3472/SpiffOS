@@ -4,8 +4,9 @@
  * Dependencies: kernel-task.h only; no heap, timer, interrupt or OS calls.
  * Invariants: ready queue iff RUNNABLE; exactly one RUNNING or none; no
  * duplicate queue slots; generations never silently wrap on reuse.
- * Concurrency: single CPU, all operations under caller-owned exclusion,
- * never in interrupt context.
+ * Concurrency: single CPU, caller-owned exclusion. All cooperative APIs
+ * reject IRQ callers by contract; the D5.6 privileged irq_handoff is the
+ * single exception, and requires trusted full-frame/critical prevalidation.
  * Reference: docs/decisions/ADR-m10-task-scheduler-foundation.md. */
 #include "kernel-task.h"
 
@@ -80,6 +81,7 @@ bool kernel_task_check(const struct kernel_task_table *table)
             (record->state == KERNEL_TASK_FREE && record->generation != 0) ||
             (record->state != KERNEL_TASK_FREE && record->generation == 0) ||
             (record->state == KERNEL_TASK_RUNNABLE) != queued[i] ||
+            (record->reclaimed && record->state != KERNEL_TASK_TERMINATED) ||
             (record->supervisor && i != KERNEL_TASK_SUPERVISOR_SLOT) ||
             (i == KERNEL_TASK_SUPERVISOR_SLOT &&
              record->state != KERNEL_TASK_FREE && !record->supervisor))
@@ -117,7 +119,7 @@ enum kernel_task_result kernel_task_create(struct kernel_task_table *table,
     for (size_t i = first; i < last; ++i) {
         struct kernel_task_record *record = &table->tasks[i];
         if (record->state != KERNEL_TASK_FREE &&
-            record->state != KERNEL_TASK_TERMINATED) continue;
+            !(record->state == KERNEL_TASK_TERMINATED && record->reclaimed)) continue;
         if (record->generation == UINT32_MAX) {
             exhausted_generation = true;
             continue;
@@ -166,6 +168,93 @@ enum kernel_task_result kernel_task_dispatch(struct kernel_task_table *table,
     if (record->dispatches != UINT64_MAX) ++record->dispatches;
     table->current_slot = slot;
     *out = (struct kernel_task_handle){(uint32_t)slot,record->generation};
+    return KERNEL_TASK_OK;
+}
+
+/* The selected identity is validated in the SAME authoritative table
+ * as the original FIFO dispatcher. Policy clients cannot invent tasks
+ * or mutate the queue from outside M10-A. */
+enum kernel_task_result kernel_task_dispatch_selected(
+    struct kernel_task_table *table,
+    struct kernel_task_handle selected,
+    struct kernel_task_handle *out)
+{
+    enum kernel_task_result status=preflight(table);
+    if(status!=KERNEL_TASK_OK) return status;
+    if(out==NULL) return KERNEL_TASK_INVALID;
+    if(!valid_handle(table,selected)) return KERNEL_TASK_BAD_HANDLE;
+    if(table->current_slot!=SIZE_MAX ||
+       table->tasks[selected.slot].state!=KERNEL_TASK_RUNNABLE)
+        return KERNEL_TASK_BAD_STATE;
+    bool found=false;
+    for(size_t i=0;i<table->ready_count;++i) {
+        if(table->ready_queue[i]==selected.slot &&
+           table->tasks[selected.slot].generation==selected.generation) {
+            found=true;
+            break;
+        }
+    }
+    if(!found) return KERNEL_TASK_CORRUPT;
+    remove_ready(table,selected.slot);
+    table->tasks[selected.slot].state=KERNEL_TASK_RUNNING;
+    if(table->tasks[selected.slot].dispatches!=UINT64_MAX)
+        ++table->tasks[selected.slot].dispatches;
+    table->current_slot=selected.slot;
+    *out=selected;
+    return KERNEL_TASK_OK;
+}
+
+/* Privileged IRQ0 handoff of two fully prevalidated task identities.
+ * Caller already verified actual saved CPU frame/stack bounds, IF=0,
+ * no nested IRQ, no preempt-disabled depth and safe resource references:
+ * D5.6 admits only zero lock/wait refs; D5.8c's isolated diagnostic may
+ * admit graph-proven mutex owners via D5.8b while NEVER admitting a
+ * BLOCKED waiter or mutating D5.3 from IRQ. This M10-A primitive has no
+ * resource authority of its own and must not be invoked without the
+ * caller's separately tested generation/stack/lock admission contract.
+ * No saved frame pointers are consulted here; M10-A alone mutates task
+ * lifecycle and FIFO membership. Every rejection remains immutable. */
+enum kernel_task_result kernel_task_irq_handoff(
+    struct kernel_task_table *table,
+    struct kernel_task_handle source,
+    struct kernel_task_handle destination,
+    struct kernel_task_handle *out)
+{
+    enum kernel_task_result result=preflight(table);
+    if(result!=KERNEL_TASK_OK) return result;
+    if(out==NULL) return KERNEL_TASK_INVALID;
+    if(!valid_handle(table,source) || !valid_handle(table,destination))
+        return KERNEL_TASK_BAD_HANDLE;
+    if(table->current_slot!=source.slot ||
+       table->tasks[source.slot].state!=KERNEL_TASK_RUNNING)
+        return KERNEL_TASK_BAD_STATE;
+    if(source.slot==destination.slot) {
+        *out=source;
+        return KERNEL_TASK_OK;
+    }
+    if(table->tasks[destination.slot].state!=KERNEL_TASK_RUNNABLE)
+        return KERNEL_TASK_BAD_STATE;
+    if(table->ready_count==0 || table->ready_count>=KERNEL_TASK_CAPACITY)
+        return KERNEL_TASK_CORRUPT;
+    bool found=false;
+    for(size_t i=0;i<table->ready_count;++i)
+        if(table->ready_queue[i]==destination.slot) {
+            found=true;
+            break;
+        }
+    if(!found) return KERNEL_TASK_CORRUPT;
+    /* One serialized transition with no callback or observable midpoint:
+     * remove destination, replace its slot with the outgoing source at
+     * the FIFO tail, then mark the incoming task as the sole RUNNING one.
+     * Proven capacity means neither operation can overflow the queue. */
+    remove_ready(table,destination.slot);
+    table->tasks[source.slot].state=KERNEL_TASK_RUNNABLE;
+    append_ready(table,source.slot);
+    table->tasks[destination.slot].state=KERNEL_TASK_RUNNING;
+    table->current_slot=destination.slot;
+    if(table->tasks[destination.slot].dispatches!=UINT64_MAX)
+        ++table->tasks[destination.slot].dispatches;
+    *out=destination;
     return KERNEL_TASK_OK;
 }
 
@@ -230,6 +319,25 @@ enum kernel_task_result kernel_task_terminate(struct kernel_task_table *table,
     if (record->state == KERNEL_TASK_RUNNING)
         table->current_slot = SIZE_MAX;
     record->state = KERNEL_TASK_TERMINATED;
+    record->reclaimed = false;
+    return KERNEL_TASK_OK;
+}
+
+/* The descriptor remains reserved after logical exit. The verified owner
+ * must have completed detached-stack and resource cleanup BEFORE this call.
+ * No IRQ-context caller, allocation, free or context switching is permitted.
+ * Until an actual production reaper is integrated, this is a caller contract
+ * and deliberately does not claim to prove stack detachment by itself. */
+enum kernel_task_result kernel_task_reap(struct kernel_task_table *table,
+    struct kernel_task_handle handle)
+{
+    enum kernel_task_result status = preflight(table);
+    if (status != KERNEL_TASK_OK) return status;
+    if (!valid_handle(table, handle)) return KERNEL_TASK_BAD_HANDLE;
+    struct kernel_task_record *record = &table->tasks[handle.slot];
+    if (record->state != KERNEL_TASK_TERMINATED || record->reclaimed)
+        return KERNEL_TASK_BAD_STATE;
+    record->reclaimed = true;
     return KERNEL_TASK_OK;
 }
 

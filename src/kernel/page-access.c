@@ -7,6 +7,17 @@
  * Reference: docs/decisions/ADR-memory-services.md, M3 page-access contract. */
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+/* One authoritative body, renamed only in this translation unit. Public
+ * entries below authenticate before inspecting its borrowed metadata.
+ * Same-file internal calls stay inside their already-admitted outer scope. */
+#define page_access_resolve d59b_private_page_access_resolve
+#define page_access_zero d59b_private_page_access_zero
+#define page_access_allocate_zero d59b_private_page_access_allocate_zero
+/* Function-like rename preserves the distinct struct page_access_claim tag. */
+#define page_access_claim(...) d59b_private_page_access_claim(__VA_ARGS__)
+#endif
 #include "page-access.h"
 
 /* Describe one nonempty half-open object-address range without overflowing.
@@ -247,3 +258,109 @@ enum page_access_result page_access_allocate_zero(
     *physical_address = allocated_address;
     return PAGE_ACCESS_OK;
 }
+
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+/* Allocate and authorize one ordinary page without calling an indirect backend.
+ * allocator/policy/owner are borrowed exclusive authority; claim borrows two
+ * disjoint uint64_t outputs. Success publishes an UNINITIALIZED numeric page;
+ * failure preserves outputs and restores exact ownership unless rollback fails.
+ * Caller holds the SAME outer exclusion through fixed direct initialization
+ * and release/publication. No IRQ entry, pointer dereference, logging or heap.
+ * Provenance: Qwen one-function draft; coordinator reviewed alias and rollback. */
+enum page_access_result page_access_claim(struct frame_allocator *allocator,
+    const struct page_access_policy *policy, enum frame_owner owner,
+    struct page_access_claim *claim)
+{
+    if (allocator == NULL || policy == NULL || claim == NULL ||
+        policy->allocator != allocator || !frame_owner_valid(owner)) {
+        return PAGE_ACCESS_INVALID;
+    }
+
+    if (!frame_allocator_check(allocator) ||
+        !page_access_output_disjoint(policy, &claim->physical_address) ||
+        !page_access_output_disjoint(policy, &claim->mapped_address)) {
+        return PAGE_ACCESS_INVALID;
+    }
+
+    uint64_t localphysical;
+    if (frame_allocate(allocator, owner, false, &localphysical) != FRAME_OK) {
+        return PAGE_ACCESS_ALLOCATION_FAILED;
+    }
+
+    uint64_t localmapped;
+    enum page_access_result resolve_result = page_access_resolve(
+        policy, owner, localphysical, &localmapped);
+    if (resolve_result != PAGE_ACCESS_OK) {
+        if (frame_release(allocator, owner, localphysical) != FRAME_OK) {
+            return PAGE_ACCESS_ROLLBACK_FAILED;
+        }
+        return resolve_result;
+    }
+
+    claim->physical_address = localphysical;
+    claim->mapped_address = localmapped;
+    return PAGE_ACCESS_OK;
+}
+#endif
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#undef page_access_resolve
+#undef page_access_zero
+#undef page_access_allocate_zero
+#undef page_access_claim
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_resolve(const struct page_access_policy *policy, enum frame_owner owner, uint64_t physical_address, uint64_t *mapped_address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=d59b_private_page_access_resolve(policy,owner,physical_address,mapped_address);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_zero(const struct page_access_policy *policy, enum frame_owner owner, uint64_t physical_address, page_access_zero_backend backend, void *backend_context)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=d59b_memory_boot_only() ?
+        d59b_private_page_access_zero(policy,owner,physical_address,backend,backend_context) : PAGE_ACCESS_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_allocate_zero(struct frame_allocator *allocator, const struct page_access_policy *policy, enum frame_owner owner, page_access_zero_backend backend, void *backend_context, uint64_t *physical_address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=d59b_memory_boot_only() ?
+        d59b_private_page_access_allocate_zero(allocator,policy,owner,backend,backend_context,physical_address) : PAGE_ACCESS_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum page_access_result page_access_claim(struct frame_allocator *allocator, const struct page_access_policy *policy, enum frame_owner owner, struct page_access_claim *claim)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return PAGE_ACCESS_INVALID;
+    enum page_access_result result=(d59b_memory_boot_only() || (scope.context!=NULL && scope.context->guard->depth>=2u)) ?
+        d59b_private_page_access_claim(allocator,policy,owner,claim) : PAGE_ACCESS_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+#endif

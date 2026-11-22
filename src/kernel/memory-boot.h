@@ -69,6 +69,9 @@ bool memory_boot_service_check(bool (*writer)(const char *));
 bool memory_boot_service_editor_check(bool (*writer)(const char *));
 /* Switch retained active workspace after full service validation; does not
  * change the display. False leaves session untouched. Boot CPU only. */
+#ifdef SPIFFOS_M10_D59_PREVIEW
+bool memory_boot_preview_available_mib(uint64_t *out);
+#endif
 bool memory_boot_select_workspace(size_t workspace_id);
 /* Reset only one retained workspace root/owner; preserves session and others. */
 bool memory_boot_reset_workspace(size_t workspace_id);
@@ -86,7 +89,7 @@ bool memory_boot_mmio_table_release(uint64_t physical);
 bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
                                   uint32_t **out_pages);
 
-#if defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
+#if defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST) || defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D55C_FRAME_GUEST_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
 /* Test-only four-page contiguous stack backing from ordinary M2/M3-owned
  * KERNEL frames. Exact ownership/contiguity is checked before publication.
  * Caller owns exclusive IF=0 interval, runs no stack switch during release,
@@ -95,5 +98,27 @@ bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack);
 bool memory_boot_m10_task_stack_release(size_t index);
 /* Isolated QEMU test: fail after two owned pages and prove rollback counts. */
 bool memory_boot_m10_task_stack_failure_probe(void);
+#endif
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+struct d59b_context;
+/* Real boot allocator transaction under authenticated D5.7 exclusion.
+ * No mapped payload/stack is freed; caller is a registered RUNNING task.
+ * Failure retains IF=0 and forbids automatic retry of uncertain work. */
+bool memory_boot_d59b_frame_cycle(struct d59b_context *context);
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+/* Callback-free M3 claim/fixed zero/exact release on real boot-owned RAM.
+ * All addresses stay transaction-local; errors retain IF=0 and live storage. */
+bool memory_boot_d59b_page_cycle(struct d59b_context *context);
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+/* Actual caller admission/refusal outside any preexisting D5.7 transaction.
+ * Only read-only/refused operations; no live resource spans an IF-on gap. */
+bool memory_boot_d59b_direct_refusals(struct d59b_context *context,unsigned index);
+#endif
+#endif
+#ifdef SPIFFOS_M10_D59B_SERVICE_TEST
+/* Same synchronous probe over the real retained boot service; no client
+ * payload or root pointer survives this call. Requires registered task. */
+bool memory_boot_d59b_service_cycle(struct d59b_context *context,unsigned index);
+#endif
 #endif
 #endif

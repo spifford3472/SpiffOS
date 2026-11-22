@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential clang lld git make python3 qemu-system-x86 ovmf xorriso binutils
+            build-essential clang lld git make python3 qemu-system-x86 qemu-system-gui ovmf xorriso binutils
 
       - name: Fetch the audited Limine commit at expected path
         shell: bash
@@ -65,7 +65,70 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -q '^test-m10-d4-complete-acceptance:' Makefile; then
+          if grep -q '^test-m10-d59-preview-acceptance:' Makefile; then
+            target=test-m10-d59-preview-acceptance
+            marker=SPIFFOS_M10_D59_PREVIEW_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d59b-acceptance:' Makefile; then
+            target=test-m10-d59b-acceptance
+            marker=SPIFFOS_M10_D59B_HOSTED_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d59-acceptance:' Makefile; then
+            target=test-m10-d59-acceptance
+            marker=SPIFFOS_M10_D59_AUDIT_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d58c-c2b-real-acceptance:' Makefile; then
+            target=test-m10-d58c-c2b-real-acceptance
+            marker=SPIFFOS_M10_D58C_C2B_REAL_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d58c-c2b-acceptance:' Makefile; then
+            target=test-m10-d58c-c2b-acceptance
+            marker=SPIFFOS_M10_D58C_C2B_MODE_OK
+          elif grep -q '^test-m10-d58c-c2-acceptance:' Makefile; then
+            target=test-m10-d58c-c2-acceptance
+            marker=SPIFFOS_M10_D58C_C2_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d58c-acceptance:' Makefile; then
+            target=test-m10-d58c-acceptance
+            marker=SPIFFOS_M10_D58C_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d58b-acceptance:' Makefile; then
+            target=test-m10-d58b-acceptance
+            marker=SPIFFOS_M10_D58B_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d58-acceptance:' Makefile; then
+            target=test-m10-d58-acceptance
+            marker=SPIFFOS_M10_D58_ACCEPTANCE_OK
+          elif grep -q ^test-m10-d57-acceptance: Makefile; then
+            target=test-m10-d57-acceptance
+            marker=SPIFFOS_M10_D57_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d56-acceptance:' Makefile; then
+            target=test-m10-d56-acceptance
+            marker=SPIFFOS_M10_D56_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d55c-acceptance:' Makefile; then
+            target=test-m10-d55c-acceptance
+            marker=SPIFFOS_M10_D55C_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d55b-acceptance:' Makefile; then
+            target=test-m10-d55b-acceptance
+            marker=SPIFFOS_M10_D55B_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d55-acceptance:' Makefile; then
+            target=test-m10-d55-acceptance
+            marker=SPIFFOS_M10_D55_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d54-acceptance:' Makefile; then
+            target=test-m10-d54-acceptance
+            marker=SPIFFOS_M10_D54_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d53-acceptance:' Makefile; then
+            target=test-m10-d53-acceptance
+            marker=SPIFFOS_M10_D53_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d5-mutex-acceptance:' Makefile; then
+            target=test-m10-d5-mutex-acceptance
+            marker=SPIFFOS_M10_D5_2D_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d5-supervisor-acceptance:' Makefile; then
+            target=test-m10-d5-supervisor-acceptance
+            marker=SPIFFOS_M10_D5_2C_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d5-resource-acceptance:' Makefile; then
+            target=test-m10-d5-resource-acceptance
+            marker=SPIFFOS_M10_D5_2B_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d5-execution-acceptance:' Makefile; then
+            target=test-m10-d5-execution-acceptance
+            marker=SPIFFOS_M10_D5_2A_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d5-acceptance:' Makefile; then
+            target=test-m10-d5-acceptance
+            marker=SPIFFOS_M10_D5_1_ACCEPTANCE_OK
+          elif grep -q '^test-m10-d4-complete-acceptance:' Makefile; then
             target=test-m10-d4-complete-acceptance
             marker=SPIFFOS_M10_D4_COMPLETE_ACCEPTANCE_OK
           elif grep -q '^test-m10-d4-acceptance:' Makefile; then

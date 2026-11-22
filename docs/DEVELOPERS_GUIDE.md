@@ -705,3 +705,247 @@ observed scheduling opportunities, not hard realtime CPU quotas.
 Only the `SPIFFOS_M10_D4_COMPLETE_TEST` image includes these objects.
 No default SpiffOS image preempts editor tasks. See
 `docs/operations/m10-d4-completion-20261113.md` and the D4 ADR.
+
+
+## M10-D5.1 — Why a terminated task descriptor is not free
+
+The M10-A task table identifies tasks by a slot and a generation. A task can
+be marked TERMINATED while its former stack, saved interrupt frame, owned
+synchronization object, or wait registration is still retained. The table's
+`reclaimed` flag is therefore not an execution-context check: it is an
+**explicit acknowledgement from a separate verified reaper** that reclamation
+has already completed on a surviving stack.
+
+`kernel_task_terminate()` marks logical termination and leaves the slot
+reserved. `kernel_task_reap()` validates the handle and state and marks
+the terminated descriptor reusable, but does **not** free memory or verify
+stack detachment. The production dispatcher/reaper must independently prove
+those properties before calling it. `kernel_task_create()` skips terminated
+slots without that acknowledgement, then increments the generation on reuse.
+A stale handle is rejected. If the 32-bit generation reaches its maximum,
+the slot is permanently exhausted rather than wrapping.
+
+This initial D5.1 code is hosted-tested metadata only, not yet a production
+interrupt-safe scheduler or a stack-lifecycle implementation. The ordinary
+SpiffOS ISO remains without general task preemption. Run
+`make HOST_CC=gcc test-m10-d5-reap` for the 20,000-cycle sanitizer test
+and `make HOST_CC=gcc test-m10-d5-acceptance` for inherited D4 regressions.
+See [D5.1 task-model ADR](decisions/ADR-m10-d5-production-task-model.md).
+
+
+## M10-D5.2a — Releasing a task's stack from a surviving stack
+
+Marking a task TERMINATED removes it from scheduling, but the CPU may still be executing instructions on that task's 16 KiB stack. Calling a memory-owner release there would let the CPU overwrite already-freed backing. The M10-B diagnostic now deliberately attempts a self-reap and requires that it **fail without freeing anything**. It then returns via the existing cooperative switch to the permanent boot stack; the dispatcher reads its actual RSP, validates the retired task's saved RSP and stack bounds, and calls `kernel_task_reap_owned` under interrupt exclusion. Only a successful exact-owner backing release permits `kernel_task_reap` to make the descriptor reusable.
+
+The range checker guards integer overflow before adding stack length and rejects malformed or overlapping ranges. The release callback belongs to trusted kernel memory code, not a user task. Tests cover 20,000 retirements, release refusal, stale generations, rejected self-free, and ordinary-task privilege confusion. Run `make HOST_CC=gcc test-m10-d5-execution-acceptance` in an isolated checkout. This still does not prove general production lock/wait resource cleanup or enable ordinary editor preemption. See [execution-reaper ADR](decisions/ADR-m10-d5-execution-aware-reaper.md).
+
+
+## M10-D5.2b — The task resource ledger and quarantine state
+
+The M10-A task handle is `(slot,generation)`. A slot can be reused, but
+its generation must advance. A stack-owner record must therefore be
+registered against the **whole handle**, not just its numeric slot.
+`kernel-task-resources.[ch]` implements exactly one bounded (16-element)
+ledger indexed by the existing task table; it does not schedule or switch
+tasks. Before first dispatch the trusted memory owner records the exact
+16 KiB stack base, range, saved stack pointer and memory-owner token.
+Attempting to use the same backing or owner token for another live
+generation fails. A later dispatcher-side saved-RSP refresh may update
+the suspended context value, but cannot redirect the stack's backing or
+owner index.
+
+The resource ledger counts lock ownership and waiter registrations only
+as **interlocks**. These are not yet wired to a production mutex manager.
+A task with nonzero counts can be logically TERMINATED, but its stack
+remains reserved and it cannot be reaped; the supervisor must resolve
+the outstanding references through a separate, future cleanup protocol.
+A terminated task may not decrement its own counts afterward, because
+that would invent unverified cleanup.
+
+The trusted surviving dispatcher reads its actual RSP with assembly,
+then calls `kernel_task_resources_retire`. It checks the complete handle,
+registered backing, saved RSP, outstanding references and supervisor or
+external-dispatcher authority before invoking the D5.2a off-stack
+reaper. Failed physical release **quarantines** the binding and blocks
+retries; the existing test allocator can poison itself after partial
+release and does not guarantee atomic rollback. Quarantined tasks are
+unavailable for descriptor reuse. Only a future explicit supervisor
+recovery design may resolve them.
+
+The M10-B QEMU diagnostic exercises the registered-owner path at
+128/256/512 MiB. Hosted GCC ASan/UBSan tests include 20,000 recycling
+cycles, collision/stale handle checks, overflow/underflow, blocked
+termination, self-release denial, ordinary-task denial and quarantine
+without retry. Run `make HOST_CC=gcc test-m10-d5-resource-ownership`
+for the fast gate and `make HOST_CC=gcc test-m10-d5-resource-acceptance`
+for the inherited D5.2a/D4/M9 suite.
+
+This is a **development-only execution boundary**, not a production
+reaper queue, resource graph or general editor preemption. Existing
+mutexes, wait queues and drivers do not yet register references in the
+ledger; general task termination must remain disabled until they do.
+See [D5.2b ownership ADR](decisions/ADR-m10-d5-resource-ownership.md).
+
+
+## M10-D5.2c — A bounded supervisor cleanup FIFO
+
+A terminated kernel task may still own other kernel resources. Calling `kernel_task_reap` directly would permit reusing its task slot before its stack, locks and waiter registrations are verified. The D5.2c `kernel-task-cleanup.[ch]` module is a small static FIFO holding complete `(slot,generation)` task identities, not pointers into freed memory. At most the 15 ordinary task slots can be queued; slot 15 is reserved permanently for the supervisor. Queue validation rejects duplicate slots and invalid generations and checks the **entire queue** before calling a memory-owner release function.
+
+On the surviving boot stack, a service visit examines at most the count recorded at entry. If a task still has lock or waiter references, its entry rotates to the tail. An eligible task's registered backing is retired through the D5.2b resource ledger. A refused release quarantines the ledger entry and removes only that request from the automatic queue: backing is never blindly retried or marked reusable. The queue itself never frees or fabricates outstanding synchronization ownership. All calls require IF=0; none run in timer IRQ context.
+
+`kernel-task-sync-proof.[ch]` separately models one registered lock owner and one registered waiter using exact generation-tagged handles. It calls the D5.2b reference API for each acquisition, wait registration, release and ownership transfer, with checks that prohibit stale or terminated owners. This **does not yet** block or wake real CPU tasks, implement priority donation, or connect the distinct D4 diagnostic lock controller to production M10-A state. The point is to prove reference transfer and fail-closed termination before designing the actual generalized mutex implementation.
+
+Fast sanitizer gates: `make HOST_CC=gcc test-m10-d5-supervisor-queue` and `make HOST_CC=gcc test-m10-d5-sync-ledger`. Complete inherited QEMU/host gate: `make HOST_CC=gcc test-m10-d5-supervisor-acceptance`. The M10-B QEMU fixture uses the queue only after returning from the outgoing worker stack to the permanent boot dispatcher. No ordinary editor/preemption ISO change is authorized. See [ADR-m10-d5-supervisor-cleanup](decisions/ADR-m10-d5-supervisor-cleanup.md).
+
+
+## M10-D5.2d — Why blocking a mutex must change task readiness
+
+An outstanding waiter reference alone is not enough to suspend execution. A task that stays RUNNABLE could be dispatched even while its lock is held. The internal `kernel-task-mutex.[ch]` adapter connects the D5.2b registered reference ledger with M10-A's actual `kernel_task_block()` and `kernel_task_wake()` transitions. Only the current RUNNING task may acquire, and only the exact RUNNING owner may release. If lock ownership is contested by a second RUNNING task, one waiter reference is registered and that task becomes BLOCKED; it is no longer in the FIFO. Unlock transfers the registered owner count, removes the waiter reference and wakes the exact generation-tagged task once into the FIFO. Repeated/forged operations, dying owners, overflow and invalid waiters are rejected.
+
+**Important execution boundary:** M10-A changes scheduling policy metadata but cannot save the CPU registers of a blocked thread. The calling worker must actually switch to a surviving dispatcher stack before any new task executes. The hosted GCC ASan/UBSan checkpoint validates reference and metadata invariants. The extended M10-B test-only real-QEMU fixture additionally verifies the execution handoff: a blocked worker switches off its actual stack, its owner releases and wakes it, and the worker resumes the saved instruction stream after its context switch to release its newly transferred lock. This is a **cooperative** execution proof, not general IRQ-preemptive mutex safety. D4's test-only priority inheritance is not reused as a second production scheduler. Real lock execution, nested/multiple waiters, owner-death cancellation and generalized preemption remain future work. Run `make HOST_CC=gcc test-m10-d5-mutex-block-wake` for the new 20,000-cycle test or `make HOST_CC=gcc test-m10-d5-mutex-acceptance` for inherited regression.
+
+
+## M10-D5.3 — Ranked mutexes and bounded priority donation
+
+The experimental `kernel-sync-d53.[ch]` sidecar is deliberately **not another task scheduler**: every owner and waiter is a full M10-A `(slot,generation)` handle and every held lock or registered waiter must appear in the D5.2b resource ledger. There are four fixed locks, ranks 0–3, and fifteen ordinary task slots; supervisor slot 15 cannot own or wait. Acquiring another lock is allowed only when its rank is strictly greater than all locks the task already holds, preventing circular dependency if all participants comply. A contender registers a waiter reference, changes RUNNING to BLOCKED, and must switch to the surviving dispatcher stack. Unlock chooses the highest effective-priority waiter, with FIFO tie-breaking; ownership transfers before that exact task is made RUNNABLE.
+
+Base priority is recorded separately for each registered generation. Effective priority propagates in at most fifteen bounded passes along wait-for edges, so when a high-priority task waits for a lock held by another task, that owner inherits its effective priority, including through a chain of strictly ascending ranks. This is **priority metadata only**: the current M10-A FIFO dispatcher does not use the donated value. Do not claim that scheduler-level priority inversion is solved until the actual dispatch path consumes it and retains the reserved supervisor service guarantee.
+
+A terminated owner does not automatically lose its mutex; the owner remains registered and `d53_orphan` reports the lock unavailable. Its stack cannot be reclaimed while references remain, and no automatic retry or unsafe reset is allowed. The trusted dispatcher can explicitly cancel an *exact BLOCKED waiter* while it is still live, drop that one reference and wake it before termination; it cannot erase references from a terminated task. Host GCC ASan/UBSan gate: `make HOST_CC=gcc test-m10-d53-sync`; inherited full test gate: `make HOST_CC=gcc test-m10-d53-acceptance`. See `decisions/ADR-m10-d53-bounded-synchronization.md`.
+
+**Integration boundary:** The D5.3 sidecar currently reconciles all D5.2b `owned_locks` and `registered_waiters` counters for its registered tasks. Do not run this sidecar and the earlier D5.2d one-waiter fixture concurrently against the same task registry; they do not yet share a global object-identity ledger. A future migration must unify the actual lock/wait object owners before enabling generalized production synchronization.
+
+
+## M10-D5.4 — Selection policy is not a second task scheduler
+
+The D5.4 adapter `kernel-dispatch-d54.[ch]` computes effective priorities from D5.3 lock ownership and the exact RUNNABLE identities in M10-A's ready queue. It maintains bounded *age counters only*. It has no task-state table or stack owner. The actual selected RUNNABLE→RUNNING transition occurs exclusively inside `kernel_task_dispatch_selected()` in `kernel-task.c`, with full-generation validation and the same queue invariants as FIFO dispatch. Invalid profiles, stale identities and broken resource ledgers fail before any task or age mutation. A runnable reserved supervisor is selected at least every fourth dispatch opportunity, using the existing pure `kernel_priority_choose` policy, but this does **not** guarantee wall-clock service under arbitrary non-yielding tasks.
+
+The new `SPIFFOS_M10_D54_GUEST_TEST` build flag enables a **separate**, three-worker QEMU diagnostic. A background owner first takes rank-0 lock and BLOCKS on an external event, making it legitimate for a high-priority and an interactive waiter to both block on the mutex. A surviving boot dispatcher wakes the owner after both waiters are suspended. The owner is selected at high effective priority, releases to the high waiter, which resumes its *real x86-64 saved C continuation* and passes ownership to the medium waiter, whose independent continuation releases the lock. The owner then exits; the boot dispatcher verifies canaries and registered refs and releases each physical stack exactly once. This is a **cooperative test-only** proof; IRQ preemption and production editor concurrency remain disabled.
+
+Run `make HOST_CC=gcc test-m10-d54-dispatch` (20,000 supervisor selection decisions and priority/aging negative tests), `make HOST_CC=gcc test-m10-d54-guest` (three memory sizes), or `make HOST_CC=gcc test-m10-d54-acceptance` (complete inherited regression). See `decisions/ADR-m10-d54-priority-dispatch.md`.
+
+
+## M10-D5.5 — Fail-closed preemption admission is not hardware proof
+
+`kernel-preempt-safety-d55.[ch]` is a **diagnostic-only** pure policy. It does not own tasks, contexts, locks, stacks, interrupts or IRQ entry state; the sole scheduler remains M10-A. A future low-level x86 entry adapter must capture the *real* RFLAGS/IF, IRQ nesting, authoritative running task identity and observed RSP. The gate cannot prevent a malicious caller from forging its `d55_cpu_evidence` snapshot; that is deliberately an open integration gate, not a completed security guarantee. Its use today is testing invariants before any actual IRQ-driven switching is authorized.
+
+Cooperative worker handoff can be admitted outside IRQ with no active critical section, even if a worker has a registered lock. IRQ-return switching requires IF=0, exactly one IRQ entry, zero critical depth, exact generation/task registration, RSP within its owned stack, and **no registered lock or waiter refs**. Synchronous lock edits require the exact RUNNING ordinary worker with IF=0 and no IRQ entry. Cancellation, reaping and verified supervisor service require an independent, physically observed RSP outside *all* registered task stacks, IF=0 and no IRQ/critical nesting; an ordinary RUNNING task cannot impersonate a privileged dispatcher. The gate does not modify authoritative state.
+
+The supervisor watchdog accepts a **provided monotonic clock sample** and a nonzero deadline. Only an explicitly verified service completion on a surviving dispatcher/supervisor stack resets the service timer. A mere dispatch selection does not. Missing clock, time rollback or elapsed time **strictly greater** than the configured limit sets a permanent diagnostic fault; no reset/retry method exists. This detects failures; it is **not** an independent timer, forced CPU interrupt or proof of an absolute realtime budget for non-yielding code. Run `make HOST_CC=gcc test-m10-d55-safety` for GCC ASan/UBSan exclusion, timeout, stale task and 20,000 service cycles, or `make HOST_CC=gcc test-m10-d55-acceptance` to include all existing QEMU/keyboard/IRQ0 regression gates.
+
+
+## M10-D5.5b — What a real IRQ0 saved frame proves
+
+The `SPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST` flag reuses the real M10-D2 register-sentinel runner and the same M9 IRQ0 assembly stack. A separate read-only `m10-d55b-evidence.c` observer receives the **actual R12 saved-frame pointer** from `x86-irq0.S`, immediately after the ordinary hardware timer callback and EOI, before IRETQ. It compares the saved RIP, CS, RFLAGS, RSP and SS against independently assembled expectations, validates four-level 48-bit canonical addresses, checks the IRQ handler's live IF=0 versus interrupted saved IF=1, and verifies at least three independent observations. Existing D2 simultaneously validates the fifteen saved general-purpose registers and return preservation. This is diagnostic-only; no allocated state, scheduling, frame edits, or logging from IRQ context.
+
+The negative build `-DSPIFFOS_M10_D55B_BAD_EXPECTED_TEST` changes only the observer's *expected* stack value. A correct CPU frame must be rejected and reported before keyboard startup; it must never be altered to fit the expected result. Run `make HOST_CC=gcc test-m10-d55b-guest` for 128/256/512MiB positive and negative real QEMU, then `make HOST_CC=gcc test-m10-d55b-acceptance` for all inherited regression suites. A genuine hardware frame **does not by itself prove a scheduler task identity**. The next milestone must bind verified frame ranges and x86 entry provenance to the real M10-A generation-tagged descriptor and enforce a supervisor CPU-time guarantee with non-yielding tasks, before normal editor preemption may be considered.
+
+
+## M10-D5.5c — A frame in a stack does not alone prove CPU authority
+
+`m10-d55c-frame-owner.[ch]` checks a borrowed 20-qword trap-frame pointer only *after* validating the exact current M10-A generation and D5.2b registered stack range. Bounds use overflow-safe subtraction and require the entire saved frame and CPU-saved RSP to lie in the same independently owned stack. It rejects if the task is not RUNNING, the registry is inconsistent, the saved values are noncanonical, locks or waiters remain registered, IF/IRQ/critical state is unsafe, or the frame's CS/SS/RFLAGS differ from expected ring-0 values. **A generic caller may still fabricate the snapshot**. The separate `SPIFFOS_M10_D55C_FRAME_GUEST_TEST` now supplies the actual saved-frame pointer from `x86-irq0.S` during a genuine hardware interrupt of one exact RUNNING M10-A worker on a D5.2b registered 16KiB M2-owned stack. A forged-generation negative rejects without editing the frame, and after observed ticks the worker terminates and its backing is reclaimed off-stack. This proves **one-worker** real provenance, not a general multiprocess IRQ scheduler. It does not mutate memory or select a task.
+
+The `d55c_tick_service` monitor advances only on externally supplied monotonic **hardware IRQ ticks**, not D1 or D5.4 dispatch sequence. It records real service completion explicitly, latches clock rollback/unavailable readings or a strict elapsed tick count greater than its budget, and never clears a fault. A separate `SPIFFOS_M10_D55C_TICK_TEST` flag instruments existing D4's independently stacked **non-yielding** workers and actual executing boot-supervisor loop; records the maximum number of hardware IRQ ticks between verified supervisor service completions. Its negative `SPIFFOS_M10_D55C_BAD_BUDGET_TEST` intentionally sets a one-tick limit and must reject with `SPIFFOS_M10_D4_COMPLETE_ERROR:D4_QUOTA_OR_RECOVERY`. This remains a **D4 diagnostic** and cannot establish production M10-A context binding or physical hardware CPU-time SLA.
+
+Run `make HOST_CC=gcc test-m10-d55c-frame-guest` for real single-worker M10-A saved frame positive/forged generation negative at three QEMU sizes, then `make HOST_CC=gcc test-m10-d55c-frame-tick` for ASan/UBSan exact-owner/frame/corruption and 20,000 monotonic service updates, `make HOST_CC=gcc test-m10-d55c-budget-guest` for 128/256/512 MiB positive and negative real QEMU, and `make HOST_CC=gcc test-m10-d55c-acceptance` for all inherited M9/M10 regressions. Never link the test observer or frame owner into normal SpiffOS.
+
+
+## M10-D5.6 — Real IRQ-exit handoff with M10-A as sole authority
+
+`kernel_task_irq_handoff(table, source, destination, out)` is a privileged operation **inside** M10-A's task manager, not a second scheduler. It verifies exact nonzero source/destination generations, the single source RUNNING record, one READY destination, FIFO membership and capacity **before** mutation. It removes destination from ready FIFO, appends the previous RUNNING source, assigns destination RUNNING and changes the authoritative `current_slot`. A rejection never changes table or caller output. Unlike `kernel_task_yield()` and `kernel_task_dispatch()`, this new operation is designed for a trusted IRQ-exit adapter with IF=0 *only after* full CPU frame, stack owner and critical/lock validation. It cannot itself authenticate CPU provenance.
+
+Under `SPIFFOS_M10_D56_IRQ_TEST`, the original x86-irq0.S M9 stub saves its 15 GPRs and hardware RIP/CS/RFLAGS/RSP/SS, performs ordinary timer accounting and one LAPIC EOI, and invokes `m10_d56_irq_select` to return the validated selected saved-frame pointer. Its one additional IRETQ uses the chosen frame, not a cooperative return address. Two non-yielding M10-A workers use physical 16KiB M2-owned stacks; the reserved supervisor slot 15 has a third, independently owned stack entered first via the existing cooperative handoff. IRQ selection activates **only after** the supervisor is on its stack, removing the bootstrap-stack race. The supervisor records actual completed work independently of IRQ dispatches. Worker code tests nested preempt-disable sections with IF=0; no IRQ observer may run inside them. The surviving boot dispatcher alone terminates/reaps the remaining task bindings after all stacks have been abandoned.
+
+The FIFO-like test IRQ selection is bounded by two workers plus supervisor. This does **not** yet integrate real D5.3 transitive priority donation or guarantee a hard physical CPU-time service deadline. Negative test-only flags corrupt a target frame, forge a nonzero critical-depth witness, or supply a stale destination generation. All must be denied without loading an invalid IRETQ frame; recovery chooses only a prevalidated supervisor context and fails before ordinary keyboard.
+
+Run `make HOST_CC=gcc test-m10-d56-handoff` for GCC ASan/UBSan (60,000 exact handoffs and stale/nonmutation negatives), `make HOST_CC=gcc test-m10-d56-guest` for all three real-QEMU memory sizes and three error injection groups, and `make HOST_CC=gcc test-m10-d56-acceptance` for every inherited M9/M10 test. Normal unflagged kernel must remain checksum-identical. Do not activate normal editor preemption without the remaining driver/IRQ/lock/resource and hardware service gates. See `decisions/ADR-m10-d56-irq-handoff.md`.
+
+
+## M10-D5.7 — Generation-scoped preemption guards and IRQ priority policy
+
+`m10-d57-safety.[ch]` exposes two independent, bounded safety helpers. A per-CPU diagnostic preemption guard associates one exact `(slot,generation)` with nested IF=0 critical sections and strict LIFO cookies; IRQ entry, wrong owner/cookie, overflow, underflow or premature IRQ-enabled entry **latches a permanent fault**. It does not release a failed lock, restart a task or free stacks. The IRQ admission check requires zero guard depth, no latched fault, genuine IRQ-exit provenance, CPU-saved IF=1 and live IF=0. The C policy itself cannot authenticate an arbitrary caller's CPU snapshot.
+
+The read-only `d57_select` scans M10-A's existing RUNNABLE queue, validates D5.2b registrations and the D5.3 four-lock dependency graph, reads D5.3 transitive effective priorities, and reuses D1 aging with one-of-four reserved supervisor opportunities. **No** D5.3 acquire/release/cancel or resource mutation is legal inside IRQ; `d57_select` only returns an exact READY handle. After independently validating target IRETQ frame and successfully calling M10-A `kernel_task_irq_handoff`, `d57_note_handoff` updates bounded ages. That mutation is policy-only; M10-A remains the sole task lifecycle owner.
+
+`SPIFFOS_M10_D57_IRQ_TEST`, together with the D5.6 test flag, enables the isolated real-IRQ0 two-worker QEMU fixture with interactive/time-sensitive priorities, genuine nested IF=0 critical guards and a third independent supervisor stack. Test-only D5.3 enrollment occurs **outside IRQ** after binding the exact physical task stacks. An invalid D5.3 generation graph is deliberately injected from a supervisor-owned IF=0 safe point, and the next IRQ must refuse scheduling without attempting D5.3 repair in the handler. This QEMU case demonstrates **base-priority** scheduling; donated priority with actual high-priority mutex waiters is proven in the hosted sanitizer but not yet in a combined real-IRQ guest.
+
+Run `make HOST_CC=gcc test-m10-d57-safety` for GCC ASan/UBSan LIFO and donated-priority/churn checks, `make HOST_CC=gcc test-m10-d57-guest` for positive and 4 negative builds on each of 128/256/512MiB, then `make HOST_CC=gcc test-m10-d57-acceptance` to run the inherited QEMU/editor/keyboard/interrupt suite. Do not treat this milestone as approval to preempt ordinary BASIC or EDIT. Before enabling production preemption, audit and integrate every memory allocator, keyboard/input path, editor/framebuffer path, timer/interrupt driver, task-resource cleanup, lock and event queue with verified preemption-disable scope and explicit tested recovery.
+
+## M10-D5.9 preemption audit: why IF-off and task ownership both matter
+
+A C function that updates an allocation bitmap and then decrements a free-count is correct only when another task cannot observe the intermediate state. On a single x86 boot CPU, interrupt exclusion can protect that short transaction, but a correct guard must capture and later restore the **original** IF rather than blindly execute STI. Nested guards need task-generation ownership and strict LIFO release; a test-only guard does not automatically protect ordinary allocator callers. An IRQ handler must not call blocking mutex or allocator APIs and cannot safely recover an abandoned lock by guessing ownership.
+
+The read-only D5.9-A inventory in `docs/operations/m10-d59-a-preemption-path-audit-20261114.md` records source function line numbers and whole-file SHA256, and fails CI when reviewed files change. This is a **review reminder, not static proof**: function-pointer calls, assembler, macros, concurrency and runtime timing require separate inspection and real QEMU tests. Before adding a new production call, decide exact task owner, IF state, transaction span, IRQ entry rules, failure containment and off-stack reclamation, then update the manifest only after reviewing the changed source and its callers.
+
+
+## D5.9-B: original IF is separate from guard ownership
+
+`m10-d59b-context.[ch]` is a separately flagged adapter, not another lock.
+PUSHFQ samples the original x86 interrupt-enable bit; CLI establishes exclusion
+before inspecting mutable task or resource state. Only then can the adapter bind
+the actual RSP to the RUNNING task's exact generation and independently registered
+stack. The existing D5.7 cookie stack still decides nested ownership and release.
+A full flags word remains nonzero with IF off because architectural reserved bit
+1 is set; test bit 9 rather than comparing the complete word to zero.
+
+A nested section must start IF-off. Its exit must keep IF-off, while the final
+matching exit restores the outer caller's original state. An invalid cookie or
+stale owner faults permanently and never executes STI. Actual assembly records
+IRQ entry depth, so having IF=0 inside an interrupt cannot impersonate ordinary
+IF-off task execution. Hosted callbacks simulate these facts; actual QEMU tests
+supply the hardware evidence. TSC samples measure observed exclusion cycles,
+not a calibrated physical latency guarantee. See
+[execution evidence](operations/m10-d59b-authentic-context-20261115.md) and
+[adapter contract](decisions/ADR-m10-d59b-authentic-context.md).
+
+
+## D5.9-B: a measured small service is not the general heap
+
+The service transaction probe reuses real M6/M4 code and the same D5.7 guard.
+It admits one 4096-byte arena, 64 metadata records and a 32-byte temporary
+client. Check those limits before traversing metadata: a general heap can have
+1024 records and clear up to 1MiB of payload, so wrapping that entire operation
+in CLI would hide a different latency problem. The probe checks recoverable OOM,
+protected roots, ownership rejection and all client bytes, then disposes the
+client before leaving the guard. It is diagnostic code, not a public malloc.
+See [service evidence](operations/m10-d59b-service-transactions-20261115.md).
+
+
+## D5.9-B page claims are private, uninitialized ownership
+
+The flagged M3 claim returns two numeric addresses, not initialized RAM and
+not a public generation handle. Its caller keeps the SAME authenticated D5.7
+exclusion held across claim, fixed direct page initialization, validation and
+release/publication. Do not return the claim from that outer transaction or
+call a caller-supplied backend while holding the runtime guard.
+
+Both output fields are checked against authority metadata before M2 changes.
+Authorization errors release the exact owner and leave the caller's output
+untouched. ROLLBACK_FAILED retains uncertain storage and requires faulting,
+rather than retrying a guessed release. The QEMU memory-boot probe keeps the
+claim on its own stack and directly calls the existing kernel zero leaf; no
+page address escapes. See ADR-m10-d59b-runtime-memory-wiring.md. General caller
+admission and active-stack lifetime protection remain separate unfinished gates.
+
+
+## D5.9-B admitted memory entries
+
+The diagnostic MEMORY_WIRING_TEST profile protects the existing M2/M3/M4/M6
+bodies at their public entry points. Do not call d59b_private implementation
+names from another translation unit. The adapter captures real IF/CPU/IRQ/RSP
+and uses the existing D5.7 generation/cookie authority. A caller-owned token
+cannot enable runtime IF: only the existing trusted d59b_context may do that.
+No shared state is inspected after final exit may enable interrupts.
+
+Generic zero backends and boot reports/snapshots/MMIO/lifecycle APIs are refused
+at runtime before callbacks or publication. Void retirement misuse stops
+IF-off; it cannot pretend storage was retired and let backing be released.
+Uninitialized page claims require an existing caller-owned transaction through
+the fixed direct zero leaf. Ordinary heap clients keep their documented borrow
+lifetimes; neither task death nor this guard automatically frees clients.
+
+Stack backing is classified through existing D5.2b bindings and validated HHDM.
+A partial release retains uncertain page identities, poisons further attempts
+and quarantines the owner. Even an allocator slot marked FREE cannot be reused
+while its retained binding covers it. See the memory-admission operations report
+for exact tests and the distinction between this candidate and normal release.

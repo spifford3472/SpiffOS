@@ -24,7 +24,8 @@ static uint64_t aged_score(const struct kernel_priority_candidate *candidate)
 
 /* Validate the entire input before choosing anything. A corrupted ready
  * list is a caller programming error, not permission to run a random task.
- * This function is read-only and is not safe to call from interrupt context. */
+ * Read-only operation may execute at the verified single-CPU IRQ-exit
+ * under IF=0 in the D5.7 test-only adapter; no ISR lock mutation. */
 enum kernel_priority_result kernel_priority_choose(
     const struct kernel_priority_candidate *candidates, size_t count,
     uint64_t dispatch_sequence, uint32_t *selected_slot)

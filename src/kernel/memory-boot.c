@@ -13,6 +13,9 @@
 #include "memory-boot.h"
 #include "frame-allocator.h"
 #include "page-access.h"
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+#endif
 #include "kernel-heap.h"
 #include "memory-service.h"
 
@@ -76,6 +79,9 @@ static bool write_region(bool (*write_text)(const char *),
 bool memory_boot_report(const struct limine_memmap_response *response,
     bool (*write_text)(const char *text))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     snapshot_count = 0; /* Never expose an earlier map after a failed report. */
     if (write_text == NULL) {
         return false;
@@ -133,6 +139,9 @@ static bool allocator_failure(bool (*write_text)(const char *))
  * Unsupported bounds preserve the existing boot/editor path via UNAVAILABLE. */
 bool memory_boot_allocator_probe(bool (*write_text)(const char *text))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     boot_allocator_available = false;
     if (write_text == NULL) {
         return false;
@@ -221,6 +230,9 @@ bool memory_boot_page_policy(const struct limine_hhdm_response *hhdm,
     const struct frame_allocator *allocator,
     struct page_access_policy *policy)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (hhdm == NULL || paging == NULL || allocator == NULL || policy == NULL ||
         hhdm->revision != 0 || paging->revision != 0) {
         return false;
@@ -314,6 +326,9 @@ bool memory_boot_page_probe(const struct limine_hhdm_response *hhdm,
     const struct limine_paging_mode_response *paging,
     bool (*write_text)(const char *text))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (write_text == NULL) {
         return false;
     }
@@ -467,6 +482,9 @@ bool memory_boot_heap_probe(const struct limine_hhdm_response *hhdm,
     const struct limine_paging_mode_response *paging,
     bool (*write_text)(const char *text))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (write_text == NULL) {
         return false;
     }
@@ -685,6 +703,9 @@ bool memory_boot_service_start(const struct limine_hhdm_response *hhdm,
     const struct limine_paging_mode_response *paging,
     bool (*writer)(const char *))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (writer == NULL) return false;
     if (retained_started || retained_service.retired) return retained_failure(writer, retained_started);
     if (!boot_allocator_available ||
@@ -739,6 +760,9 @@ bool memory_boot_service_start(const struct limine_hhdm_response *hhdm,
  * already emitted UNAVAILABLE; a serial or invariant failure stops boot. */
 bool memory_boot_service_check(bool (*writer)(const char *))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (writer == NULL) return false;
     if (!retained_started) return true;
     if (!retained_valid()) return retained_failure(writer, true);
@@ -749,16 +773,44 @@ bool memory_boot_service_check(bool (*writer)(const char *))
  * phase has its own marker so tests prove ordering without duplicate success. */
 bool memory_boot_service_editor_check(bool (*writer)(const char *))
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (writer == NULL) return false;
     if (!retained_started) return true;
     if (!retained_valid()) return retained_failure(writer, true);
     return writer("SPIFFOS_MEMORY_EDITOR_OK\r\n");
 }
 
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Sample whole MiB available to any workspace from the shared ordinary
+ * frame pool. Reserved frames never enter this count. The boot allocator
+ * publishes readiness once, before any preview task starts. Caller owns
+ * the output, which stays unchanged if entry fails. Never use from IRQ. */
+bool memory_boot_preview_available_mib(uint64_t *out)
+{
+    enum { BYTES_PER_MIB = 1024 * 1024 };
+    struct d59b_memory_scope scope = {0};
+    if (out == NULL || !boot_allocator_available ||
+        !d59b_memory_scope_enter(&scope)) return false;
+    /* Round down without multiplying a potentially wider frame count. */
+    uint64_t available = boot_allocator.ordinary_free /
+        (BYTES_PER_MIB / MEMORY_PAGE_BYTES);
+    if (!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    *out = available;
+    return true;
+}
+#endif
+
 /* Mutate only the retained session root, preserving M6 ownership and all
  * other workspace roots. The display manager prepares its target first. */
 bool memory_boot_select_workspace(size_t workspace_id)
 {
+#if defined(SPIFFOS_M10_D59B_MEMORY_WIRING_TEST) && !defined(SPIFFOS_M10_D59_PREVIEW)
+    /* The preview foreground selects through the existing guarded service
+     * transaction below. The retained service stays initialized and pinned. */
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     return retained_started &&
         memory_service_select_workspace(&retained_service, workspace_id) == MEMORY_SERVICE_OK;
 }
@@ -766,6 +818,9 @@ bool memory_boot_select_workspace(size_t workspace_id)
 /* Delegate isolated owner cleanup to the validated memory service. */
 bool memory_boot_reset_workspace(size_t workspace_id)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     return retained_started &&
         memory_service_reset_workspace(&retained_service, workspace_id) == MEMORY_SERVICE_OK;
 }
@@ -776,6 +831,9 @@ bool memory_boot_reset_workspace(size_t workspace_id)
  * rollback poisons the service so no still-owned RAM is accidentally reused. */
 bool memory_boot_mmio_table_acquire(uint64_t *physical, uint64_t **mapped)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if(physical==NULL || mapped==NULL || mmio_table_poisoned ||
        !retained_started || !boot_allocator_available ||
        mmio_table_count>=MMIO_TABLE_LIMIT ||
@@ -807,6 +865,9 @@ bool memory_boot_mmio_table_acquire(uint64_t *physical, uint64_t **mapped)
  * has been removed. Wrong/stale addresses are rejected without free. */
 bool memory_boot_mmio_table_release(uint64_t physical)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if(mmio_table_poisoned || physical==0 || !retained_started ||
        !frame_allocator_check(&boot_allocator)) return false;
     for(size_t i=0;i<mmio_table_count;++i) {
@@ -841,6 +902,9 @@ static bool snapshot_rollback_failed;
 bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
                                   uint32_t **out_pages)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if (snapshot_rollback_failed || !retained_started ||
         !boot_allocator_available || workspace_id < 1 || workspace_id > SNAPSHOT_WORKSPACES ||
         pages == 0 || pages > SNAPSHOT_PAGES || out_pages == NULL ||
@@ -893,16 +957,17 @@ bool memory_boot_snapshot_prepare(size_t workspace_id, size_t pages,
     return true;
 }
 
-#if defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
+#if defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST) || defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D55C_FRAME_GUEST_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_B_SWITCH_TEST) || defined(SPIFFOS_M10_D3_PREEMPT_TEST) || defined(SPIFFOS_M10_D4_PRIORITY_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST)
 /* M10-B first owned-stack QEMU proof. Each 16 KiB stack must be made of
  * exactly four contiguous, individually M2-owned ordinary KERNEL frames.
  * Contiguity is NOT assumed from M2's allocation order: it is verified
  * before a single pointer becomes visible to the caller. Allocations occur
  * only with IF=0, after retained-service validation and before its next
  * read-only check; the test returns these frames before keyboard startup. */
-/* Keep older D3/M10-B tests byte-for-byte at two stacks. Only the
- * new D4 completion diagnostic allocates four independent workers. */
-#ifdef SPIFFOS_M10_D4_COMPLETE_TEST
+/* Keep older D3/M10-B tests byte-for-byte at two stacks. D4, D5.4,
+ * D5.6 and the isolated C2b real-IRQ fixture need four independently
+ * owned M2 stack slots; the normal kernel does not compile this block. */
+#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST)
 enum { M10_B_TEST_STACKS=4, M10_B_STACK_PAGES=4 };
 #else
 enum { M10_B_TEST_STACKS=2, M10_B_STACK_PAGES=4 };
@@ -921,7 +986,15 @@ static bool m10_b_stack_rollback(size_t index, size_t acquired)
     while(acquired>0) {
         --acquired;
         if(frame_release(&boot_allocator,FRAME_OWNER_KERNEL,
-                m10_b_stack_physical[index][acquired])!=FRAME_OK) clean=false;
+                m10_b_stack_physical[index][acquired])!=FRAME_OK) {
+            clean=false;
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+            /* Preserve the failed physical identity and all not-yet-released
+             * pages. Poison/quarantine forbids another automatic attempt. */
+            m10_b_stack_poisoned=true;
+            return false;
+#endif
+        }
         m10_b_stack_physical[index][acquired]=0;
     }
     if(!clean) m10_b_stack_poisoned=true;
@@ -932,6 +1005,9 @@ static bool m10_b_stack_rollback(size_t index, size_t acquired)
  * Any failed mapping/contiguity check rolls back every acquired frame. */
 bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if(index>=M10_B_TEST_STACKS || out_stack==NULL || m10_b_stack_poisoned ||
        m10_b_stack_active[index] || !retained_started ||
        !boot_allocator_available ||
@@ -982,6 +1058,9 @@ bool memory_boot_m10_task_stack_prepare(size_t index, void **out_stack)
  * The exact physical slots are released; a second call must fail. */
 bool memory_boot_m10_task_stack_release(size_t index)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if(index>=M10_B_TEST_STACKS || m10_b_stack_poisoned ||
        !m10_b_stack_active[index] ||
        !frame_allocator_check(&boot_allocator)) return false;
@@ -995,9 +1074,12 @@ bool memory_boot_m10_task_stack_release(size_t index)
  * Called only with IF=0 from the temporary M10-B guest smoke test. */
 bool memory_boot_m10_task_stack_failure_probe(void)
 {
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_boot_admit()) return false;
+#endif
     if(!retained_started || m10_b_stack_active[0] ||
        m10_b_stack_active[1] || m10_b_stack_poisoned ||
-#ifdef SPIFFOS_M10_D4_COMPLETE_TEST
+#if defined(SPIFFOS_M10_D56_IRQ_TEST) || defined(SPIFFOS_M10_D4_COMPLETE_TEST) || defined(SPIFFOS_M10_D54_GUEST_TEST) || defined(SPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST)
        m10_b_stack_active[2] || m10_b_stack_active[3] ||
 #endif
        !frame_allocator_check(&boot_allocator)) return false;
@@ -1016,5 +1098,273 @@ bool memory_boot_m10_task_stack_failure_probe(void)
            boot_allocator.reserve_free==reserved_before &&
            boot_allocator.owned[FRAME_OWNER_KERNEL]==kernel_before &&
            frame_allocator_check(&boot_allocator);
+}
+#endif
+
+#ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
+#include "m10-d59b-context.h"
+/* Qwen-generated single-frame cycle, reviewed to check release status,
+ * initialize outputs, retain failure exclusion, and test denied operations.
+ * Numeric physical frame only, never dereferenced or published. No IRQ use,
+ * allocation retries or whole-pool scans in the hot protected transaction. */
+/**
+ * Tests frame allocation and release within a D59B-protected context.
+ * Captures interrupt state, snapshots allocator before and after,
+ * allocates a kernel-owned frame, verifies counts, releases it,
+ * and restores state. On any error, marks context faulted and returns false.
+ *
+ * @param context Valid D59B context; must be initialized and guard valid
+ * @return true on success, false on any failure including allocation errors
+ */
+bool memory_boot_d59b_frame_cycle(struct d59b_context *context) {
+    uint32_t cookie;
+    if (!d59b_enter(context, &cookie)) {
+        return false;
+    }
+
+    if (!boot_allocator_available) {
+        context->guard->faulted = true;
+        return false;
+    }
+    /* Borrow real boot allocator; each worker serializes through D5.7. */
+    uint64_t ordinary_free_before = boot_allocator.ordinary_free;
+    uint64_t reserve_free_before = boot_allocator.reserve_free;
+    uint64_t kernel_owned_before = boot_allocator.owned[FRAME_OWNER_KERNEL];
+
+    // Allocate a frame
+    uint64_t physical = UINT64_MAX;
+    enum frame_result result = frame_allocate(&boot_allocator, FRAME_OWNER_KERNEL, false, &physical);
+    if (result != FRAME_OK || physical == UINT64_MAX) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    // Verify counts after allocation
+    if (boot_allocator.ordinary_free != ordinary_free_before - 1 ||
+        boot_allocator.reserve_free != reserve_free_before ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned_before + 1) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    /* Wrong-owner and forbidden-reserve failures must preserve the live
+     * allocation and caller output while the same authenticated gate is held. */
+    uint64_t refused = UINT64_MAX;
+    if (frame_release(&boot_allocator, FRAME_OWNER_SESSION, physical) != FRAME_WRONG_OWNER ||
+        frame_allocate(&boot_allocator, FRAME_OWNER_KERNEL, true, &refused) != FRAME_FORBIDDEN ||
+        refused != UINT64_MAX ||
+        boot_allocator.ordinary_free != ordinary_free_before - 1u ||
+        boot_allocator.reserve_free != reserve_free_before ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned_before + 1u) {
+        context->guard->faulted = true;
+        return false;
+    }
+    /* Release only the exact temporary frame, never task/stack backing. */
+    result = frame_release(&boot_allocator, FRAME_OWNER_KERNEL, physical);
+    if (result != FRAME_OK) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    // Verify counts restored after release
+    if (boot_allocator.ordinary_free != ordinary_free_before ||
+        boot_allocator.reserve_free != reserve_free_before ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned_before) {
+        context->guard->faulted = true;
+        return false;
+    }
+
+    return d59b_exit(context, cookie);
+}
+#endif
+
+#ifdef SPIFFOS_M10_D59B_SERVICE_TEST
+#include "m10-d59b-service.h"
+/* The bridge borrows the actual boot service without reading live metadata;
+ * the shared probe authenticates execution and takes D5.7 before all reads. */
+bool memory_boot_d59b_service_cycle(struct d59b_context *context,unsigned index)
+{
+    return d59b_service_probe(context,&retained_service,index);
+}
+#endif
+
+
+#ifdef SPIFFOS_M10_D59B_PAGE_CLAIM_TEST
+enum { D59B_PAGE_MAX_TRACKED_FRAMES=512u*1024u*1024u/MEMORY_PAGE_BYTES };
+/* Claim one real boot-allocator page, initialize it by fixed DIRECT leaf calls,
+ * verify all 4096 bytes, then release only the exact temporary ownership.
+ * Borrow context and retained authority for one authenticated transaction.
+ * Supported single-CPU diagnostic profile is at most 512MiB tracked frames.
+ * No address escapes; no arbitrary callback, stack release, retry or log.
+ * Any unexpected failure latches D5.7 fault/IF=0 and retains uncertain storage.
+ * Provenance: Qwen third reviewed draft; coordinator adds rollback negative. */
+bool memory_boot_d59b_page_cycle(struct d59b_context *context)
+{
+    uint32_t cookie = 0;
+    if (!d59b_enter(context, &cookie))
+        return false;
+
+    if (!boot_allocator_available ||
+        retained_policy.allocator != &boot_allocator ||
+        boot_allocator.total_frames > D59B_PAGE_MAX_TRACKED_FRAMES)
+        goto fault;
+
+    uint64_t ordinary_free = boot_allocator.ordinary_free;
+    uint64_t reserve_free = boot_allocator.reserve_free;
+    uint64_t kernel_owned = boot_allocator.owned[FRAME_OWNER_KERNEL];
+
+    /* Reuse real M2/M3 rollback with deliberately unsupported mapping width.
+     * Sentinels are numeric outputs ONLY and are NEVER dereferenced. */
+    struct page_access_policy refused_policy=retained_policy;
+    refused_policy.virtual_address_bits=1u;
+    struct page_access_claim refused={UINT64_C(0x12340),UINT64_C(0x56780)};
+    if(page_access_claim(&boot_allocator,&refused_policy,FRAME_OWNER_KERNEL,
+                         &refused)!=PAGE_ACCESS_UNSUPPORTED ||
+       refused.physical_address!=UINT64_C(0x12340) ||
+       refused.mapped_address!=UINT64_C(0x56780) ||
+       boot_allocator.ordinary_free!=ordinary_free ||
+       boot_allocator.reserve_free!=reserve_free ||
+       boot_allocator.owned[FRAME_OWNER_KERNEL]!=kernel_owned)
+        goto fault;
+
+    struct page_access_claim claim = {0};
+    enum page_access_result result = page_access_claim(&boot_allocator,
+        &retained_policy, FRAME_OWNER_KERNEL, &claim);
+    if (result != PAGE_ACCESS_OK)
+        goto fault;
+
+    if (!kernel_page_zero(NULL, claim.mapped_address, MEMORY_PAGE_BYTES))
+        goto fault;
+    if (!kernel_page_has_value(claim.mapped_address, 0))
+        goto fault;
+
+    if (!kernel_page_write_and_verify(claim.mapped_address, 0xa5))
+        goto fault;
+
+    if (kernel_page_zero(NULL, claim.mapped_address, MEMORY_PAGE_BYTES - 1))
+        goto fault;
+    if (!kernel_page_has_value(claim.mapped_address, 0xa5))
+        goto fault;
+
+    if (!kernel_page_zero(NULL, claim.mapped_address, MEMORY_PAGE_BYTES))
+        goto fault;
+    if (!kernel_page_has_value(claim.mapped_address, 0))
+        goto fault;
+
+    if (frame_release(&boot_allocator, FRAME_OWNER_SESSION, claim.physical_address) != FRAME_WRONG_OWNER)
+        goto fault;
+    if (frame_release(&boot_allocator, FRAME_OWNER_KERNEL, claim.physical_address) != FRAME_OK)
+        goto fault;
+
+    if (boot_allocator.ordinary_free != ordinary_free ||
+        boot_allocator.reserve_free != reserve_free ||
+        boot_allocator.owned[FRAME_OWNER_KERNEL] != kernel_owned ||
+        !frame_allocator_check(&boot_allocator))
+        goto fault;
+
+    return d59b_exit(context, cookie);
+
+fault:
+    context->guard->faulted = true;
+    return false;
+}
+#endif
+
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+/* Direct lifecycle bridge to published Limine-validated authority. Called only
+ * by boot binding with actual IF=0 on the original CPU; no callback or supplied
+ * mapping policy can replace this source. Publish numeric outputs together. */
+bool memory_boot_d59b_scope_policy(uint64_t *offset,uint64_t *frames)
+{
+    if(!d59b_memory_boot_admit()) return false;
+    if(offset==NULL || frames==NULL || !retained_started ||
+       !boot_allocator_available || retained_policy.allocator!=&boot_allocator ||
+       !frame_allocator_check(&boot_allocator)) return false;
+    *offset=retained_policy.direct_map_offset;
+    *frames=boot_allocator.total_frames;
+    return true;
+}
+#endif
+
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+static unsigned d59b_refused_backend_calls;
+/* Negative-only observer: this supplied backend MUST NOT be called at runtime.
+ * Even a gate regression cannot dereference an untrusted numeric address here.
+ * No allocation, device I/O or metadata repair; diagnostic build only. */
+static bool d59b_refused_backend(void *opaque,uint64_t mapped,size_t bytes)
+{
+    (void)opaque;(void)mapped;(void)bytes;
+    ++d59b_refused_backend_calls;
+    return false;
+}
+
+/* Exercise direct API callers outside a preexisting D5.7 transaction. Only
+ * read-only or refused operations are issued here: no live temporary page or
+ * client may span an IF-on interruption/worker termination. Short snapshots
+ * authenticate separately; existing task stacks/roots stay installed for the
+ * whole worker lifetime. Verify no callback/output/ownership/lifetime changes.
+ * Actual flags are sampled independently; unexpected failure retains CLI. */
+bool memory_boot_d59b_direct_refusals(struct d59b_context *context,unsigned index)
+{
+    if(index>=2u) return false;
+    uint64_t initial_flags=0;
+    __asm__ volatile("pushfq; popq %0":"=r"(initial_flags)::"memory");
+    uint32_t cookie=0;
+    if(!d59b_enter(context,&cookie)) return false;
+    if(!frame_allocator_check(&boot_allocator) ||
+       memory_service_check(&retained_service)!=MEMORY_SERVICE_OK) goto fault;
+    const uint64_t ordinary=boot_allocator.ordinary_free;
+    const uint64_t reserve=boot_allocator.reserve_free;
+    const uint64_t owned=boot_allocator.owned[FRAME_OWNER_KERNEL];
+    const size_t free_bytes=retained_service.heap.free_bytes;
+    const size_t live=retained_service.heap.live_allocations;
+    const uint64_t stack_page=m10_b_stack_physical[index][0];
+    size_t generations[MEMORY_SERVICE_WORKSPACE_COUNT];
+    for(size_t i=0;i<MEMORY_SERVICE_WORKSPACE_COUNT;++i)
+        generations[i]=retained_service.workspace_roots[i]->reset_generation;
+    if(!d59b_exit(context,cookie)) return false;
+
+    /* Each public entry below must authenticate and release its OWN scope.
+     * Supplied callbacks are rejected before invocation and claims cannot
+     * escape without a caller-owned outer initialization transaction. */
+    struct page_access_claim claim={UINT64_C(0x12340),UINT64_C(0x56780)};
+    uint64_t physical=UINT64_C(0x12340);
+    uint64_t *mapped=(void *)(uintptr_t)UINT64_C(0x56780);
+    if(!frame_allocator_check(&boot_allocator) ||
+       memory_service_check(&retained_service)!=MEMORY_SERVICE_OK ||
+       frame_release(&boot_allocator,FRAME_OWNER_KERNEL,stack_page)!=FRAME_FORBIDDEN ||
+       memory_service_reset_workspace(&retained_service,index+1u)!=MEMORY_SERVICE_INVALID ||
+       page_access_claim(&boot_allocator,&retained_policy,FRAME_OWNER_KERNEL,
+                         &claim)!=PAGE_ACCESS_INVALID ||
+       page_access_zero(&retained_policy,FRAME_OWNER_KERNEL,stack_page,
+                        d59b_refused_backend,NULL)!=PAGE_ACCESS_INVALID ||
+       page_access_allocate_zero(&boot_allocator,&retained_policy,
+             FRAME_OWNER_KERNEL,d59b_refused_backend,NULL,&physical)!=PAGE_ACCESS_INVALID ||
+       memory_boot_mmio_table_acquire(&physical,&mapped) ||
+       claim.physical_address!=UINT64_C(0x12340) ||
+       claim.mapped_address!=UINT64_C(0x56780) ||
+       physical!=UINT64_C(0x12340) ||
+       mapped!=(void *)(uintptr_t)UINT64_C(0x56780) ||
+       d59b_refused_backend_calls!=0) goto fault;
+
+    uint64_t after_flags=0;
+    __asm__ volatile("pushfq; popq %0":"=r"(after_flags)::"memory");
+    if(((initial_flags^after_flags)&UINT64_C(0x200))!=0) goto fault;
+    if(!d59b_enter(context,&cookie)) return false;
+    if(boot_allocator.ordinary_free!=ordinary || boot_allocator.reserve_free!=reserve ||
+       boot_allocator.owned[FRAME_OWNER_KERNEL]!=owned ||
+       retained_service.heap.free_bytes!=free_bytes ||
+       retained_service.heap.live_allocations!=live ||
+       memory_service_check(&retained_service)!=MEMORY_SERVICE_OK) goto fault;
+    for(size_t i=0;i<MEMORY_SERVICE_WORKSPACE_COUNT;++i)
+        if(retained_service.workspace_roots[i]->reset_generation!=generations[i])
+            goto fault;
+    return d59b_exit(context,cookie);
+fault:
+    __asm__ volatile("cli":::"memory");
+    context->guard->faulted=true;
+    return false;
 }
 #endif

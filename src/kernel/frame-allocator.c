@@ -4,6 +4,16 @@
  * Reference: docs/decisions/ADR-frame-allocator.md (internal diagnostic API). */
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+/* One authoritative body, renamed only in this translation unit. Public
+ * entries below authenticate before inspecting its borrowed metadata.
+ * Same-file internal calls stay inside their already-admitted outer scope. */
+#define frame_allocator_initialize d59b_private_frame_allocator_initialize
+#define frame_allocator_address d59b_private_frame_allocator_address
+#define frame_release d59b_private_frame_release
+#define frame_allocator_check d59b_private_frame_allocator_check
+#endif
 #include "frame-allocator.h"
 
 /* Classify a diagnostic owner token; pure, no side effects or ownership. */
@@ -159,6 +169,9 @@ enum frame_result frame_release(struct frame_allocator *allocator,
         (reserved && owner != FRAME_OWNER_SUPERVISOR)) {
         return FRAME_INVALID;
     }
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+    if(!d59b_memory_frame_release_allowed(address)) return FRAME_FORBIDDEN;
+#endif
     allocator->owners[ordinal] = FRAME_OWNER_FREE;
     --allocator->owned[owner];
     ++*free_count;
@@ -206,3 +219,84 @@ bool frame_allocator_check(const struct frame_allocator *allocator)
     }
     return true;
 }
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#undef frame_allocator_initialize
+#undef frame_allocator_address
+#undef frame_release
+#undef frame_allocator_check
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum frame_result frame_allocator_initialize(struct frame_allocator *allocator, const struct memory_region *regions, size_t count, uint8_t *slots, size_t slot_capacity, uint64_t reserve_frames)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return FRAME_INVALID;
+    enum frame_result result=d59b_memory_boot_only() ?
+        d59b_private_frame_allocator_initialize(allocator,regions,count,slots,slot_capacity,reserve_frames) : FRAME_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+bool frame_allocator_address(const struct frame_allocator *allocator, uint64_t ordinal, uint64_t *address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return false;
+    /* Only the measured <=512MiB tracking profile is admitted at runtime.
+     * Bootstrap still handles its original capacity/unavailable contract. */
+    if(scope.context!=NULL && allocator!=NULL &&
+       allocator->total_frames>512u*1024u*1024u/MEMORY_PAGE_BYTES) {
+        if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+        return false;
+    }
+    bool result=d59b_private_frame_allocator_address(allocator,ordinal,address);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum frame_result frame_release(struct frame_allocator *allocator, enum frame_owner owner, uint64_t address)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return FRAME_INVALID;
+    /* Only the measured <=512MiB tracking profile is admitted at runtime.
+     * Bootstrap still handles its original capacity/unavailable contract. */
+    if(scope.context!=NULL && allocator!=NULL &&
+       allocator->total_frames>512u*1024u*1024u/MEMORY_PAGE_BYTES) {
+        if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+        return FRAME_INVALID;
+    }
+    enum frame_result result=d59b_private_frame_release(allocator,owner,address);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+bool frame_allocator_check(const struct frame_allocator *allocator)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return false;
+    /* Only the measured <=512MiB tracking profile is admitted at runtime.
+     * Bootstrap still handles its original capacity/unavailable contract. */
+    if(scope.context!=NULL && allocator!=NULL &&
+       allocator->total_frames>512u*1024u*1024u/MEMORY_PAGE_BYTES) {
+        if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+        return false;
+    }
+    bool result=d59b_private_frame_allocator_check(allocator);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+#endif

@@ -1,4 +1,4 @@
-/* Purpose: original 5x7 uppercase/digit/US-punctuation font in an 8x8 boot cell.
+/* Purpose: 5x7 boot console font in an 8x8 cell, with lowercase in preview.
  * Dependencies: fixed integer types only. No hardware or allocations.
  * Invariants: immutable glyph data; unsupported bytes select '?'.
  * References: ADR-011 and docs/operations/console-2026-10-28.md. */
@@ -82,6 +82,38 @@ static const uint8_t punctuation[128][7] = {
     [126]={0,0,9,22,0,0,0},
 };
 
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Five-bit lowercase rows for mixed-case text in the preview console. */
+static const uint8_t lowercase[26][7] = {
+    {0, 0, 14, 1, 15, 17, 15}, /* a */
+    {16, 16, 22, 25, 17, 17, 30}, /* b */
+    {0, 0, 14, 17, 16, 17, 14}, /* c */
+    {1, 1, 13, 19, 17, 17, 15}, /* d */
+    {0, 0, 14, 17, 31, 16, 14}, /* e */
+    {6, 9, 8, 28, 8, 8, 8}, /* f */
+    {0, 0, 15, 17, 15, 1, 14}, /* g */
+    {16, 16, 22, 25, 17, 17, 17}, /* h */
+    {4, 0, 12, 4, 4, 4, 14}, /* i */
+    {2, 0, 6, 2, 2, 18, 12}, /* j */
+    {16, 16, 18, 20, 24, 20, 18}, /* k */
+    {12, 4, 4, 4, 4, 4, 6}, /* l */
+    {0, 0, 26, 21, 21, 21, 21}, /* m */
+    {0, 0, 22, 25, 17, 17, 17}, /* n */
+    {0, 0, 14, 17, 17, 17, 14}, /* o */
+    {0, 0, 30, 17, 30, 16, 16}, /* p */
+    {0, 0, 15, 17, 15, 1, 1}, /* q */
+    {0, 0, 22, 25, 16, 16, 16}, /* r */
+    {0, 0, 15, 16, 14, 1, 30}, /* s */
+    {8, 8, 28, 8, 8, 9, 6}, /* t */
+    {0, 0, 17, 17, 17, 19, 13}, /* u */
+    {0, 0, 17, 17, 17, 10, 4}, /* v */
+    {0, 0, 17, 17, 21, 21, 10}, /* w */
+    {0, 0, 17, 10, 4, 10, 17}, /* x */
+    {0, 0, 17, 17, 15, 1, 14}, /* y */
+    {0, 0, 31, 2, 4, 8, 31}, /* z */
+};
+#endif
+
 /* Return a row with bit 7 at the left; row >=7 is blank cell spacing.
  * Unsupported characters map to '?' (entry 39). No memory ownership,
  * side effects, allocation or context restrictions. */
@@ -96,6 +128,10 @@ uint8_t console_font_row(unsigned char character, unsigned int row)
         (character >= 123 && character <= 126)) {
         return (uint8_t)(punctuation[character][row] << 2);
     }
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    if (character >= 'a' && character <= 'z')
+        return (uint8_t)(lowercase[character - 'a'][row] << 2);
+#endif
     unsigned int index = 39;
     if (character >= 'A' && character <= 'Z') {
         index = character - 'A';

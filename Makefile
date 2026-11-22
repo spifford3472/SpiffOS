@@ -12,13 +12,137 @@ KERNEL := build/spiffos-kernel.elf
 # production ISO links none of these objects and retains original behavior.
 M10B_TEST_OBJECTS :=
 ifneq ($(findstring -DSPIFFOS_M10_B_SWITCH_TEST,$(BOOT_TEST_FLAGS)),)
-M10B_TEST_OBJECTS := build/kernel-task.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
+M10B_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/kernel-task-cleanup.o build/kernel-task-mutex.o build/x86-task-context.o build/x86-task-switch.o build/m10-b-guest-smoke.o
+endif
+
+# D5.4 independently stacked three-worker cooperative synchronization proof.
+# Never linked into unflagged normal editor.
+M10D54_TEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D54_GUEST_TEST,$(BOOT_TEST_FLAGS)),)
+M10D54_TEST_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/kernel-task-cleanup.o build/kernel-priority-policy.o build/kernel-sync-d53.o build/kernel-dispatch-d54.o build/x86-task-context.o build/x86-task-switch.o build/m10-d54-guest-smoke.o
+endif
+
+# M10-D5.5c tick-budget proof reuses the already-isolated D4 full IRQ
+# diagnostic, not the normal editor. M10-A/resource objects are linked
+# solely to satisfy policy validator symbols and never own D4 task state.
+M10D55C_TEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D55C_TICK_TEST,$(BOOT_TEST_FLAGS)),)
+M10D55C_TEST_OBJECTS := build/m10-d55c-frame-owner.o build/kernel-task.o build/kernel-task-resources.o build/kernel-task-reaper.o
+endif
+
+# D5.5c single real M10-A-owned interrupted worker proof.
+# This uses cooperative entry/exit, but authentic IRQ0 frame observation;
+# it NEVER schedules a task inside IRQ or changes the ordinary editor link.
+M10D55C_FRAME_GUEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D55C_FRAME_GUEST_TEST,$(BOOT_TEST_FLAGS)),)
+M10D55C_FRAME_GUEST_OBJECTS := build/kernel-task.o build/kernel-task-resources.o build/kernel-task-reaper.o build/m10-d55c-frame-owner.o build/m10-d55c-frame-guest.o build/x86-task-context.o build/x86-task-switch.o
+endif
+
+# D5.6 real IRQ0 selector drives ONLY authoritative M10-A lifecycle.
+# 2 non-yielding worker stacks plus an independently M2-owned supervisor.
+# No normal editor, unflagged kernel or D4 diagnostic linkage changes.
+M10D56_IRQ_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D56_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+M10D56_IRQ_OBJECTS := build/kernel-task.o build/kernel-task-resources.o build/kernel-task-reaper.o build/m10-d55c-frame-owner.o build/x86-task-context.o build/x86-task-switch.o build/m10-d56-guest.o
+endif
+
+# D5.7 extends ONLY the flagged D5.6 IRQ guest with read-only
+# D5.3 transitive donated-priority selection and exact preempt guard.
+M10D57_IRQ_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D57_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+M10D57_IRQ_OBJECTS := build/m10-d57-safety.o build/kernel-sync-d53.o build/kernel-priority-policy.o
+endif
+
+# D5.9-B real-context adapter is absent from default kernel linkage.
+M10D59B_CONTEXT_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D59B_CONTEXT_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D57_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_CONTEXT_TEST requires D57_IRQ_TEST and D56_IRQ_TEST)
+endif
+ifeq ($(findstring -DSPIFFOS_M10_D56_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_CONTEXT_TEST requires D56_IRQ_TEST)
+endif
+M10D59B_CONTEXT_OBJECTS := build/m10-d59b-context.o
+endif
+
+# Same authenticated guard, isolated retained-service transaction probe.
+M10D59B_SERVICE_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D59B_SERVICE_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D59B_CONTEXT_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_SERVICE_TEST requires D59B_CONTEXT_TEST)
+endif
+M10D59B_SERVICE_OBJECTS := build/m10-d59b-service.o
+endif
+
+# Callback-free page claiming is an isolated authentic-context diagnostic.
+ifneq ($(findstring -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D59B_CONTEXT_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_PAGE_CLAIM_TEST requires D59B_CONTEXT_TEST)
+endif
+endif
+
+# Runtime memory wiring must keep the proven context/service/page profile.
+ifneq ($(findstring -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST,$(BOOT_TEST_FLAGS)),)
+ifeq ($(findstring -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_MEMORY_WIRING_TEST requires D59B_PAGE_CLAIM_TEST)
+endif
+ifeq ($(findstring -DSPIFFOS_M10_D59B_SERVICE_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59B_MEMORY_WIRING_TEST requires D59B_SERVICE_TEST)
+endif
+endif
+
+# The interactive preview extends the complete isolated D5.9-B profile.
+D59_PREVIEW_FLAGS := -DSPIFFOS_M10_D56_IRQ_TEST -DSPIFFOS_M10_D57_IRQ_TEST -DSPIFFOS_M10_D59B_CONTEXT_TEST -DSPIFFOS_M10_D59B_SERVICE_TEST -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST -DSPIFFOS_M10_D59_PREVIEW
+ifneq ($(filter -DSPIFFOS_M10_D59_PREVIEW,$(BOOT_TEST_FLAGS)),)
+ifeq ($(filter -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST,$(BOOT_TEST_FLAGS)),)
+$(error D59_PREVIEW requires D59B_MEMORY_WIRING_TEST)
+endif
+endif
+
+# D5.8b separately flagged IF=0 blocked-stack handoff fixture.
+# Never link into unflagged kernel or change normal cooperative ABI.
+M10D58B_BLOCK_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D58B_BLOCK_HANDOFF_TEST,$(BOOT_TEST_FLAGS)),)
+M10D58B_BLOCK_OBJECTS := build/m10-d58b-admission.o build/m10-d58b-block-switch.o
+endif
+
+# D5.8c C1 real IRQ lock-owner frame admission, dedicated diagnostic only.
+M10D58C_IRQ_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D58C_LOCK_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+M10D58C_IRQ_OBJECTS := build/m10-d58b-admission.o build/m10-d58c-irq-frame.o
+endif
+
+# C2a observes real IRQ0 donation in separately flagged cooperative D5.4
+# QEMU proof; never attempts IRQ task handoff or unflagged editor linkage.
+M10D58C_C2_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D58C_C2_IRQ_OBSERVE_TEST,$(BOOT_TEST_FLAGS)),)
+M10D58C_C2_OBJECTS := build/m10-d58c-irq-frame.o
+endif
+
+# C2b separately flagged actual IRQ0 handoff, high RET waiter and
+# genuine D5.3 donation: NEVER built or linked into the default kernel.
+M10D58C_C2B_REAL_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D58C_C2B_REAL_IRQ_TEST,$(BOOT_TEST_FLAGS)),)
+M10D58C_C2B_REAL_OBJECTS := build/kernel-task.o build/kernel-task-reaper.o build/kernel-task-resources.o build/kernel-sync-d53.o build/kernel-priority-policy.o build/m10-d57-safety.o build/m10-d55c-frame-owner.o build/m10-d58b-admission.o build/m10-d58b-block-switch.o build/m10-d58c-irq-frame.o build/m10-d58c-c2b-resume-gate.o build/x86-task-context.o build/x86-task-switch.o build/m10-d58c-c2b-real-guest.o
+endif
+
+# D5.8a IRQ notifications: exclusively the flagged D5.6/D5.7 guest.
+M10D58_IRQ_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D58_NOTIFY_TEST,$(BOOT_TEST_FLAGS)),)
+M10D58_IRQ_OBJECTS := build/m10-d58-notify.o
 endif
 
 # D2 is a separate interrupt-frame diagnostic, never in the released ISO.
 M10D2_TEST_OBJECTS :=
-ifneq ($(findstring -DSPIFFOS_M10_D2_IRQ_FRAME_TEST,$(BOOT_TEST_FLAGS)),)
+ifneq ($(filter -DSPIFFOS_M10_D2_IRQ_FRAME_TEST -DSPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST,$(BOOT_TEST_FLAGS)),)
 M10D2_TEST_OBJECTS := build/m10-d2-irq-frame.o build/m10-d2-probe-run.o
+endif
+
+# D5.5b additional independent read-only real-IRQ0 frame observer.
+# Build only in disposable test ISO; normal kernel never contains it.
+M10D55B_TEST_OBJECTS :=
+ifneq ($(findstring -DSPIFFOS_M10_D55B_IRQ_EVIDENCE_TEST,$(BOOT_TEST_FLAGS)),)
+M10D55B_TEST_OBJECTS := build/m10-d55b-evidence.o
 endif
 
 # D3 full-frame IRQ return handoff is guest diagnostic ONLY, not a live
@@ -87,6 +211,57 @@ build/m10-d2-irq-frame.o: src/kernel/m10-d2-irq-frame.c src/kernel/m10-d2-irq-fr
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/kernel/m10-d2-irq-frame.c -o $@
 
+build/m10-d57-safety.o: src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d57-safety.c -o $@
+
+build/m10-d58-notify.o: src/kernel/m10-d58-notify.c src/kernel/m10-d58-notify.h Makefile
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d58-notify.c -o $@
+
+.PHONY: test-m10-d58-guest
+test-m10-d58-guest:
+	python3 scripts/test-m10-d58-guest.py
+
+.PHONY: test-m10-d57-guest
+test-m10-d57-guest:
+	python3 scripts/test-m10-d57-guest.py
+
+build/m10-d56-guest.o: src/kernel/m10-d56-guest.c src/kernel/kernel-task.h src/kernel/m10-d55c-frame-owner.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d56-guest.c -o $@
+
+.PHONY: test-m10-d56-guest
+test-m10-d56-guest:
+	python3 scripts/test-m10-d56-guest.py
+
+build/m10-d55c-frame-guest.o: src/kernel/m10-d55c-frame-guest.c src/kernel/m10-d55c-frame-owner.h src/kernel/x86-task-context.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d55c-frame-guest.c -o $@
+
+.PHONY: test-m10-d55c-frame-guest
+test-m10-d55c-frame-guest:
+	python3 scripts/test-m10-d55c-frame-guest.py
+
+build/m10-d55c-frame-owner.o: src/kernel/m10-d55c-frame-owner.c src/kernel/m10-d55c-frame-owner.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d55c-frame-owner.c -o $@
+
+.PHONY: test-m10-d55c-budget-guest
+test-m10-d55c-budget-guest:
+	python3 scripts/test-m10-d55c-budget-guest.py
+
+build/m10-d55b-evidence.o: src/kernel/m10-d55b-evidence.c src/kernel/m10-d55b-evidence.h src/kernel/m10-d2-irq-frame.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d55b-evidence.c -o $@
+
+.PHONY: test-m10-d55b-guest test-m10-d55b-acceptance
+test-m10-d55b-guest:
+	python3 scripts/test-m10-d55b-guest.py
+
+test-m10-d55b-acceptance: test-m10-d55b-guest test-m10-d55-acceptance
+	@echo SPIFFOS_M10_D55B_ACCEPTANCE_OK
+
 build/m10-d2-probe-run.o: src/kernel/m10-d2-probe-run.S Makefile
 	mkdir -p build
 	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone -c src/kernel/m10-d2-probe-run.S -o $@
@@ -127,6 +302,286 @@ test-m10-d4-state: build/m10-d4-task-state-test
 .PHONY: test-m10-d4-complete-guest
 test-m10-d4-complete-guest:
 	python3 scripts/test-m10-d4-complete-guest.py
+
+# M10-D5.1 metadata-only task reclamation gate. This never links into the
+# ordinary kernel image; the full D4 acceptance suite remains mandatory.
+.PHONY: test-m10-d5-reap test-m10-d5-acceptance
+test-m10-d5-reap: build/m10-d5-task-reap-test
+	./build/m10-d5-task-reap-test
+
+# D5.2a owner-backed reaper: hosted sanitizer plus M10-B real stack-switch
+# fixture and inherited D5.1/D4 acceptance. No normal-kernel linkage.
+.PHONY: test-m10-d5-execution-reap test-m10-d5-execution-acceptance
+test-m10-d5-execution-reap: build/m10-d5-execution-reaper-test
+	./build/m10-d5-execution-reaper-test
+
+# D5.2b fixed registry: real-generation ownership and fail-closed quarantine.
+# These objects are NOT linked into the ordinary SpiffOS editor runtime.
+.PHONY: test-m10-d5-resource-ownership test-m10-d5-resource-acceptance
+test-m10-d5-resource-ownership: build/m10-d5-task-resources-test
+	./build/m10-d5-task-resources-test
+
+# D5.2c isolated supervisor cleanup: no normal-kernel linkage.
+.PHONY: test-m10-d5-supervisor-queue test-m10-d5-supervisor-acceptance
+test-m10-d5-supervisor-queue: build/m10-d5-supervisor-queue-test
+	./build/m10-d5-supervisor-queue-test
+
+# D5.2c registered one-owner/one-waiter reference interlock regression.
+.PHONY: test-m10-d5-sync-ledger
+test-m10-d5-sync-ledger: build/m10-d5-sync-ledger-test
+	./build/m10-d5-sync-ledger-test
+
+# D5.2d authoritative task block/wake mutex proof, not default kernel.
+.PHONY: test-m10-d5-mutex-block-wake test-m10-d5-mutex-acceptance
+test-m10-d5-mutex-block-wake: build/m10-d5-mutex-block-wake-test
+	./build/m10-d5-mutex-block-wake-test
+
+# D5.7 hosted sanitizer proves fail-closed generation-tagged guard,
+# transitive D5.3 donation and supervisor reservation before IRQ enabling.
+# D5.8b Phase 1 hosted graph admission; inherited genuine IRQ0 tests
+# remain unchanged. This does not yet activate lock-bearing IRQ execution.
+build/m10-d58b-admission.o: src/kernel/m10-d58b-admission.c src/kernel/m10-d58b-admission.h Makefile
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d58b-admission.c -o $@
+
+build/m10-d58b-block-switch.o: src/kernel/m10-d58b-block-switch.S Makefile
+	@mkdir -p build
+	$(CC) --target=x86_64-unknown-none-elf -mno-red-zone -c src/kernel/m10-d58b-block-switch.S -o $@
+
+.PHONY: test-m10-d58b-block-guest
+test-m10-d58b-block-guest:
+	python3 scripts/test-m10-d58b-block-guest.py
+
+.PHONY: test-m10-d58b-acceptance
+test-m10-d58b-acceptance: test-m10-d58b-admission test-m10-d58b-block-guest test-m10-d58-acceptance
+	@echo SPIFFOS_M10_D58B_ACCEPTANCE_OK
+
+build/m10-d58c-irq-frame.o: src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58c-irq-frame.h Makefile
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d58c-irq-frame.c -o $@
+
+.PHONY: test-m10-d58c-frame
+test-m10-d58c-frame: build/m10-d58c-irq-frame-test
+	./build/m10-d58c-irq-frame-test
+
+build/m10-d58c-irq-frame-test: tests/m10-d58c-irq-frame-test.c src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58c-irq-frame.h src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58c-irq-frame-test.c src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+# C2b Phase 0 is pure, hosted context-form validation, not IRQ dispatch.
+build/m10-d58c-c2b-resume-gate.o: src/kernel/m10-d58c-c2b-resume-gate.c src/kernel/m10-d58c-c2b-resume-gate.h Makefile
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d58c-c2b-resume-gate.c -o $@
+
+build/m10-d58c-c2b-real-guest.o: src/kernel/m10-d58c-c2b-real-guest.c src/kernel/m10-d58c-c2b-resume-gate.h Makefile
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d58c-c2b-real-guest.c -o $@
+
+.PHONY: test-m10-d58c-c2b-real-negative
+test-m10-d58c-c2b-real-negative:
+	python3 scripts/test-m10-d58c-c2b-real-negative.py
+
+.PHONY: test-m10-d58c-c2b-real-acceptance
+test-m10-d58c-c2b-real-acceptance: test-m10-d58c-c2b-real-guest test-m10-d58c-c2b-real-negative test-m10-d58c-c2b-acceptance
+	@echo SPIFFOS_M10_D58C_C2B_REAL_ACCEPTANCE_OK
+
+.PHONY: test-m10-d58c-c2b-real-guest
+test-m10-d58c-c2b-real-guest:
+	python3 scripts/test-m10-d58c-c2b-real-guest.py
+
+.PHONY: test-m10-d58c-c2b-mode
+test-m10-d58c-c2b-mode: build/m10-d58c-c2b-mode-test
+	./build/m10-d58c-c2b-mode-test
+
+build/m10-d58c-c2b-mode-test: tests/m10-d58c-c2b-mode-test.c src/kernel/m10-d58c-c2b-resume-gate.c src/kernel/m10-d58c-c2b-resume-gate.h src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58c-c2b-mode-test.c src/kernel/m10-d58c-c2b-resume-gate.c src/kernel/m10-d58c-irq-frame.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+.PHONY: test-m10-d58c-c2b-acceptance
+test-m10-d58c-c2b-acceptance: test-m10-d58c-c2b-mode test-m10-d58c-c2-acceptance
+	@echo SPIFFOS_M10_D58C_C2B_MODE_OK
+
+.PHONY: test-m10-d58c-c2-acceptance
+test-m10-d58c-c2-acceptance: test-m10-d58c-c2-observe test-m10-d58c-acceptance
+	@echo SPIFFOS_M10_D58C_C2_ACCEPTANCE_OK
+
+.PHONY: test-m10-d58c-c2-observe
+test-m10-d58c-c2-observe:
+	python3 scripts/test-m10-d58c-c2-observe.py
+
+.PHONY: test-m10-d58c-acceptance
+test-m10-d58c-acceptance: test-m10-d58c-frame test-m10-d58c-lock-guest test-m10-d58b-acceptance
+	@echo SPIFFOS_M10_D58C_ACCEPTANCE_OK
+
+.PHONY: test-m10-d58c-lock-guest
+test-m10-d58c-lock-guest:
+	python3 scripts/test-m10-d58c-lock-guest.py
+
+.PHONY: test-m10-d58b-admission
+test-m10-d58b-admission: build/m10-d58b-admission-test
+	./build/m10-d58b-admission-test
+
+build/m10-d58b-admission-test: tests/m10-d58b-admission-test.c src/kernel/m10-d58b-admission.c src/kernel/m10-d58b-admission.h src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58b-admission-test.c src/kernel/m10-d58b-admission.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+.PHONY: test-m10-d58-acceptance
+test-m10-d58-acceptance: test-m10-d58-notify test-m10-d58-guest test-m10-d57-acceptance
+	@echo SPIFFOS_M10_D58_ACCEPTANCE_OK
+
+.PHONY: test-m10-d58-notify
+test-m10-d58-notify: build/m10-d58-notify-test
+	./build/m10-d58-notify-test
+
+build/m10-d58-notify-test: tests/m10-d58-notify-test.c src/kernel/m10-d58-notify.c src/kernel/m10-d58-notify.h src/kernel/kernel-task.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d58-notify-test.c src/kernel/m10-d58-notify.c src/kernel/kernel-task.c -o $@
+
+.PHONY: test-m10-d57-safety test-m10-d57-acceptance
+test-m10-d57-safety: build/m10-d57-safety-test
+	./build/m10-d57-safety-test
+
+build/m10-d57-safety-test: tests/m10-d57-safety-test.c src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d57-safety-test.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c -o $@
+
+test-m10-d57-acceptance: test-m10-d57-safety test-m10-d57-guest test-m10-d56-acceptance
+	@echo SPIFFOS_M10_D57_ACCEPTANCE_OK
+
+# M10-D5.6 privileged M10-A IRQ transaction test, hosted only so far.
+.PHONY: test-m10-d56-handoff test-m10-d56-acceptance
+test-m10-d56-handoff: build/m10-d56-irq-handoff-test
+	./build/m10-d56-irq-handoff-test
+
+build/m10-d56-irq-handoff-test: tests/m10-d56-irq-handoff-test.c src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d56-irq-handoff-test.c src/kernel/kernel-task.c -o $@
+
+test-m10-d56-acceptance: test-m10-d56-handoff test-m10-d56-guest test-m10-d55c-acceptance
+	@echo SPIFFOS_M10_D56_ACCEPTANCE_OK
+
+# D5.5c pure authoritative IRQ frame binding and hardware tick service tests.
+# No default kernel, D4 task controller, or editor preemption changes.
+.PHONY: test-m10-d55c-frame-tick test-m10-d55c-acceptance
+test-m10-d55c-frame-tick: build/m10-d55c-frame-tick-test
+	./build/m10-d55c-frame-tick-test
+
+build/m10-d55c-frame-tick-test: tests/m10-d55c-frame-tick-test.c src/kernel/m10-d55c-frame-owner.c src/kernel/m10-d55c-frame-owner.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d55c-frame-tick-test.c src/kernel/m10-d55c-frame-owner.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d55c-acceptance: test-m10-d55c-frame-tick test-m10-d55c-frame-guest test-m10-d55c-budget-guest test-m10-d55b-acceptance
+	@echo SPIFFOS_M10_D55C_ACCEPTANCE_OK
+
+# D5.5 safety admission and monotonic supervisor service watchdog are
+# hosted diagnostic-only: never linked into ordinary editor/kernel.
+.PHONY: test-m10-d55-safety test-m10-d55-acceptance
+test-m10-d55-safety: build/m10-d55-preempt-safety-test
+	./build/m10-d55-preempt-safety-test
+
+build/m10-d55-preempt-safety-test: tests/m10-d55-preempt-safety-test.c src/kernel/kernel-preempt-safety-d55.c src/kernel/kernel-preempt-safety-d55.h src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d55-preempt-safety-test.c src/kernel/kernel-preempt-safety-d55.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d55-acceptance: test-m10-d55-safety test-m10-d54-acceptance
+	@echo SPIFFOS_M10_D55_ACCEPTANCE_OK
+
+# D5.4 authoritative priority selection, supervisor dispatch and real-QEMU
+# bounded multiwaiter integration (diagnostic only, not normal editor).
+.PHONY: test-m10-d54-dispatch test-m10-d54-acceptance
+test-m10-d54-dispatch: build/m10-d54-dispatch-test
+	./build/m10-d54-dispatch-test
+
+build/m10-d54-dispatch-test: tests/m10-d54-dispatch-test.c src/kernel/kernel-dispatch-d54.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d54-dispatch-test.c src/kernel/kernel-dispatch-d54.c src/kernel/kernel-sync-d53.c src/kernel/kernel-priority-policy.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d54-acceptance: test-m10-d54-dispatch test-m10-d54-guest test-m10-d53-acceptance
+	@echo SPIFFOS_M10_D54_ACCEPTANCE_OK
+
+# D5.3 bounded multiwaiter, donation and cancellation proof (test-only).
+.PHONY: test-m10-d53-sync test-m10-d53-acceptance
+test-m10-d53-sync: build/m10-d53-sync-test
+	./build/m10-d53-sync-test
+
+build/m10-d53-sync-test: tests/m10-d53-sync-test.c src/kernel/kernel-sync-d53.c src/kernel/kernel-sync-d53.h src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d53-sync-test.c src/kernel/kernel-sync-d53.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+test-m10-d53-acceptance: test-m10-d53-sync test-m10-d5-mutex-acceptance
+	@echo SPIFFOS_M10_D53_ACCEPTANCE_OK
+
+build/m10-d5-mutex-block-wake-test: tests/m10-d5-mutex-block-wake-test.c src/kernel/kernel-task-mutex.c src/kernel/kernel-task-mutex.h src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-mutex-block-wake-test.c src/kernel/kernel-task-mutex.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+test-m10-d5-mutex-acceptance: test-m10-d5-mutex-block-wake test-m10-d5-supervisor-acceptance
+	@echo SPIFFOS_M10_D5_2D_ACCEPTANCE_OK
+
+build/m10-d5-sync-ledger-test: tests/m10-d5-sync-ledger-test.c src/kernel/kernel-task-sync-proof.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-sync-ledger-test.c src/kernel/kernel-task-sync-proof.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task.c -o $@
+
+build/m10-d5-supervisor-queue-test: tests/m10-d5-supervisor-queue-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-cleanup.c src/kernel/kernel-task-cleanup.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-supervisor-queue-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-cleanup.c -o $@
+
+# M10-B diagnostic-only real execution of registered mutex lock transfer.
+build/kernel-sync-d53.o: src/kernel/kernel-sync-d53.c src/kernel/kernel-sync-d53.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-sync-d53.c -o $@
+
+build/kernel-dispatch-d54.o: src/kernel/kernel-dispatch-d54.c src/kernel/kernel-dispatch-d54.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-dispatch-d54.c -o $@
+
+build/m10-d54-guest-smoke.o: src/kernel/m10-d54-guest-smoke.c src/kernel/kernel-dispatch-d54.h src/kernel/memory-boot.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d54-guest-smoke.c -o $@
+
+.PHONY: test-m10-d54-guest
+test-m10-d54-guest:
+	python3 scripts/test-m10-d54-guest.py
+
+build/kernel-task-mutex.o: src/kernel/kernel-task-mutex.c src/kernel/kernel-task-mutex.h src/kernel/kernel-task-resources.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task-mutex.c -o $@
+
+build/kernel-task-cleanup.o: src/kernel/kernel-task-cleanup.c src/kernel/kernel-task-cleanup.h src/kernel/kernel-task-resources.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task-cleanup.c -o $@
+
+test-m10-d5-supervisor-acceptance: test-m10-d5-supervisor-queue test-m10-d5-sync-ledger test-m10-d5-resource-acceptance
+	@echo SPIFFOS_M10_D5_2C_ACCEPTANCE_OK
+
+build/m10-d5-task-resources-test: tests/m10-d5-task-resources-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-resources.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-task-resources-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-resources.c -o $@
+
+build/kernel-task-resources.o: src/kernel/kernel-task-resources.c src/kernel/kernel-task-resources.h src/kernel/kernel-task-reaper.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task-resources.c -o $@
+
+test-m10-d5-resource-acceptance: test-m10-d5-resource-ownership test-m10-d5-execution-acceptance
+	@echo SPIFFOS_M10_D5_2B_ACCEPTANCE_OK
+
+build/m10-d5-execution-reaper-test: tests/m10-d5-execution-reaper-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c src/kernel/kernel-task-reaper.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-execution-reaper-test.c src/kernel/kernel-task.c src/kernel/kernel-task-reaper.c -o $@
+
+build/kernel-task-reaper.o: src/kernel/kernel-task-reaper.c src/kernel/kernel-task-reaper.h src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/kernel-task-reaper.c -o $@
+
+test-m10-d5-execution-acceptance: test-m10-d5-execution-reap test-m10-d5-acceptance
+	@echo SPIFFOS_M10_D5_2A_ACCEPTANCE_OK
+
+build/m10-d5-task-reap-test: tests/m10-d5-task-reap-test.c src/kernel/kernel-task.c src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d5-task-reap-test.c src/kernel/kernel-task.c -o $@
+
+test-m10-d5-acceptance: test-m10-d5-reap test-m10-d4-complete-acceptance
+	@echo SPIFFOS_M10_D5_1_ACCEPTANCE_OK
 
 .PHONY: test-m10-d4-complete-acceptance
 test-m10-d4-complete-acceptance: test-m10-d4-state test-m10-d4-complete-guest test-m10-d4-acceptance
@@ -338,8 +793,8 @@ test-double-fault:
 	python3 scripts/test-double-fault.py
 
 # Limine supplies a valid stack; the recovered start.S is intentionally unused.
-$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
-	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
+$(KERNEL): build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D59B_SERVICE_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) linker.ld Makefile
+	$(LD) $(LDFLAGS) build/main.o build/framebuffer.o build/text-console.o build/console-font.o build/boot-logo.o build/keyboard.o build/keyboard-ps2.o build/logical-line.o build/keyboard-console.o build/screen-editor.o build/memory-map.o build/memory-boot.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o build/workspace-manager.o build/apic-irq0.o build/apic-readonly.o build/apic-memory-type.o build/x86-mmio-map.o build/mmio-page-policy.o build/x86-page-walk.o build/apic-preflight.o build/acpi-madt.o build/acpi-discovery.o build/kernel-timer.o build/kernel-scheduler-clock.o build/x86-idt.o build/x86-tss.o build/x86-pic.o build/x86-irq0.o build/x86-exceptions.o $(M10B_TEST_OBJECTS) $(M10D54_TEST_OBJECTS) $(M10D2_TEST_OBJECTS) $(M10D55B_TEST_OBJECTS) $(M10D55C_TEST_OBJECTS) $(M10D55C_FRAME_GUEST_OBJECTS) $(M10D56_IRQ_OBJECTS) $(M10D57_IRQ_OBJECTS) $(M10D58_IRQ_OBJECTS) $(M10D59B_CONTEXT_OBJECTS) $(M10D59B_SERVICE_OBJECTS) $(M10D58B_BLOCK_OBJECTS) $(M10D58C_IRQ_OBJECTS) $(M10D58C_C2_OBJECTS) $(M10D58C_C2B_REAL_OBJECTS) $(M10D3_TEST_OBJECTS) $(M10D4_TEST_OBJECTS) $(M10D4_COMPLETE_OBJECTS) -o $@
 
 .PHONY: iso test run debug
 iso: $(KERNEL)
@@ -673,3 +1128,162 @@ test-memory: test-scheduler-clock
 .PHONY: test-m10-c-guest
 test-m10-c-guest:
 	python3 scripts/test-m10-c-guest.py
+
+# M10-D5.9-A: read-only audited-source drift gate, NOT runtime preemption.
+.PHONY: test-m10-d59-audit
+test-m10-d59-audit:
+	python3 scripts/audit-m10-d59.py
+	python3 tests/m10-d59-audit-test.py
+
+.PHONY: test-m10-d59-acceptance
+test-m10-d59-acceptance: test-m10-d59-audit test-m10-d58c-c2b-real-acceptance
+	@echo SPIFFOS_M10_D59_AUDIT_ACCEPTANCE_OK
+
+# M10-D5.9-B hosted, opt-in exclusion-gate and real M2 frame fixture.
+# No production kernel object depends on this diagnostic implementation.
+.PHONY: test-m10-d59b-gate
+test-m10-d59b-gate: build/m10-d59b-gate-host-test build/m10-d59b-frame-host-test build/m10-d59b-mutation-host-test build/m10-d59b-d57-compat-host-test
+	./build/m10-d59b-gate-host-test
+	./build/m10-d59b-frame-host-test
+	./build/m10-d59b-mutation-host-test
+	./build/m10-d59b-d57-compat-host-test
+
+build/m10-d59b-gate-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h tests/m10-d59b-gate/test_gate.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/test_gate.c -o $@
+
+build/m10-d59b-frame-host-test: tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h tests/m10-d59b-gate/frame_gate_test.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h src/kernel/memory-map.c src/kernel/memory-map.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Iinclude -Isrc/kernel tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/frame_gate_test.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -o $@
+
+# Inject read-only test callbacks at three real frame-allocate metadata writes.
+# A disposable source copy is generated in build; production src stays pristine.
+build/m10-d59b-instrumented-frame-allocate.c: tests/m10-d59b-gate/instrument-frame-mutations.py src/kernel/frame-allocate.c Makefile
+	mkdir -p build
+	python3 tests/m10-d59b-gate/instrument-frame-mutations.py src/kernel/frame-allocate.c $@
+
+build/m10-d59b-mutation-host-test: build/m10-d59b-instrumented-frame-allocate.c tests/m10-d59b-gate/frame_mutation_test.c tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/gate.h src/kernel/frame-allocator.c src/kernel/memory-map.c src/kernel/frame-allocator.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-gate/gate.c tests/m10-d59b-gate/frame_mutation_test.c build/m10-d59b-instrumented-frame-allocate.c src/kernel/frame-allocator.c src/kernel/memory-map.c -o $@
+
+# Link only D5.7's existing guard and M2 frame allocator into a hosted
+# compatibility fixture; GC the unused priority selector's dependencies.
+build/m10-d59b-d57-compat-host-test: tests/m10-d59b-gate/d57_frame_guard_test.c src/kernel/m10-d57-safety.c src/kernel/m10-d57-safety.h src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c src/kernel/frame-allocator.h Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-gate/d57_frame_guard_test.c src/kernel/m10-d57-safety.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -Wl,--gc-sections -o $@
+
+.PHONY: test-m10-d59b-acceptance
+test-m10-d59b-acceptance: test-m10-d59b-gate test-m10-d59-acceptance
+	@echo SPIFFOS_M10_D59B_HOSTED_ACCEPTANCE_OK
+
+
+.PHONY: test-m10-d59b-context-host test-m10-d59b-context-guest
+# The mockable hardware surface exists exclusively in this hosted executable.
+test-m10-d59b-context-host: build/m10-d59b-context-host-test
+	./build/m10-d59b-context-host-test
+
+build/m10-d59b-context-host-test: tests/m10-d59b-context-test.c src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_D59B_HOSTED -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-context-test.c src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -Wl,--gc-sections -o $@
+
+test-m10-d59b-context-guest:
+	python3 scripts/test-m10-d59b-context-guest.py
+
+# Keep highest existing target/marker, extending its inherited coverage.
+test-m10-d59b-acceptance: test-m10-d59b-context-host test-m10-d59b-context-guest
+
+# Explicit freestanding adapter rule; no implicit kernel compilation paths.
+build/m10-d59b-context.o: src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.h src/kernel/kernel-task-resources.h src/kernel/kernel-task.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d59b-context.c -o $@
+
+build/m10-d56-guest.o build/memory-boot.o: src/kernel/m10-d59b-context.h
+
+
+.PHONY: test-m10-d59b-service-host test-m10-d59b-service-guest
+build/m10-d59b-service.o: src/kernel/m10-d59b-service.c src/kernel/m10-d59b-service.h src/kernel/m10-d59b-context.h src/kernel/memory-service.h Makefile
+	mkdir -p build
+	$(CC) $(CFLAGS) -c src/kernel/m10-d59b-service.c -o $@
+
+build/memory-boot.o build/m10-d56-guest.o: src/kernel/m10-d59b-service.h
+build/m10-d59b-context-host-test: tests/m10-d59b-test-cpu.h
+
+test-m10-d59b-service-host: build/m10-d59b-service-host-test
+	./build/m10-d59b-service-host-test
+
+build/m10-d59b-service-host-test: tests/m10-d59b-service-test.c tests/m10-d59b-test-cpu.h src/kernel/m10-d59b-service.c src/kernel/m10-d59b-service.h src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/memory-service.c src/kernel/kernel-heap.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_D59B_HOSTED -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-service-test.c src/kernel/m10-d59b-service.c src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/memory-service.c src/kernel/kernel-heap.c -Wl,--gc-sections -o $@
+
+test-m10-d59b-service-guest:
+	python3 scripts/test-m10-d59b-service-guest.py
+
+test-m10-d59b-acceptance: test-m10-d59b-service-host test-m10-d59b-service-guest
+
+.PHONY: test-m10-d59b-page-claim-host test-m10-d59b-page-claim-guest
+build/m10-d59b-page-claim-host-test: tests/m10-d59b-page-claim-test.c src/kernel/page-access.c src/kernel/page-access.h src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/frame-allocator.h src/kernel/memory-map.c src/kernel/memory-map.h Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-page-claim-test.c src/kernel/page-access.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c -Wl,--wrap=frame_release -o $@
+
+test-m10-d59b-page-claim-host: build/m10-d59b-page-claim-host-test
+	./build/m10-d59b-page-claim-host-test
+
+test-m10-d59b-page-claim-guest:
+	python3 scripts/test-m10-d59b-page-claim-guest.py
+
+test-m10-d59b-acceptance: test-m10-d59b-page-claim-host test-m10-d59b-page-claim-guest
+
+.PHONY: test-m10-d59b-latency-math
+build/m10-d59b-latency-math-test: tests/m10-d59b-latency/calibration-test.c tests/m10-d59b-latency/calibrate.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/m10-d59b-latency/calibration-test.c -o $@
+
+test-m10-d59b-latency-math: build/m10-d59b-latency-math-test
+	./build/m10-d59b-latency-math-test
+
+test-m10-d59b-acceptance: test-m10-d59b-latency-math
+
+
+.PHONY: test-m10-d59b-memory-scope-host
+build/m10-d59b-memory-scope-host-test: tests/m10-d59b-memory-scope-test.c tests/m10-d59b-test-cpu.h src/kernel/m10-d59b-context.c src/kernel/m10-d59b-context.h src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 -DSPIFFOS_D59B_HOSTED -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Isrc/kernel tests/m10-d59b-memory-scope-test.c src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c -Wl,--gc-sections -o $@
+
+test-m10-d59b-memory-scope-host: build/m10-d59b-memory-scope-host-test
+	python3 -c "import subprocess; [subprocess.run(['./build/m10-d59b-memory-scope-host-test', case], check=True) for case in ('happy','boot-if','bind-stack','irq','cpu','rsp','early-unbind','cookie','nested-if','retire-stack','token-enable','token-hide')]"
+
+test-m10-d59b-acceptance: test-m10-d59b-memory-scope-host
+
+# Native white-box harness includes memory-boot.c ONCE, allowing actual private
+# boot RAM/stack records to be initialized without a production injection API.
+D59B_MEMORY_HOST_SOURCES := src/kernel/m10-d59b-context.c src/kernel/m10-d57-safety.c src/kernel/kernel-task.c src/kernel/kernel-task-resources.c src/kernel/kernel-task-reaper.c src/kernel/frame-allocator.c src/kernel/frame-allocate.c src/kernel/memory-map.c src/kernel/page-access.c src/kernel/kernel-heap.c src/kernel/memory-service.c src/kernel/m10-d59b-service.c
+D59B_MEMORY_HOST_FLAGS := -DSPIFFOS_D59B_HOSTED -DSPIFFOS_M10_D56_IRQ_TEST -DSPIFFOS_M10_D59B_CONTEXT_TEST -DSPIFFOS_M10_D59B_SERVICE_TEST -DSPIFFOS_M10_D59B_PAGE_CLAIM_TEST -DSPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+
+.PHONY: test-m10-d59b-memory-direct-host test-m10-d59b-memory-admission-guest
+build/m10-d59b-memory-direct-host-test: tests/m10-d59b-memory-admission-test.c tests/m10-d59b-test-cpu.h src/kernel/memory-boot.c src/kernel/memory-boot.h src/kernel/m10-d59b-context.h src/kernel/frame-allocator.h src/kernel/page-access.h src/kernel/kernel-heap.h src/kernel/memory-service.h $(D59B_MEMORY_HOST_SOURCES) Makefile
+	@mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -g -O1 $(D59B_MEMORY_HOST_FLAGS) -fsanitize=address,undefined -ffunction-sections -fdata-sections -fno-omit-frame-pointer -Iinclude -Isrc/kernel tests/m10-d59b-memory-admission-test.c $(D59B_MEMORY_HOST_SOURCES) -Wl,--gc-sections -Wl,--wrap=frame_release -o $@
+
+test-m10-d59b-memory-direct-host: build/m10-d59b-memory-direct-host-test
+	python3 scripts/test-m10-d59b-memory-direct-host.py
+
+test-m10-d59b-memory-admission-guest:
+	python3 scripts/test-m10-d59b-memory-admission-guest.py
+
+test-m10-d59b-acceptance: test-m10-d59b-memory-direct-host test-m10-d59b-memory-admission-guest
+
+
+build/m10-d59b-context.o: src/kernel/memory-map.h
+build/main.o build/frame-allocator.o build/frame-allocate.o build/page-access.o build/kernel-heap.o build/memory-service.o: src/kernel/m10-d59b-context.h
+build/m10-d59b-memory-direct-host-test: $(wildcard src/kernel/*.h)
+
+
+build/main.o build/workspace-manager.o build/m10-d56-guest.o: src/kernel/m10-d59-preview.h
+
+.PHONY: iso-m10-d59-preview
+iso-m10-d59-preview:
+	$(MAKE) -B BOOT_TEST_FLAGS="$(D59_PREVIEW_FLAGS)" iso
+
+.PHONY: test-m10-d59-preview-acceptance
+test-m10-d59-preview-acceptance: test-m10-d59b-acceptance
+	python3 scripts/test-m10-d59-preview.py

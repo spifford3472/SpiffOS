@@ -442,3 +442,142 @@ This authorizes D4 coding and QEMU regression work, not an automatic
 merge, physical install or production-editor preemption. See
 `ADR-m10-d4-priority-supervisor-proof.md` and
 `../operations/m10-d4-completion-20261113.md`.
+
+
+## M10-D5.2a isolated execution-reaper proof — owner direction 2026-11-13
+
+The owner elected to proceed with an execution-aware cleanup boundary after D5.1. This authorizes **isolated implementation/testing only** of a supervisor/dispatcher-only reaper adapter and M10-B real-QEMU proof. It does not grant automatic merge, deployment, Ring 3 support, general IRQ scheduler activation or physical hardware boot. Keep the prior D5.1 descriptor lifecycle, D4 diagnostic isolation and supervisor reserve intact. See [ADR-m10-d5-execution-aware-reaper](ADR-m10-d5-execution-aware-reaper.md).
+
+
+## M10-D5.2b owner direction — isolated resource ownership, 2026-11-13
+
+The owner chose the next D5.2b checkpoint after D5.2a. Implement a bounded generation-tagged task resource registry and fail-closed cleanup gate, with tested lock/wait reference interlocks and quarantine after memory-owner failure. This is **development/testing authorization only**, stacked on PRs #71/#72; it does not authorize merge, deployment, general editor preemption, new process ABI or physical disk changes. See [D5.2b ADR](ADR-m10-d5-resource-ownership.md).
+
+
+## M10-D5.2c owner direction — bounded supervisor cleanup proof (2026-11-13)
+
+Owner selected isolated implementation of the next M10-D5 cleanup checkpoint. Add a fixed-capacity supervisor-only FIFO of terminated generation-tagged tasks and verify a one-owner/one-waiter synchronization reference proof against the D5.2b registry. Keep D4 diagnostics separate; production mutex/wait integration and general editor preemption are explicitly **not** approved. No merge, accepted ISO deployment or physical media is authorized. See [D5.2c ADR](ADR-m10-d5-supervisor-cleanup.md).
+
+
+## M10-D5.2d owner direction — authoritative mutex blocking and waking (2026-11-13)
+
+The owner elected D5.2d isolated implementation of a small one-owner/one-waiter mutex that connects the M10-A lifecycle's actual RUNNING→BLOCKED→RUNNABLE state changes to D5.2b's generation-tagged lock/wait reference registry. No second scheduler, IRQ mutex operations, generic lock ABI, normal-editor preemption, merge or deployment is authorized. The cooperative dispatcher must still perform a real CPU context switch after a blocked task returns. See [D5.2d ADR](ADR-m10-d5-mutex-block-wake.md).
+
+
+## M10-D5.3 owner direction — bounded multiwaiter synchronization (2026-11-13)
+
+Owner approved continuing after D5.2d with isolated implementation/testing of bounded ranked locks, multiple waiter registration, transitive priority donation, explicit cancellation and fail-closed orphan detection. The M10-A task table remains the sole lifecycle/dispatch authority; a D5.3 sidecar may calculate effective priority but may **not** turn on general editor IRQ preemption or become another scheduler. No merge, deployment, physical disk or public ABI authorized. See [D5.3 ADR](ADR-m10-d53-bounded-synchronization.md).
+
+
+## M10-D5.4 owner direction — authoritative priority dispatch and real multiwaiter QEMU (2026-11-13)
+
+The owner elected to implement D5.4 after D5.3: effective-priority selection must feed the **single authoritative M10-A task dispatcher**, preserve the supervisor's reserved slot and bounded dispatch opportunities, and prove genuine multiwaiter CPU-context handoffs in disposable QEMU. This authorizes isolated development/testing only, not normal-editor IRQ preemption, merge, accepted ISO replacement or physical deployment. No parallel lifecycle scheduler; D4 remains diagnostic. See [D5.4 ADR](ADR-m10-d54-priority-dispatch.md).
+
+
+## M10-D5.5 owner direction — preemption safety boundaries (2026-11-13)
+
+Following D5.4's passing exact-head CI, the owner adopted the recommendation to address execution-safety boundaries **before** enabling general SpiffOS preemption. D5.5 begins as an isolated, fail-closed safety-admission and supervisor-service-deadline proof: validate task generation, CPU entry/context provenance, interrupts/critical-section exclusion, registered stack ownership, and latched missed-service diagnostics. This direction does **not** authorize normal editor preemption, Ring 3, automatic orphan recovery, merge, accepted ISO replacement or physical deployment. Any future hardware enforcement must provide trusted snapshots; the new policy alone cannot authenticate CPU state. See [D5.5 ADR](ADR-m10-d55-preemption-safety.md).
+
+
+## M10-D5.5b hardware-observed IRQ0 frame proof — 2026-11-14
+
+Owner elected the next isolated execution-safety checkpoint after D5.5. D5.5b may add **test-only** x86 IRQ0 real saved-frame observation, independent live IF sampling, exact assembly-sentinel RIP/RSP and full GPR/segment cross-validation, with positive and negative real QEMU checks. The observer never changes the interrupt frame, scheduler, EOI or ordinary editor. This permits no merge, ISO replacement, physical deploy or ordinary editor preemption. See [D5.5b ADR](ADR-m10-d55b-x86-evidence.md).
+
+
+## M10-D5.5c isolated exact-frame ownership and hardware-tick service proof (2026-11-14)
+
+Owner chose M10-D5.5c following D5.5b: implement isolated, read-only verification of a 20-qword IRQ frame against exact authoritative M10-A task generation and D5.2b stack owner, plus hardware-tick-based supervisor service completion checks with non-yielding worker validation in QEMU. This authorizes tests and draft PR only. Do **not** enable normal editor IRQ preemption, merge stacked drafts, deploy an ISO or access physical disks. The QEMU budget fixture deliberately reuses D4's diagnostic controller; **separately**, a single real M10-A-owned worker is interrupted by IRQ0 and its authentic frame is read-only checked against the exact RUNNING generation and registered physical stack, then safely reclaimed. No IRQ-time task dispatch is authorized. See [D5.5c ADR](ADR-m10-d55c-task-frame-budget.md).
+
+
+## M10-D5.6 isolated authoritative M10-A IRQ-exit handoff (2026-11-14)
+
+Owner chose to proceed from D5.5c to isolated real IRQ-exit preemptive multitasking, preserving **M10-A as the only task lifecycle and dispatch-state owner** and maintaining a separately owned supervisor stack. The D5.6 diagnostic adds a dedicated prevalidated `kernel_task_irq_handoff()` operation in M10-A, called only after real source and target IRQ frames/stack generation/lock exclusion are checked by the test-only IRQ bridge. Two independently owned, non-yielding workers and a reserved supervisor are switched by actual IRQ0 IRETQ in disposable QEMU. This authorizes **development/testing/draft PR only**; normal editor preemption, merge, accepted ISO replacement, physical boot media and general user/task ABI remain unapproved. See [D5.6 ADR](ADR-m10-d56-irq-handoff.md).
+
+
+## M10-D5.7 isolated preemption guard, priority inheritance and fail-closed IRQ selection (2026-11-14)
+
+Owner authorized progressing from D5.6 to test-only preemption safety, D5.3 donation-aware IRQ selection and fault containment. The D5.7 checkpoint adds a bounded, exact-generation, strict LIFO critical guard; a read-only D5.3/D1 priority candidate selector over M10-A's sole ready queue; and an isolated real-IRQ0 D5.6 fixture where only M10-A performs task-state transitions. Hosted tests prove donation from blocked high-priority waiter to an otherwise low-priority lock owner; QEMU proves different base classes with non-yielding workers and rejection of corrupt graph, stale generation, invalid frame and active exclusion. This is **not** production-wide driver instrumentation or full IRQ-time lock-contended execution. Development and tests only; normal EDIT/BASIC preemption, merge, accepted ISO replacement and physical boot deployment remain unapproved. See [D5.7 ADR](ADR-m10-d57-preemption-and-priority.md).
+
+## M10-D5.8 isolated IRQ-mutex integration direction — 2026-11-14
+
+Owner requested next recommended D5.8 milestone following confirmed exact-head D5.7 GitHub Actions success. Staged development/test authorization only, beginning with a bounded deferred diagnostic notification, then real IRQ-preempted mutex donation/wake and failure containment. M10-A remains sole state authority; no D5.3 mutation in IRQ. Normal EDIT/BASIC preemption, merge, ISO replacement and physical deployment are not authorized. See `ADR-m10-d58-irq-mutex-integration.md`.
+
+## M10-D5.8b Phase 1 frame-ownership investigation — 2026-11-14
+
+Owner approved proceeding with the recommended D5.8b Phase 1 after D5.8a CI passed. Isolated, read-only exact-generation D5.3 graph + D5.2b owner admission may be coded/tested; no weakening of the old D5.6/D5.5c IRQ frame check and no real blocked-stack resumption is approved by this preliminary checkpoint. `ADR-m10-d58b-frame-ownership-gate.md` records the proof and separate hardware execution gate. No merge, ISO deployment or ordinary EDIT/BASIC preemption.
+
+## M10-D5.8c diagnostic real-IRQ lock-owner direction — 2026-11-14
+
+Owner elected the recommended D5.8c integration after PR #84 exact-head CI success. Authorize isolated diagnostics first proving a real D5.3 lock-owning worker's authentic IRQ0 source and target frame under M10-A, without weakening old D5.6/D5.5c strict production conditions. Then, under separate review, integrate genuinely BLOCKED waiter, medium competitor and donation/wake only after proving interoperability of cooperative BLOCKED stack surrender and IRQ0 IRETQ context. Owner ISO, normal EDIT/BASIC, merge and physical deployment remain prohibited. See ADR-m10-d58c-real-irq-lock-owner.md.
+
+## M10-D5.8c C2a authentic IRQ donation observation gate — 2026-11-14
+
+Owner requested continuing the remaining D5.8c work after exact-head C1 CI run #85 passed. First prove a real IF=0 IRQ0 observation of a lock-owning low-priority task with a genuine high-priority BLOCKED waiter and separate READY medium competitor; preserve both real cooperative saved waiter continuation and non-IRQ D5.3 lock transfer/wake. This is C2a test authorization, not permission to conflate cooperative dispatch with real IRQ handoff. Complete C2b IRQ priority switching during contention remains open. No merge, accepted ISO, normal editor or physical deployment. See ADR-m10-d58c-c2-blocked-irq-observation.md.
+
+## M10-D5.8c C2b Phase 0 context-form gate — 2026-11-14
+
+After C2a genuine donated-owner IRQ0 observation, owner-directed continuation permits an isolated exact-generation read-only admission predicate that differentiates a cooperative saved RET continuation from a fully verified IRQ IRETQ frame. A READY waiter with cooperative context is never a legal IRQ-return target; only a trusted hardware-frame bridge may later join the phases. This Phase 0 implementation and hosted tests do NOT authorize actual mixed-form IRQ dispatch, merge, deployment or ordinary editor preemption. See ADR-m10-d58c-c2b-context-modes.md.
+
+## M10-D5.8c C2b Phase 1 physical bridge experiment — 2026-11-14
+
+Owner's continuation authorizes isolated test-only real IRQ0 handoff between a donated low lock owner and an independent medium IRQ worker, with high BLOCKED on its original RET context and reserved supervisor on its own IRQ frame. Require a verified IF-off IRQ disarm before off-IRQ D5.3 release/wake and high's genuine cooperative continuation. Prohibit synthetic RET-to-IRETQ conversion or normal EDIT/BASIC preemption. This is work authorization, not proof of a passing experiment. See ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.8c C2b physical IRQ experiment checkpoint — 2026-11-14
+
+The four independently owned M2-stack diagnostic now passes targeted real IRQ0 tests at 128/256/512 MiB: medium worker preempted by donated low owner via actual M10-A handoff, reserved supervisor completes bounded service, and high genuine BLOCKED waiter is woken only AFTER an IF-off IRQ-selector disarm and resumes via its original RET context. Five fault categories at three QEMU sizes also fail closed. These observations are isolated development evidence, not merge/release authorization. Full inherited acceptance and independent exact-head CI must still pass. See ../operations/m10-d58c-c2b-real-irq-20261114.md.
+
+## M10-D5.9 production-preemption safety audit authorization — 2026-11-14
+
+After D5.8c C2b PR #88 passed independent GitHub CI and Forge full acceptance, owner approved the next recommended milestone: D5.9 audits the *ordinary* kernel's actual exclusion/ownership boundaries before enabling any normal EDIT/BASIC preemption. Stage A is read-only source inventory and regression guardrails; future allocator, input/display and interrupt gates are separately verified. No global CLI wrapper, automatic locks, normal program preemption, merge or owner ISO replacement is authorized. See ADR-m10-d59-production-preemption-boundaries.md.
+
+## Owner autonomous development scope — 2026-11-15
+
+The supplied M10-D5.9/M11 handoff authorizes isolated docs-first execution-context
+and allocator integration reusing D5.7, required tests, commits and draft PRs.
+It supersedes the hosted-only next-assignment limitation for development, not
+acceptance. No merge, accepted ISO replacement, unrestricted ordinary preemption,
+privilege, host OS or infrastructure changes. See ADR-m10-d59b-authentic-context.md.
+
+## D5.9-B bounded service continuation — 2026-11-15
+
+Owner autonomous memory-safety scope permits isolated tests of the existing one-page
+M6 service through the same D5.7/context adapter. No general heap masking or new
+manager; see ADR-m10-d59b-service-transactions.md. Parent #91 exact-head CI run #108 has passed; this child still requires
+its own independent acceptance.
+
+## D5.9-B runtime admission scope — 2026-11-15
+
+Owner autonomous memory work continues from independently accepted #92 (CI #109).
+The same D5.7 guard may admit known allocator/service entry points in a separate
+flagged profile, with verified bootstrap/runtime/retirement authority and direct
+fixed page initialization. No callback exception or general preemption approval
+is inferred. See ADR-m10-d59b-runtime-memory-wiring.md.
+
+
+D5.9-B page subgate: callback-free M3 claim and direct kernel zeroing are
+implemented ONLY in the authentic-context diagnostic. General wrappers and
+stack lifetime admission remain pending, as do D5.9-C/D/E and M11.
+See ../operations/m10-d59b-page-claim-20261115.md for measured evidence.
+
+
+D5.9-B isolated memory-admission child proceeds under the existing runtime
+wiring ADR after the callback-free page diagnostic. Bootstrap is not a fake
+task identity; runtime uses the same generation-keyed D5.7 cookies. Exact
+entry-point/lifetime validation is required before any ordinary activation.
+
+
+D5.9-B memory-entry integration now wires 24 existing allocator/service/page
+entries and 17 boot-only gates in the isolated MEMORY_WIRING_TEST profile.
+Actual boot/SUP/off-stack lifecycle and existing D5.2b stack protection are
+implemented; the earlier scope-only checkpoint is superseded by this candidate.
+Targeted native/QEMU validation and full Forge acceptance pass (627.34 seconds,
+exit 0); child exact-head CI remains the independent publication gate. Normal preemption/M11 remain unreleased. See
+../operations/m10-d59b-memory-admission-20261115.md.
+
+## D5.9-C/D/E isolated hands-on preview
+
+The owner-authorized hands-on handoff permits a separate QEMU build with the
+existing editor as sole foreground owner, two preempted background workers
+and a reserved supervisor. See [the preview ADR](ADR-m10-d59-multitasking-preview.md)
+for the execution boundary and acceptance matrix. Approval covers development
+and testing through a candidate ISO.

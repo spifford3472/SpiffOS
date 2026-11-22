@@ -6,6 +6,11 @@
  * Invariants: metadata is external to the arena; one boot CPU owns all state
  * with interrupts disabled; this is not a user ABI or virtual-memory design.
  * Reference: docs/decisions/ADR-memory-services.md, M4 heap design. */
+/* In the isolated MEMORY_WIRING_TEST profile, public entries establish and
+ * restore the actual boot/task exclusion described above before the same body
+ * runs. Unsupported bootstrap/lifetime/callback operations reject runtime.
+ * This adds no default-kernel preemption or new allocator API; see
+ * docs/decisions/ADR-m10-d59b-runtime-memory-wiring.md. */
 #ifndef SPIFFOS_KERNEL_HEAP_H
 #define SPIFFOS_KERNEL_HEAP_H
 

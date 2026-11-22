@@ -9,6 +9,18 @@
  * Reference: docs/decisions/ADR-memory-services.md, M4 bounded heap contract. */
 #include <stddef.h>
 #include <stdint.h>
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#include "m10-d59b-context.h"
+/* One authoritative body, renamed only in this translation unit. Public
+ * entries below authenticate before inspecting its borrowed metadata.
+ * Same-file internal calls stay inside their already-admitted outer scope. */
+#define kernel_heap_initialize d59b_private_kernel_heap_initialize
+#define kernel_heap_allocate d59b_private_kernel_heap_allocate
+#define kernel_heap_release d59b_private_kernel_heap_release
+#define kernel_heap_release_workspace d59b_private_kernel_heap_release_workspace
+#define kernel_heap_release_session d59b_private_kernel_heap_release_session
+#define kernel_heap_check d59b_private_kernel_heap_check
+#endif
 #include "kernel-heap.h"
 
 /* Describe one nonempty half-open host-address range without performing an
@@ -562,3 +574,93 @@ enum kernel_heap_result kernel_heap_release_session(struct kernel_heap *heap)
 {
     return kernel_heap_release_owner(heap, KERNEL_HEAP_OWNER_SESSION);
 }
+
+#ifdef SPIFFOS_M10_D59B_MEMORY_WIRING_TEST
+#undef kernel_heap_initialize
+#undef kernel_heap_allocate
+#undef kernel_heap_release
+#undef kernel_heap_release_workspace
+#undef kernel_heap_release_session
+#undef kernel_heap_check
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum kernel_heap_result kernel_heap_initialize(struct kernel_heap *heap, void *arena, size_t arena_bytes, struct kernel_heap_block *blocks, size_t block_capacity)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return KERNEL_HEAP_INVALID;
+    enum kernel_heap_result result=d59b_memory_boot_only() ?
+        d59b_private_kernel_heap_initialize(heap,arena,arena_bytes,blocks,block_capacity) : KERNEL_HEAP_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum kernel_heap_result kernel_heap_allocate(struct kernel_heap *heap, enum kernel_heap_owner owner, size_t size_bytes, void **allocation)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return KERNEL_HEAP_INVALID;
+    enum kernel_heap_result result=d59b_private_kernel_heap_allocate(heap,owner,size_bytes,allocation);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum kernel_heap_result kernel_heap_release(struct kernel_heap *heap, enum kernel_heap_owner owner, void *allocation)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return KERNEL_HEAP_INVALID;
+    enum kernel_heap_result result=d59b_private_kernel_heap_release(heap,owner,allocation);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum kernel_heap_result kernel_heap_release_workspace(struct kernel_heap *heap, enum kernel_heap_owner workspace_owner)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return KERNEL_HEAP_INVALID;
+    enum kernel_heap_result result=d59b_memory_boot_only() ?
+        d59b_private_kernel_heap_release_workspace(heap,workspace_owner) : KERNEL_HEAP_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+enum kernel_heap_result kernel_heap_release_session(struct kernel_heap *heap)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return KERNEL_HEAP_INVALID;
+    enum kernel_heap_result result=d59b_memory_boot_only() ?
+        d59b_private_kernel_heap_release_session(heap) : KERNEL_HEAP_INVALID;
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+
+/* Preserve the original API input/output/ownership contract. Authenticate
+ * actual boot/task execution before calling the SAME existing body; D5.7
+ * is the sole runtime guard. No output staging, retry or alternate allocator.
+ * An uncertain exit stops IF-off after possible publication. */
+bool kernel_heap_check(const struct kernel_heap *heap)
+{
+    struct d59b_memory_scope scope={0};
+    if(!d59b_memory_scope_enter(&scope)) return false;
+    bool result=d59b_private_kernel_heap_check(heap);
+    if(!d59b_memory_scope_leave(&scope)) d59b_memory_stop();
+    return result;
+}
+#endif

@@ -308,3 +308,128 @@ FPU/SIMD context, CR3 switching, exception containment and guaranteed
 hardware realtime CPU budgets remain M10-D5/open architecture
 requirements; diagnostic code must not be silently enabled in the
 normal kernel. See `ADR-m10-d4-priority-supervisor-proof.md`.
+
+
+## M10-D5.1 production task reclamation checkpoint — 2026-11-13
+
+The owner authorized resolving the Forge QWEN access blocker and beginning the first D5.1 implementation, without extending merge or deployment authority. The existing bounded M10-A generation-tagged task table remains the sole candidate production lifecycle manager; the D4 diagnostic controller stays separate. Logical task termination now leaves descriptors unreclaimed until an explicit reaper confirmation. **This first implementation is metadata-only:** it does not establish a production reaper, detach/verify a physical execution stack, or enable normal-kernel IRQ preemption. Before activation, verify all saved contexts, waiter references, mutex owners and stack backing are retired by a surviving dispatcher, with QEMU tests. Ring 3, SIMD, task quotas and production lock graphs remain OPEN. See `ADR-m10-d5-production-task-model.md`.
+
+
+## M10-D5.2a execution-aware cleanup remaining gates — 2026-11-13
+
+The isolated reaper adapter checks a terminated generation-tagged task, owner stack bounds, saved RSP and real current boot-stack RSP, then releases owner-indexed backing before descriptor reuse. The M10-B diagnostic is its first real execution integration. **Production reaper integration remains OPEN** pending verified wait/lock ownership retirement, bounded cleanup queue, all-or-nothing memory-owner release semantics, authentic CPU context and separate supervisor authority controls. No full production scheduler/editor preemption is enabled. See `ADR-m10-d5-execution-aware-reaper.md`.
+
+
+## M10-D5.2b open production integration gates — 2026-11-13
+
+Resource registry and lifecycle tests may run in isolation, but existing kernel synchronization objects do not yet register their waiters and owners with it. Real mutex/wait registration, verified atomic stack-owner release or quarantine recovery, bounded supervisor reaper queue, and task/driver reference lifecycle remain OPEN before allowing general production task termination. No production editor preemption is authorized. See `ADR-m10-d5-resource-ownership.md`.
+
+
+## M10-D5.2c remaining integration blockers (2026-11-13)
+
+The isolated cleanup queue can rotate task entries blocked by lock/wait references and quarantine uncertain physical releases, but the real operating-system mutex, wait-queue and driver-owner paths do **not** yet use the new registered one-owner/waiter fixture. This fixture deliberately does not block/wake task execution, donate priority or create an ABI. Production scheduler integration, lock cancellation/owner-death semantics, actual task resource graph, recovery after partially freed frames and bounded supervisor CPU service remain OPEN. No general preemptive editor activation. See `ADR-m10-d5-supervisor-cleanup.md`.
+
+
+## M10-D5.2d execution and production acceptance gates (2026-11-13)
+
+The isolated D5.2d internal mutex tracks a real M10-A RUNNING waiter into BLOCKED, removes it from the ready queue and wakes it when the owner transfers the lock. This validates scheduler **metadata** and reference integration, not an execution-time cooperative yield or an IRQ-preemptive mutex. Production integration remains OPEN pending multiple waiters, priority inheritance, owner-death cancellation protocol, wake race/fault injection and global lock ordering/priority scheduling. The isolated M10-B QEMU fixture now proves actual cooperative two-worker mutex blocking and resumed context, but **does not** establish safe general IRQ-preemptive or Ring 3 operation. The normal editor remains nonpreemptive. See `ADR-m10-d5-mutex-block-wake.md`.
+
+
+## M10-D5.3 production scheduler and safety gates (2026-11-13)
+
+The isolated bounded four-lock/fifteen-ordinary-task sidecar now supports up to fourteen waiters on one mutex, enforces strictly increasing rank, computes bounded transitive priority donation and validates registered waiter counts and M10-A BLOCKED/WAKE states. Priority donation is **computed only**; M10-A production dispatch remains FIFO and cannot yet guarantee priority inversion avoidance. Owner termination is fail-closed: live locks remain orphaned with blocked references and no implicit cleanup. Future gates include a truly priority-aware authoritative dispatcher, independently validated on-CPU/supervisor authority, safe dead-owner cleanup, real-QEMU multiwaiter switching, preemption-safe locking, fault injection and production scheduler/IRQ reentrancy acceptance. See `ADR-m10-d53-bounded-synchronization.md`.
+
+
+## M10-D5.4 remaining release blockers (2026-11-13)
+
+The D5.4 isolated adapter now selects using D5.3 generation-tagged effective priority and task ages, but **only** M10-A may move the exact ready task to RUNNING. Runnable supervisor slot 15 receives at least one of every four dispatch opportunities; this is not a hard realtime CPU-time guarantee. A separate D5.4 QEMU diagnostic uses three independently stacked workers to validate two blocked mutex waiters, explicit external-event owner wake, actual priority inheritance, both saved-C-continuation resumes and off-stack cleanup. General IRQ-preemptive editor and Ring 3 are still NOT enabled. Remaining blockers include physical CPU-time supervisor budget, IRQ-safe locks, exception/owner-death recoverability, integration with normal scheduler and driver queues, FPU/SIMD and stack/context isolation. See `ADR-m10-d54-priority-dispatch.md`.
+
+
+## M10-D5.5 hardware integration and timed service open gates (2026-11-13)
+
+The bounded D5.5 test-only policy can reject unsafe interrupt origin/nesting, active critical sections, stale generation handles, a claimed dispatcher still on a task stack, IRQ-time mutex edits/reaping, and expired or rolled-back monotonic service observations. Supervisor service completion must be explicitly verified; merely being selected every four dispatches is **not** sufficient. **Still OPEN:** an assembly-backed trustworthy source for actual RFLAGS/IRQ depth/RSP/CPU identity and interrupt saved frames; integration into real M10-A IRQ-exit operations; real wall-clock CPU-time bounds when a worker does not yield; preempt-disable nesting/atomicity; malformed frame quarantine; owner-death recovery and generalized driver lock graph; Ring 3/SIMD/CR3. Until these are independently verified, no ordinary editor IRQ preemption or production scheduling can be enabled. See `ADR-m10-d55-preemption-safety.md`.
+
+
+## M10-D5.5b remaining trusted task preemption and supervisor budget gates — 2026-11-14
+
+D5.5b can observe an **actual CPU-saved IRQ0 frame** on the known diagnostic assembly sentinel, including RIP/CS/RFLAGS/RSP/SS, live IF=0 and the original D2 register preservation checks. It does **not** authenticate a general M10-A task's current generation from interrupt state, nor validate a production worker-owned stack/frame at dispatch, model preempt-disable nesting against locks, guarantee CPU-time bounded supervisor service under a non-yielding worker, implement actual task preemption or enable ordinary editor preemption. A later low-level adapter must bind the observed frame and all stack/context ownership to the authoritative task descriptor before the D5.5 admission gate may authorize a switch. See `ADR-m10-d55b-x86-evidence.md`.
+
+
+## M10-D5.5c remaining trusted IRQ-to-M10-A binding and production service limits (2026-11-14)
+
+D5.5c's hosted validator checks exact RUNNING M10-A (slot,generation), D5.2b owned stack bounds, registered lock/waiter interlocks, full 20-qword IRQ frame geometry, saved RSP/RIP/CS/SS/RFLAGS, IF and critical depth. A separate **real-QEMU** test of D4 non-yielding workers measures hardware IRQ tick gaps between actual completed boot-supervisor work; missed deadlines fail closed. This QEMU experiment uses the preexisting **D4 diagnostic state controller**, not M10-A. The new single-worker real-IRQ0 fixture independently verifies the authentic saved frame against the exact RUNNING M10-A generation and D5.2b owned stack and rejects a forged-generation witness. **Still OPEN:** extending that trusted binding to **multiple runnable/preempted tasks** and safe interrupt-return dispatch, in-IRQ-safe task state transition and actual preempt-disable/critical exclusion, authoritative cleanup, timing jitter and enforced CPU-time budget across real hardware, owner-death recovery, FPU/SIMD/CR3 and Ring 3. Normal editor preemption remains forbidden. See `ADR-m10-d55c-task-frame-budget.md`.
+
+
+## M10-D5.6 production activation blockers (2026-11-14)
+
+The D5.6 diagnostic demonstrates real IRQ0 selection through M10-A's **sole authoritative task table**, with atomic exact-generation handoff, prevalidated source/target frames, two independently registered non-yielding workers, nested IF=0 critical sections, recorded supervisor work on its third owned stack, and safe off-stack retirement. An invalid destination frame, forged nonzero critical-depth witness or stale destination generation is rejected in separately flagged QEMU negatives without dispatching the rejected frame. The normal editor remains nonpreemptive. **Still OPEN before production activation:** integration of preempt-disable depth into *all* real kernel locks, allocators, scheduler/resource paths and drivers; authoritative saved-frame lifecycle refresh and preempted multiworker cleanup on faults; real IRQ nesting/exception failure containment; effective-priority D5.3 donation within true IRQ selection (fixture currently M10-A FIFO); bounded physical CPU-time supervisor service and watchdog; FPU/SIMD, CR3/Ring3, multicore and actual application ABI. No merger or deployment authorized. See `ADR-m10-d56-irq-handoff.md`.
+
+
+## M10-D5.7 production lock, driver and recovery gates (2026-11-14)
+
+D5.7's isolated guard uses an exact-current-generation owner and LIFO cookies under IF=0; overflow, underflow, stale-generation exit, order inversion and IRQ-time enter latch a permanent fault. The D5.3 priority graph is used **read-only** at IRQ exit; actual M10-A state changes remain inside its privileged handoff. Hosted sanitizer confirms transitive-priority policy on a blocked high-priority waiter and supervisor reservation; real QEMU confirms two non-yielding workers with distinct classes, nested critical exclusion, a 3-tick maximum service gap, and corrupt-target/graph/stale generation negative paths. **OPEN:** all real kernel memory allocation, keyboard, framebuffer/editor, interrupt acknowledgement, driver/event queues, resource registry and synchronization critical paths have NOT been converted to the guard; no real QEMU concurrent lock-contention + high-priority donation under IRQ has been proven yet; D5.3 mutations must remain outside IRQ and a future safe-point handoff must be designed; source-frame corruption/owner-death handling cannot force-release stacks or locks; mandatory full FPU/SIMD, CR3/Ring3, SMP and calibrated hardware timing remain. Ordinary BASIC/EDIT preemption remains prohibited. See `ADR-m10-d57-preemption-and-priority.md`.
+
+## M10-D5.8 real-IRQ contention and production audit gates — 2026-11-14
+
+D5.7 exact-head CI passed, but there is no integrated real IRQ lock contention/donation/wake proof. D5.8 must demonstrate an authentic low-priority lock owner, high-priority BLOCKED waiter, intervening CPU worker and surviving supervisor using M10-A transitions, while forbidding D5.3 mutation in ISR. Safe deferred notification is not lock-transfer authority. Owner-death locks stay orphaned and fail-closed. Before production activation, full kernel allocator/editor/driver exclusion audit, correct on-stack failure recovery and independent validation remain OPEN. See `ADR-m10-d58-irq-mutex-integration.md`.
+
+## M10-D5.8b Phase 1 remaining x86 handoff boundary — 2026-11-14
+
+A nonzero resource lock count can be legitimate when validated against the full D5.3 graph, but D5.6 and D5.5c still reject such frames. A read-only admission helper cannot itself prove genuine saved IRQ frame geometry, live stack detachment or blocked-task x86 surrender. Before real lock-contention IRQ switching, explicitly validate physical CPU RSP after `d53_acquire()` makes the waiter BLOCKED, transfer to a separate surviving stack at IF=0 non-IRQ safe point, and independently validate READY target frame ownership. No synthetic blocked-stack IRETQ. See `ADR-m10-d58b-frame-ownership-gate.md`.
+
+## M10-D5.8c remaining live-waiter IRQ integration gate — 2026-11-14
+
+D5.8b's cooperative IF-off BLOCKED task context is a saved six-register RET stack, whereas D5.6 IRQ0 task continuation is a full 20-qword IRETQ frame. Their states are NOT interchangeable. Before real-IRQ high-priority wait and low-priority donation, prove handoff between those independent contexts without synthetic frames, running a blocked task, mutating D5.3 in IRQ, or releasing orphaned locks. Stage C1 tests only genuine lock-owning worker frame admission while an IRQ-preemptive competitor and supervisor remain live. See ADR-m10-d58c-real-irq-lock-owner.md.
+
+## M10-D5.8c C2b true IRQ handoff with blocked cooperative context — 2026-11-14
+
+The first C2a fixture may prove actual IRQ0 saved-frame observation of donation while the owner is RUNNING and a high-priority waiter is BLOCKED, but priority-aware task selection still occurs at a non-IRQ D5.4 safe point. Before claiming true IRQ0 priority-inherited handoff among contended workers, a separate verified IRETQ/RET context interoperability design, real medium CPU preemption, bounded supervisor work and negative recovery must pass. A blocked task must never be an IRETQ destination merely because M10-A wakes it. See ADR-m10-d58c-c2-blocked-irq-observation.md.
+
+## M10-D5.8c C2b physical frame/stack interoperability — 2026-11-14
+
+A pure generation-tagged context-form admission guard can refuse illegal RET-to-IRETQ destinations, but cannot prove that a CPU has left one stack, authenticated a new full saved IRQ frame or safely disarmed IRQ selection before waking a RET-only waiter. A separate QEMU-only physical bridge and supervisor CPU service proof remain OPEN. No blind conversion, synthetic frame or production activation. See ADR-m10-d58c-c2b-context-modes.md.
+
+## M10-D5.8c C2b Phase 1 physical execution acceptance — 2026-11-14
+
+Until independently tested under genuine IRQ0, the four-stack owner/high RET waiter/medium IRETQ worker/reserved supervisor execution sequence remains an experiment: source/target physical frame integrity, donation-selected medium-to-owner switches, actual supervisor CPU work, IF-off pre-release off-ramp, high-only cooperative continuation and safe reaping must pass on all three QEMU sizes. No physical release or normal editor preemption. See ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.8c C2b post-diagnostic production activation gates — 2026-11-14
+
+The four-stack targeted C2b real IRQ0 test addresses the previously open physical RET/IRETQ interoperability and priority-donation handoff under genuine contention. Still OPEN before ordinary kernel/editor preemption: complete driver and allocator IF/lock exclusion audit, interrupt/nesting exception recovery, secure orphan-owner remediation without forced lock release, hardware CPU-time deadline assurance, user program address-space/CR3, FPU/SIMD and SMP handling. The new test is exclusively disposable QEMU; full regression and independent CI/owner review gate remain. See ADR-m10-d58c-c2b-real-irq-bridge.md.
+
+## M10-D5.9 remaining production exclusion proofs — 2026-11-14
+
+The prior C2b real-IRQ diagnostic does not instrument production frame_allocator, kernel_heap, memory_service, workspace/editor, keyboard input, timer/IOAPIC, memory mapper and exception paths. Explicit root callers, saved IF, task-generation ownership and the critical-span boundaries remain to be proved before any code activation. Do not infer preemption safety from absence of locks or from documented single-CPU behavior. D5.9-A static inventory is not a concurrency proof. See ADR-m10-d59-production-preemption-boundaries.md.
+
+## D5.9-B authentic context acceptance remains OPEN — 2026-11-15
+
+Owner authorized isolated adapter implementation; hosted tests alone cannot close
+real IRQ/CPU/stack/IF evidence. Complete frame, heap/service, mapping rollback and
+stack-lifetime gates remain open until independently tested. See
+ADR-m10-d59b-authentic-context.md.
+
+## D5.9-B service limits — 2026-11-15
+
+One-page/64-record/32-byte diagnostic transactions do not close general heap
+latency, root-reset lifetime, large zeroing, page rollback or caller coverage.
+See ADR-m10-d59b-service-transactions.md.
+
+## D5.9-B runtime admission acceptance — 2026-11-15
+
+Caller coverage, stack-frame release admission, callback-free page initialization
+and actual rollback remain open for the new wiring candidate. Boot-only report,
+reset/snapshot/MMIO APIs must reject active-task use until D5.9-C/D ownership
+models exist. Observed heap timings are not hardware guarantees.
+
+
+D5.9-B memory-entry candidate now has real caller gates, trusted runtime IF
+restoration and off-stack physical retirement. Full Forge acceptance passes; child exact-head CI is
+pending. Root-reset concurrent lifetime and ordinary keyboard/display/driver
+activation remain separate open C/D/E release gates; rejected legacy APIs are
+not silently made concurrent. No Ring 3/process allocation ABI is implied.
+
+## D5.9-C/D/E preview acceptance
+
+Foreground ownership, IRQ and supervisor integration, off-stack retirement,
+the separate launcher and exact-head acceptance remain pending. See
+[the preview ADR](ADR-m10-d59-multitasking-preview.md).
