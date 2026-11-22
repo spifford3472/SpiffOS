@@ -31,10 +31,17 @@ struct workspace_manager {
 bool workspace_manager_initialize(struct workspace_manager *manager,
     const struct text_console *boot_console,
     logical_line_submit_fn submit, void *submit_context);
-/* Render read-only boot monitor; false clock_present means 'unavailable'.
- * Tick count is a sampled monotonic count, not a fabricated CPU load. */
+#ifdef SPIFFOS_M10_D59_PREVIEW
+struct m10_d59_preview_metrics;
+bool workspace_manager_preview_prepare(const struct workspace_manager *manager);
+#endif
+/* Render a read-only monitor from the foreground owner's sampled metrics. */
 bool workspace_manager_system_diagnostics(struct workspace_manager *manager,
-    bool clock_present, uint64_t ticks);
+    bool clock_present, uint64_t ticks
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    , const struct m10_d59_preview_metrics *metrics
+#endif
+);
 /* Switch to 1..9, preserving all visible pixels and editor state.
  * On unsupported framebuffer dimensions or bad ID, leaves active view intact. */
 /* Toggle read-only system view, preserving current user pixels and editor. */

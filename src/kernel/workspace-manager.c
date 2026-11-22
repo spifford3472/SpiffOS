@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <limine.h>
 #include "workspace-manager.h"
+#ifdef SPIFFOS_M10_D59_PREVIEW
+#include "m10-d59-preview.h"
+#endif
 #include "boot-logo.h"
 #include "memory-boot.h"
 #include "framebuffer.h"
@@ -33,6 +36,25 @@ static bool snapshot_supported(const struct limine_framebuffer *fb)
         fb->pitch >= fb->width * 4 && fb->pitch % 4 == 0;
 }
 
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Reserve the exact framebuffer backing for all nine workspaces at boot.
+ * The boot caller borrows an initialized manager. The existing snapshot
+ * allocator publishes each row only on success and owns its pages until
+ * shutdown. Failure stops preview startup, retaining earlier rows. This
+ * function draws nothing and cannot run on a scheduled or IRQ stack. */
+bool workspace_manager_preview_prepare(const struct workspace_manager *manager)
+{
+    if (manager == NULL || !snapshot_supported(manager->framebuffer)) return false;
+    const struct limine_framebuffer *fb = manager->framebuffer;
+    const size_t last = ((size_t)fb->height - 1) * WORKSPACE_MAX_WIDTH + (size_t)fb->width;
+    const size_t pages = (last + SNAPSHOT_PIXELS_PER_PAGE - 1) / SNAPSHOT_PIXELS_PER_PAGE;
+    if (pages == 0 || pages > SNAPSHOT_PAGE_COUNT) return false;
+    for (size_t i = 0; i < WORKSPACE_COUNT; ++i)
+        if (!memory_boot_snapshot_prepare(i + 1, pages, workspace_pages[i])) return false;
+    return true;
+}
+#endif
+
 /* Copy only visible 32-bit words, excluding pitch padding. Both endpoints are
  * owned by this manager; framebuffer memory is volatile and loader-mapped. */
 static bool snapshot_transfer(const struct limine_framebuffer *fb,
@@ -43,9 +65,15 @@ static bool snapshot_transfer(const struct limine_framebuffer *fb,
                   (size_t)fb->width;
     size_t pages = (last + SNAPSHOT_PIXELS_PER_PAGE - 1) /
                    SNAPSHOT_PIXELS_PER_PAGE;
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    if (pages == 0 || pages > SNAPSHOT_PAGE_COUNT) return false;
+    for (size_t i = 0; i < pages; ++i)
+        if (workspace_pages[index][i] == NULL) return false;
+#else
     if (pages == 0 || pages > SNAPSHOT_PAGE_COUNT ||
         !memory_boot_snapshot_prepare(index + 1, pages,
                                       workspace_pages[index])) return false;
+#endif
     volatile uint8_t *base = fb->address;
     for (size_t y = 0; y < fb->height; ++y) {
         volatile uint32_t *physical =
@@ -199,19 +227,54 @@ static bool system_write_unsigned(struct text_console *console, uint64_t value)
     return text_console_write(console,digits);
 }
 
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Draw previously sampled metrics on the caller's system console. Read no
+ * shared scheduler state. False means missing metrics or display failure.
+ * Runs only on the foreground, with no allocation or IRQ exclusion. */
+static bool preview_write_metrics(struct text_console *console,
+    const struct m10_d59_preview_metrics *metrics)
+{
+    return metrics != NULL &&
+        text_console_write(console, "\nMULTITASKING PREVIEW\nWORKER 1 ITERATIONS: ") &&
+        system_write_unsigned(console, metrics->worker_iterations[0]) &&
+        text_console_write(console, "\nWORKER 2 ITERATIONS: ") &&
+        system_write_unsigned(console, metrics->worker_iterations[1]) &&
+        text_console_write(console, "\\nWORKER IRQ SLICES: ") &&
+        system_write_unsigned(console, metrics->worker_ticks[0]) &&
+        text_console_write(console, " / ") &&
+        system_write_unsigned(console, metrics->worker_ticks[1]) &&
+        text_console_write(console, "\\nFOREGROUND IRQ SLICES: ") &&
+        system_write_unsigned(console, metrics->foreground_ticks) &&
+        text_console_write(console, "\nIRQ TASK SWITCHES: ") &&
+        system_write_unsigned(console, metrics->irq_switches) &&
+        text_console_write(console, "\nSUPERVISOR COMPLETIONS: ") &&
+        system_write_unsigned(console, metrics->supervisor_completions) &&
+        text_console_write(console, "\nMAX SUPERVISOR GAP (TICKS): ") &&
+        system_write_unsigned(console, metrics->max_supervisor_gap) &&
+        text_console_write(console, "\nF10: REFRESH SYSTEM SCREEN\n");
+}
+#endif
+
 /* F10 renders a bounded read-only diagnostic snapshot. Report only actual
  * workspace metadata and timer observations supplied by the boot caller.
  * A missing timer source is NOT zero ticks; it is shown as unavailable.
  * Existing F10 calls remain supported through the compatibility wrapper.
  * The view's drawing occurs only after the foreground pixels are preserved. */
 bool workspace_manager_system_diagnostics(struct workspace_manager *manager,
-    bool clock_present, uint64_t ticks)
+    bool clock_present, uint64_t ticks
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    , const struct m10_d59_preview_metrics *metrics
+#endif
+)
 {
     if (manager == NULL || !snapshot_supported(manager->framebuffer)) return false;
     workspace_manager_hide_indicator(manager);
+#ifndef SPIFFOS_M10_D59_PREVIEW
     if (manager->system_visible) return true;
+#endif
     size_t index = manager->active_id - 1;
-    if (!snapshot_transfer(manager->framebuffer, index, true)) return false;
+    if (!manager->system_visible &&
+        !snapshot_transfer(manager->framebuffer, index, true)) return false;
     manager->snapshot_ready[index] = true;
     struct text_console system_console = {0};
     const struct limine_framebuffer *fb = manager->framebuffer;
@@ -238,13 +301,22 @@ bool workspace_manager_system_diagnostics(struct workspace_manager *manager,
             system_write_unsigned(&system_console,ticks)) &&
         (clock_present ||
             text_console_write(&system_console,"UNAVAILABLE")) &&
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        preview_write_metrics(&system_console, metrics) &&
+        text_console_write(&system_console,
+            "F1-F9: WORKSPACES\nF12: SHOW WORKSPACE NUMBER");
+#else
         text_console_write(&system_console,
             "\nTASK CPU LOAD: UNAVAILABLE\n"
             "D3 PREEMPTION: DIAGNOSTIC TEST ONLY\n\n"
             "F1-F9: WORKSPACES\nF10: SYSTEM SCREEN\n"
             "F12: SHOW WORKSPACE NUMBER");
+#endif
     if (!displayed) {
         (void)snapshot_transfer(fb,index,false);
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        manager->system_visible = false;
+#endif
         return false;
     }
     manager->system_visible = true;
@@ -255,7 +327,11 @@ bool workspace_manager_system_diagnostics(struct workspace_manager *manager,
  * is implied, so its tick field is explicitly unavailable. */
 bool workspace_manager_system(struct workspace_manager *manager)
 {
-    return workspace_manager_system_diagnostics(manager,false,0);
+    return workspace_manager_system_diagnostics(manager,false,0
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        ,NULL
+#endif
+    );
 }
 
 /* Prepare a new editor only after verifying snapshot bounds and target ID.

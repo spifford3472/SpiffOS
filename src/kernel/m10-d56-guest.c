@@ -14,6 +14,9 @@
 #include "m10-d2-irq-frame.h"
 #include "x86-task-context.h"
 #include "memory-boot.h"
+#ifdef SPIFFOS_M10_D59_PREVIEW
+#include "m10-d59-preview.h"
+#endif
 #ifdef SPIFFOS_M10_D57_IRQ_TEST
 #include "m10-d57-safety.h"
 #endif
@@ -31,9 +34,16 @@
 #include <stddef.h>
 
 #ifdef SPIFFOS_M10_D56_IRQ_TEST
-enum { D56_WORKERS=2, D56_STACKS=3, D56_SUP_INDEX=2,
+enum { D56_WORKERS=2,
+#ifdef SPIFFOS_M10_D59_PREVIEW
+       D56_FG_INDEX=2, D56_STACKS=4, D56_SUP_INDEX=3,
+#else
+       D56_STACKS=3, D56_SUP_INDEX=2,
+#endif
        D56_CANARY=64,
-#ifdef SPIFFOS_M10_D57_IRQ_TEST
+#ifdef SPIFFOS_M10_D59_PREVIEW_BOUNDED_TEST
+       D56_STOP_TICKS=320,
+#elif defined(SPIFFOS_M10_D57_IRQ_TEST)
        D56_STOP_TICKS=220,
 #else
        D56_STOP_TICKS=120,
@@ -97,6 +107,34 @@ static bool negative_rejected;
 static const char *reason="UNSET";
 /* Static, nonallocating mapping needed by guard before function definition. */
 static unsigned index_of_slot(size_t slot);
+
+#ifdef SPIFFOS_M10_D59_PREVIEW
+/* Copy one coherent scheduler sample into the foreground caller's output.
+ * Tick and service fields are counts, and worker iterations are unitless.
+ * The borrowed output changes only after successful exact-generation guard
+ * release. This runs off IRQ, allocates nothing and preserves caller IF.
+ * An uncertain guard exit stops while still on the current stack. */
+bool m10_d59_preview_snapshot(struct m10_d59_preview_metrics *out)
+{
+    uint32_t cookie = 0;
+    if (out == NULL || !d59b_enter(&d59b_context, &cookie)) return false;
+    const bool foreground = active && !failed &&
+        tasks.current_slot == handles[D56_FG_INDEX].slot;
+    const struct m10_d59_preview_metrics metrics = {
+        .ticks = ticks,
+        .worker_ticks = {slices[0], slices[1]},
+        .foreground_ticks = slices[D56_FG_INDEX],
+        .irq_switches = irq_switches,
+        .supervisor_completions = service.service_completions,
+        .max_supervisor_gap = service.max_observed_gap_ticks,
+        .worker_iterations = {iterations[0], iterations[1]}
+    };
+    if (!d59b_exit(&d59b_context, cookie)) d59b_memory_stop();
+    if (!foreground) return false;
+    *out = metrics;
+    return true;
+}
+#endif
 
 /* Diagnostic reason is read only on the non-interrupted boot context. */
 const char *m10_d56_failure_reason(void) {return reason;}
@@ -234,6 +272,9 @@ static unsigned index_of_slot(size_t slot)
 {
     if(slot==handles[0].slot) return 0;
     if(slot==handles[1].slot) return 1;
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    if(slot==handles[D56_FG_INDEX].slot) return D56_FG_INDEX;
+#endif
     if(slot==handles[D56_SUP_INDEX].slot) return D56_SUP_INDEX;
     return D56_STACKS;
 }
@@ -297,7 +338,11 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
        !incoming_safe(from,incoming)) {
         failed=true;reason="UNSAFE_CURRENT_FRAME";active=false;
         /* Unknown source is never used for a speculative task handoff. */
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        d59b_memory_stop();
+#else
         return incoming;
+#endif
     }
 #ifdef SPIFFOS_M10_D57_IRQ_TEST
     /* Trusted RFLAGS comes from a frame that incoming_safe already
@@ -331,7 +376,9 @@ uint64_t *m10_d56_irq_select(uint64_t *incoming)
 #endif
     if(!d55c_tick_observe(&service,true,ticks))
         {failed=true;reason="SUPERVISOR_DEADLINE";}
+#if !defined(SPIFFOS_M10_D59_PREVIEW) || defined(SPIFFOS_M10_D59_PREVIEW_BOUNDED_TEST)
     if(ticks>=D56_STOP_TICKS) done=true;
+#endif
 
     /* The only candidate authority is M10-A's own FIFO ready queue.
      * Rotation through supervisor gives service within three real ticks. */
@@ -471,6 +518,11 @@ __attribute__((noreturn)) static void worker_run(unsigned index)
 #endif
         work=work*UINT64_C(6364136223846793005)+UINT64_C(1);
         ++iterations[index];
+#ifdef SPIFFOS_M10_D59_PREVIEW_FAULT_TEST
+        /* Test an actual worker-stack #UD. The existing fatal trap retains
+         * all task backing. It must never continue or report retirement. */
+        if(index==0 && slices[0]>=12) __asm__ volatile("ud2":::"memory");
+#endif
         if((iterations[index]&UINT64_C(0x3fff))==0) {
 #ifdef SPIFFOS_M10_D59B_CONTEXT_TEST
             /* First outer transaction on EACH real worker starts IF=0;
@@ -591,7 +643,14 @@ __attribute__((noreturn)) static void supervisor_run(void)
 #ifdef SPIFFOS_M10_D58_NOTIFY_TEST
         d58_supervisor_drain();
 #endif
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        /* Count completed service once per observed hardware tick. A busy
+         * supervisor loop may revisit the same tick many times. */
+        if(ticks != service.last_completed_service_tick &&
+           !d55c_tick_service_completed(&service,true,true,ticks)) {
+#else
         if(!d55c_tick_service_completed(&service,true,true,ticks)) {
+#endif
             failed=true;reason="SERVICE_COMPLETION";
         }
 #if defined(SPIFFOS_M10_D57_IRQ_TEST) && defined(SPIFFOS_M10_D57_BAD_GRAPH_TEST)
@@ -624,7 +683,7 @@ __attribute__((noreturn)) static void supervisor_run(void)
 static bool prepare_worker(unsigned index,void (*entry)(void))
 {
     const uintptr_t base=(uintptr_t)stacks[index];
-    if(index>=D56_WORKERS || base==0 ||
+    if(index>=D56_SUP_INDEX || base==0 ||
        base>UINTPTR_MAX-X86_TASK_STACK_BYTES ||
        (base&15u)!=0 || entry==NULL) return false;
     const uintptr_t top=base+X86_TASK_STACK_BYTES;
@@ -644,7 +703,11 @@ static bool prepare_worker(unsigned index,void (*entry)(void))
 
 /* All M10-A task handles and exact physical stack-owner registrations
  * are established before a single IRQ is authorized to select a worker. */
-bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
+bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *)
+#ifdef SPIFFOS_M10_D59_PREVIEW
+    ,void (*foreground)(void)
+#endif
+)
 {
     if(clock_ms==NULL) {reason="CLOCK";return false;}
     const uint64_t entry=enter_critical();
@@ -680,6 +743,9 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
             stacks[i][j]=UINT8_C(0xa7);
     if(!prepare_worker(0,worker_zero) ||
        !prepare_worker(1,worker_one) ||
+#ifdef SPIFFOS_M10_D59_PREVIEW
+       !prepare_worker(D56_FG_INDEX,foreground) ||
+#endif
        !x86_task_context_init(&supervisor_context,
             stacks[D56_SUP_INDEX],X86_TASK_STACK_BYTES,supervisor_run)) {
         reason="FRAME_INIT";goto fail_early;
@@ -692,7 +758,7 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
                KERNEL_TASK_OK &&
         kernel_task_make_runnable(&tasks,handles[D56_SUP_INDEX])==
                KERNEL_TASK_OK;
-    for(unsigned i=0;i<D56_WORKERS && ready;++i)
+    for(unsigned i=0;i<D56_SUP_INDEX && ready;++i)
         ready=kernel_task_create(&tasks,false,&handles[i])==KERNEL_TASK_OK &&
             kernel_task_make_runnable(&tasks,handles[i])==KERNEL_TASK_OK;
     for(unsigned i=0;i<D56_STACKS && ready;++i) {
@@ -713,6 +779,10 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
             KERNEL_PRIORITY_INTERACTIVE)==D53_OK &&
         d53_enroll(&d57_sync,&owners,&tasks,handles[1],
             KERNEL_PRIORITY_TIME_SENSITIVE)==D53_OK &&
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        d53_enroll(&d57_sync,&owners,&tasks,handles[D56_FG_INDEX],
+            KERNEL_PRIORITY_TIME_SENSITIVE)==D53_OK &&
+#endif
         d53_check(&d57_sync,&owners,&tasks);
 #endif
     struct kernel_task_handle dispatched={0};
@@ -752,6 +822,9 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
         irq_switches>=D56_MIN_WORKER_TICKS &&
         slices[0]>=D56_MIN_WORKER_TICKS &&
         slices[1]>=D56_MIN_WORKER_TICKS &&
+#ifdef SPIFFOS_M10_D59_PREVIEW
+        slices[D56_FG_INDEX]>=D56_MIN_WORKER_TICKS &&
+#endif
         service.service_completions>=D56_MIN_WORKER_TICKS &&
         service.max_observed_gap_ticks<=D56_MAX_SERVICE_GAP &&
         critical_cycles!=0 &&
@@ -777,7 +850,7 @@ bool m10_d56_guest_smoke(bool (*clock_ms)(uint64_t *))
 #endif
         kernel_task_check(&tasks) &&
         kernel_task_resources_check(&owners,&tasks);
-    for(unsigned i=0;i<D56_WORKERS;++i)
+    for(unsigned i=0;i<D56_SUP_INDEX;++i)
         if(kernel_task_terminate(&tasks,handles[i])!=KERNEL_TASK_OK)
             good=false;
     for(unsigned i=0;i<D56_STACKS;++i) {

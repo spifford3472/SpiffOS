@@ -419,3 +419,11 @@ the existing D5.2b ledger, including quarantine and nonreuse of retained stacks.
 Trusted d59b_context is the sole runtime IF-restoration authority. The default
 D4 binary stays unchanged. See ../operations/m10-d59b-memory-admission-20261115.md
 for tests, restrictions and final acceptance status.
+
+## D5.9 isolated interactive preview
+
+The separate QEMU profile extends D5.9-B with one independently stacked
+foreground owner, two workers and the reserved supervisor. Snapshot backing
+is prepared before the runtime starts. Foreground pixel writes may be
+interrupted by IRQ0 while the scheduler uses the existing exact-generation
+ownership checks. See [the preview ADR](../decisions/ADR-m10-d59-multitasking-preview.md).
