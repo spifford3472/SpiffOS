@@ -427,3 +427,9 @@ restoration and off-stack physical retirement. Full Forge acceptance passes; chi
 pending. Root-reset concurrent lifetime and ordinary keyboard/display/driver
 activation remain separate open C/D/E release gates; rejected legacy APIs are
 not silently made concurrent. No Ring 3/process allocation ABI is implied.
+
+## D5.9-C/D/E preview acceptance
+
+Foreground ownership, IRQ and supervisor integration, off-stack retirement,
+the separate launcher and exact-head acceptance remain pending. See
+[the preview ADR](ADR-m10-d59-multitasking-preview.md).

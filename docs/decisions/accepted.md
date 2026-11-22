@@ -573,3 +573,11 @@ implemented; the earlier scope-only checkpoint is superseded by this candidate.
 Targeted native/QEMU validation and full Forge acceptance pass (627.34 seconds,
 exit 0); child exact-head CI remains the independent publication gate. Normal preemption/M11 remain unreleased. See
 ../operations/m10-d59b-memory-admission-20261115.md.
+
+## D5.9-C/D/E isolated hands-on preview
+
+The owner-authorized hands-on handoff permits a separate QEMU build with the
+existing editor as sole foreground owner, two preempted background workers
+and a reserved supervisor. See [the preview ADR](ADR-m10-d59-multitasking-preview.md)
+for the execution boundary and acceptance matrix. Approval covers development
+and testing through a candidate ISO.
