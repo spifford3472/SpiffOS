@@ -79,3 +79,19 @@ normal IRQ scheduling across privilege levels require later decisions.
 
 References: AGENTS.md, accepted.md, open.md, ADR-011, the D5.9 preview and
 runtime memory wiring ADRs, and docs/architecture/system-overview.md.
+
+## Hosted page-permission validation — 2026-11-23
+
+The diagnostic has a read-only permission checker separate from the MMIO
+walker. It verifies the selected top-level user branch and checks effective
+user, write and execute permissions for 4 KiB leaves. The hosted fixtures cover
+RX, RW/NX, presence versus unreadable tables, ancestor restrictions and an
+unchanged result on failure. `make HOST_CC=gcc test-m11-page-permissions` passed
+on Forge under ASan/UBSan, and the source compiled freestanding with Clang.
+The unchanged M10-D5.9 baseline passed full Forge preview acceptance at 128,
+256 and 512 MiB. Hardware entry and off-stack retirement remain pending.
+
+Qwen's first permission request timed out, its next checked the wrong address
+regions, and its split retry inspected the child table for root permissions
+and did not correctly aggregate hardware permission bits. The lead replaced
+only the failed read-only permission helpers and verified the focused cases.

@@ -54,6 +54,10 @@ jobs:
           test -r /usr/share/OVMF/OVMF_CODE_4M.fd
           test -r /usr/share/OVMF/OVMF_VARS_4M.fd
 
+      - name: Verify M11 page permissions
+        shell: bash
+        run: make HOST_CC=gcc test-m11-page-permissions
+
       - name: Verify default kernel and workspace tests
         shell: bash
         run: |

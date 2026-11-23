@@ -1284,6 +1284,14 @@ build/main.o build/workspace-manager.o build/m10-d56-guest.o: src/kernel/m10-d59
 iso-m10-d59-preview:
 	$(MAKE) -B BOOT_TEST_FLAGS="$(D59_PREVIEW_FLAGS)" iso
 
+.PHONY: test-m11-page-permissions
+test-m11-page-permissions: build/m11-page-permissions-test
+	./build/m11-page-permissions-test
+
+build/m11-page-permissions-test: src/kernel/m11-page-permissions.c src/kernel/m11-page-permissions.h src/kernel/x86-page-walk.h tests/m11-page-permissions-test.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -Isrc/kernel tests/m11-page-permissions-test.c src/kernel/m11-page-permissions.c -o $@
+
 .PHONY: test-m10-d59-preview-acceptance
 test-m10-d59-preview-acceptance: test-m10-d59b-acceptance
 	python3 scripts/test-m10-d59-preview.py
