@@ -433,3 +433,7 @@ not silently made concurrent. No Ring 3/process allocation ABI is implied.
 Foreground ownership, IRQ and supervisor integration, off-stack retirement,
 the separate launcher and exact-head acceptance remain pending. See
 [the preview ADR](ADR-m10-d59-multitasking-preview.md).
+
+## Hosted BASIC acceptance — 2026-11-22
+
+The interactive integer grammar and recovery contract are approved for the hosted preview. Hosted conformance, the guest console and launch contract, and the integrated Ring 3 acceptance remain open.

@@ -427,3 +427,7 @@ foreground owner, two workers and the reserved supervisor. Snapshot backing
 is prepared before the runtime starts. Foreground pixel writes may be
 interrupted by IRQ0 while the scheduler uses the existing exact-generation
 ownership checks. See [the preview ADR](../decisions/ADR-m10-d59-multitasking-preview.md).
+
+## Hosted BASIC preview — 2026-11-22
+
+A host harness exercises the same interpreter core intended for a future Ring 3 application. The core evaluates complete bounded lines against explicit session state. Device I/O and the eventual user/kernel console contract sit outside the evaluator. See [the interactive contract](../basic/interactive-preview.md).
