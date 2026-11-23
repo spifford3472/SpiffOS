@@ -29,7 +29,7 @@ Errors report a short reason and emit no result. Any failed assignment preserves
 
 ## Hosted acceptance cases
 
-Run cases in order within each group using a new session for each group. Assert the initial prompt and each resulting prompt as well as the listed result or error. Results and errors end in a newline. Hosted conformance execution is pending implementation.
+Run cases in order within each group using a new session for each group. Assert the initial prompt and each resulting prompt as well as the listed result or error. Results and errors end in a newline. The hosted conformance suite executes these cases.
 
 | Group | Input | Expected before the next `READY.` |
 | --- | --- | --- |
@@ -66,3 +66,27 @@ After the QEMU-only Ring 3 diagnostic passes, review a small console and launch 
 RAM-only program editing and execution follow the interactive milestone. Strings, floating point, persistent storage, graphics, audio, networking and the native compiler remain outside this preview.
 
 The governing references are [ADR-005](https://github.com/spifford3472/SpiffOS/blob/main/docs/architecture/adr-005-basic-language-native-compiler.md), [ADR-006](https://github.com/spifford3472/SpiffOS/blob/main/docs/architecture/adr-006-basic-process-ipc-safety.md), the [Programmer’s Reference outline](https://github.com/spifford3472/SpiffOS/blob/main/docs/basic/programmers-reference.md) and the [M11 diagnostic proposal](https://github.com/spifford3472/SpiffOS/pull/97).
+
+## Running and verification
+
+Build and test the hosted preview with `make HOST_CC=gcc test-basic-interactive`.
+Run `./build/basic-interactive` from the checkout for an interactive session,
+then enter `PRINT 2 + 2` and press Enter. End the session with Ctrl+D on an
+empty line.
+
+On Forge, the contract passed under strict GCC and Clang and GCC ASan/UBSan.
+A separate deterministic arithmetic check matched 1,876 result transcripts
+with arbitrary-precision reference calculations in GCC and sanitizer builds.
+The evaluator alone compiled freestanding for x86-64 with no undefined symbols.
+The hosted harness supplies input and output. Guest launch and QEMU BASIC
+integration remain pending the Ring 3 diagnostic and console contract.
+
+Provenance. Qwen supplied the lexical helpers, hosted harness drafts, parser
+structure, and arithmetic and transcript test drafts. The first combined
+evaluator failed strict compilation. Split retries still missed checked
+multiplication, nesting propagation and statement evaluation. GCC UBSan
+caught signed negation of `INT64_MIN` in the third arithmetic draft. The
+third statement draft printed zero for `PRINT 2 + 2` because it skipped the
+evaluation pass. The harness drafts mishandled EOF or CRLF at the input
+limit, and the transcript drivers timed out or failed review. Narrow lead
+fallbacks addressed these failures and supplied exact-byte acceptance cases.

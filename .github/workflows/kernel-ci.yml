@@ -61,6 +61,10 @@ jobs:
           make HOST_CC=gcc test-workspace-manager-memory
           make HOST_CC=gcc iso
 
+      - name: Verify hosted interactive BASIC
+        shell: bash
+        run: make HOST_CC=gcc test-basic-interactive
+
       - name: Run highest available comprehensive acceptance
         shell: bash
         run: |

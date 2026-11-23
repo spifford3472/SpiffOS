@@ -1287,3 +1287,11 @@ iso-m10-d59-preview:
 .PHONY: test-m10-d59-preview-acceptance
 test-m10-d59-preview-acceptance: test-m10-d59b-acceptance
 	python3 scripts/test-m10-d59-preview.py
+
+.PHONY: test-basic-interactive
+test-basic-interactive: build/basic-interactive
+	python3 scripts/test-basic-interactive.py ./build/basic-interactive
+
+build/basic-interactive: src/basic/interactive.c src/basic/interactive.h src/basic/host-main.c Makefile
+	mkdir -p build
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -O2 src/basic/interactive.c src/basic/host-main.c -o $@
