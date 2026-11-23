@@ -27,7 +27,7 @@ class AuditGateTest(unittest.TestCase):
     def test_normal_inventory(self):
         actual = audit.inventory()
         # The separately flagged adapter and bounded service probe are audited.
-        self.assertEqual(66, len(actual))
+        self.assertEqual(67, len(actual))
         self.assertIn("src/kernel/m10-d59b-context.c", actual)
         self.assertIn("src/kernel/m10-d59b-service.c", actual)
         self.assertEqual("allocator", actual["src/kernel/m10-d59b-context.c"]["category"])
@@ -81,7 +81,7 @@ class AuditGateTest(unittest.TestCase):
             key for key, entry in actual.items()
             if entry["category"] == "unreviewed"
         ]
-        self.assertEqual(31, len(unreviewed))
+        self.assertEqual(32, len(unreviewed))
         self.assertTrue(all(
             actual[key]["state"] == "UNREVIEWED_NO_PREEMPTION"
             for key in unreviewed

@@ -1043,6 +1043,13 @@
       "sha256": "88ca82177d99e9016db044e900a67f11cef2a0023aee754b6aea0d3ff827272c",
       "state": "REVIEW_REQUIRED_NO_PREEMPTION"
     },
+    "src/kernel/m11-page-permissions.c": {
+      "candidate_calls": [],
+      "category": "unreviewed",
+      "functions": [],
+      "sha256": "a5f7745ad18969f7c1cde8e7bf6e877a9d8fb664a29f83de9f09a51bd784f6c4",
+      "state": "UNREVIEWED_NO_PREEMPTION"
+    },
     "src/kernel/main.c": {
       "candidate_calls": [],
       "category": "entry",

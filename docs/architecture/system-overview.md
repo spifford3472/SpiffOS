@@ -427,3 +427,7 @@ foreground owner, two workers and the reserved supervisor. Snapshot backing
 is prepared before the runtime starts. Foreground pixel writes may be
 interrupted by IRQ0 while the scheduler uses the existing exact-generation
 ownership checks. See [the preview ADR](../decisions/ADR-m10-d59-multitasking-preview.md).
+
+## M11 isolated Ring 3 diagnostic — 2026-11-22
+
+A separate QEMU profile may run one fixed user-mode diagnostic before the preview scheduler takes IRQ ownership. Its protected gate and surviving dispatcher exercise a privilege transition, bootstrap-root restoration and retirement. See [the M11 ADR](../decisions/ADR-m11-ring3-diagnostic.md).
